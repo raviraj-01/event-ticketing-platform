@@ -1,0 +1,228 @@
+# Project: <name TBD — currently "BLAK Tickets" (UI) / "VYBERA" (code, repo, package)>
+
+> Working rules for any session: read this file first. Never print, read aloud or commit secrets; never touch `.env`.
+> One issue per change → explain → change → test → update this file → commit (`fix(area): ...`).
+> DB changes go in migrations, not startup `ALTER`s. Frontend changes go into every HTML copy until they are consolidated (see M14).
+> Never delete data, drop tables or delete tracked files without asking Ravi. If intended behaviour is unclear, ask.
+
+**Current phase:** Phase 1 audit complete (2026-11-21). Waiting for Ravi's go-ahead before Phase 2.
+
+---
+
+## Overview
+
+An event ticketing platform for India: buyers discover events and book tickets (PayU or manual UPI), creators (organizers) run events and staff, staff sell tickets offline and scan QR codes at the gate, and admins approve creators and moderate the platform.
+
+**Roles**
+| Role | Table | How they log in | JWT payload |
+|---|---|---|---|
+| Buyer | `users` | `/login` (email/phone + password), `/auth/google` (Google ID token), `/social-login` (unverified, see C3) | `{sub, email}` (no `scope`) |
+| Creator | `creator_accounts` | `/creator/login`; needs `kyc_status='Approved'` | `{sub, email, scope:'creator'}` |
+| Staff | `staff_accounts` | `/staff/login` (login ID / email / phone) | `{sub, staffId, creatorId, scope:'staff'}` (no email) |
+| Admin | `admin_accounts` | `/admin/login` | `{sub, email, scope:'admin', adminType:'admin'}` |
+| Super admin | `super_admin_accounts` (separate table) | `/admin/login` (checked first) | `{sub, email, scope:'admin', adminType:'super'}` |
+
+Purpose tokens use the same secret: `{scope:'password-reset', email}` (TTL `PASSWORD_RESET_TTL_MINUTES`, default 10) and `{scope:'signup-phone-otp', identifier}` (10 min). All login tokens last **30 days** (`server.js:168`).
+
+**Main flows (as implemented today)**
+- Buyer: signup → phone OTP (Twilio Verify) → `/signup` → browse `/events` → pick tier → PayU (`/payments/payu/initiate` → PayU → `/payments/payu/success`) **or** manual UPI ("I have paid" + UTR) → the browser itself calls `POST /bookings` → ticket with QR (`VYBERA-TICKET|bookingId|eventId|qrToken`).
+- Creator: `/creator/applications` (+ KYC docs: pan/aadhaar/gst/bank) → super admin verifies every document and approves → `/creator/login` → `/creator/events` (goes **live immediately**, no event approval) → `/creator/staff` + `/creator/staff/:id/assignments` (allocates tier inventory to staff) → `/creator/analytics`, `/creator/finance/unlock` (4-digit PIN).
+- Staff: `/staff/login` → `/staff/dashboard` → `/staff/sales` (cash/"online" sale, creates a booking) → `/bookings/scan` → `/staff/withdrawals`.
+- Admin: `/admin/snapshot` (everything) → approve/reject creators & KYC docs (super only) → event status → user/staff status → admin accounts (super only).
+
+## Tech stack
+
+Verified against the code on 2026-11-21:
+- **Backend:** one file, `server.js` (4,585 lines). Node (local v25.9; README says ≥20), Express 5.2, `pg` Pool, `bcrypt`, hand-written HS256 JWT on Node `crypto` (`server.js:161-202`), `nodemailer`, `qrcode`, `google-auth-library` (added in uncommitted work). Twilio Verify is called through raw `fetch` (no SDK). PayU uses a form post + SHA-512 hash. **Cloudflare R2** storage uses a hand-written SigV4 presigner (`server.js:598-671`), with a fallback to local disk `uploads/`.
+- **Frontend:** plain HTML + inline JS, no build step.
+  - `vybera_26.html` (12,171 lines, ~750 KB) is the **live web app**, served at `/` (`server.js:23,1129`).
+  - `VYBERA.html` (11,210 lines, ~1.1 MB) is a **legacy** copy, last changed 2026-06-28, still publicly reachable at `/VYBERA.html`, and hardcodes `http://localhost:3003` (`VYBERA.html:6344`).
+  - Firebase JS SDK v10 is loaded from the gstatic CDN in `firebaseconfig.js`. The `firebase` npm dependency is not used by the server.
+- **Android:** Cordova (`cordova-android` 15, target SDK 36), app id `com.vybera.app`. Plugins: inappbrowser, customurlscheme (`vybera://`), googleplus, android-permissions.
+  - `vybera-cordova/www/index.html` is a **diverged fork** of `vybera_26.html` (~900 changed lines in both directions; see M14). It sets `window.VYBERA_API_BASE='https://vybera.onrender.com'`.
+  - `vybera-cordova/www/server.js` is a **stale, unused** copy of the backend (a WebView cannot run Node), but it gets bundled into the APK (see H15).
+  - **Source of truth:** backend = root `server.js`. Web frontend = `vybera_26.html`, but some features exist only in the Cordova copy, so right now neither HTML file is complete.
+- **Hosting:** Render (`https://vybera.onrender.com`, referenced in the HTML and `config.xml`).
+- **Tests:** none. `npm test` only runs `node --check`.
+
+## How to run locally
+
+1. Node 20+, PostgreSQL (local or hosted).
+2. `npm install`
+3. Copy `.env.example` to `.env` and fill it in. **Required:** `DATABASE_URL`, `JWT_SECRET` (the server exits without them).
+4. `npm start` → http://localhost:3003. `GET /health` checks the DB.
+5. Tables are created and altered automatically on startup (`initDb`, `server.js:750`). There is no migration tool yet.
+
+**Environment variables read by the code** (names only):
+`PORT, APP_BASE_URL, JWT_SECRET, DATABASE_URL, SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD, R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, GOOGLE_CLIENT_ID, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID, TWILIO_VERIFY_CHANNEL, SMTP_SERVICE, SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM, PASSWORD_RESET_TTL_MINUTES, PAYU_KEY, PAYU_SALT, PAYU_ENV`.
+`.env.example` also lists `R2_ACCOUNT_ID`, which is unused. The local `.env` contains `PAYU_TEST_MODE`, which no code reads (`PAYU_ENV` is what selects test or production).
+
+### External accounts / keys you need (create your own test credentials)
+| Service | Used for | Env / config | Notes |
+|---|---|---|---|
+| PostgreSQL | all data | `DATABASE_URL` | SSL turned on automatically unless the URL contains `localhost` (`server.js:80`) |
+| JWT secret | signing all tokens | `JWT_SECRET` | generate it yourself, e.g. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| Twilio Verify | signup phone OTP (+91 only) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`, `TWILIO_VERIFY_CHANNEL` | a trial account can only text verified numbers |
+| PayU (India) | online payments | `PAYU_KEY`, `PAYU_SALT`, `PAYU_ENV=test` | test endpoint `https://test.payu.in/_payment` |
+| SMTP (e.g. a Gmail app password) | password-reset email | `SMTP_SERVICE` or `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `APP_BASE_URL` | |
+| Cloudflare R2 | KYC docs, banners, profile images, ticket JSON | `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | KYC, banner and profile uploads **require** R2; other uploads fall back to `uploads/` |
+| Google OAuth (web client) | `/auth/google` ID-token login | `GOOGLE_CLIENT_ID` | |
+| Google OAuth (Android client) | Cordova googleplus plugin | `vybera-cordova/config.xml` `GoogleSignInClientId` | |
+| Firebase project | frontend Google popup sign-in | `firebaseconfig.js` (public web config) | restrict the API key in Google Cloud console |
+| Super admin bootstrap | first super admin | `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD` | re-applied on **every** boot (see M1) |
+| Render | hosting | — | |
+
+## Architecture
+
+```
+server.js            everything: config, JWT, middleware, R2 presign, initDb (schema), ~63 routes
+vybera_26.html       live web SPA (all roles in one page, "pages" toggled by showPage)
+VYBERA.html          legacy SPA copy (unused, still served)
+firebaseconfig.js    Firebase Google sign-in helper (ES module, CDN imports)
+assets/              logos (BLAK Tickets)
+prev                 old server.js copy from 2026-06-22 (tracked, publicly served!)
+uploads/             local file fallback (git-ignored, publicly served at /uploads)
+vybera-cordova/      Cordova Android project; www/ = app bundle (forked index.html, stale server.js)
+```
+
+**Request flow:** `cors` (reflects any origin) → a hand-written CORS/COOP middleware → `bodyParser.json({limit:'30mb'})` → `express.static(__dirname)` (**serves the whole repo root**, see H1) → routes. Auth is per-route middleware: `requireCreator`, `requireAdmin`, `requireSuperAdmin`, `requireStaff`, `requireBuyer`, `requireScanIdentity`, `requireProfileIdentity`. Tokens are sent as `Authorization: Bearer`. The frontend stores them in `localStorage` (`VYBERA_BUYER_TOKEN`, `VYBERA_CREATOR_TOKEN`, `VYBERA_STAFF_TOKEN`, `VYBERA_ADMIN_TOKEN`).
+
+**Key tables** (created in `initDb`, `server.js:750-1071`):
+- `users`: buyers. `email` UNIQUE (case-sensitive); `phone` not unique; `status` Active/Suspended.
+- `bookings`: PK `id TEXT`, **chosen by the client**. Has `user_id` (FK → users), `event_id` (**no FK**), price/qty/total, `status`, `qr_token`, `scanned_at`, `staff_id`, `staff_ref`.
+- `creator_accounts` (+ `finance_pin`) and `creator_kyc_documents` (document type, object key, verification status).
+- `creator_events`: PK `EVT-…`. `tickets` is a **JSONB array of tiers** `{name, price, qty, perks}`, where `qty` = tier inventory still unallocated to staff. `capacity` is never enforced. `booking_count`/`revenue` are denormalised and recomputed after sales.
+- `admin_accounts` and `super_admin_accounts` (separate tables; legacy "Super Admin" rows are migrated over on boot).
+- `staff_accounts`: `creator_id` NULL means admin-created staff. Login identifiers: `staff_id` (unique), `email`, `phone` (both non-unique). `share_token`.
+- `staff_assignments`: tier inventory allocated to staff. `allocation_mode` is `creator_quota` (staff earns a commission) or `staff_owned` (staff resells), with `commission_rate`, `purchase_price`, `resale_price`, `sold_count`.
+- `staff_sales` and `staff_withdrawals`.
+- `payment_transactions`: PK `txnid` (**client-chosen**). Holds the PayU status and a `verified` flag. Not linked to bookings by any constraint.
+- **No indexes** beyond PKs/UNIQUEs. **No migrations table.**
+
+## Key design decisions (existing, keep)
+
+| Decision | Reason | Trade-off |
+|---|---|---|
+| `POST /bookings/scan` runs in a transaction with `SELECT … FOR UPDATE OF b`, checks the staff assignment, returns 403 (wrong event) / 409 (duplicate or refunded), and sets `scanned_at` | Two gates scanning the same QR at once: the second waits on the row lock, then sees `scanned_at` and gets 409. Only one entry. | Holds a row lock for the scan transaction (milliseconds). Whole booking (all qty) is admitted in one scan. |
+| `qr_token = crypto.randomBytes(18)` (144 bits) | Unguessable, so a QR can't be forged even if the booking ID is known | Backfills in `/bookings/mine` use 24 bytes, which is inconsistent but harmless |
+| `requireAdmin` / `requireStaff` re-check account status in the DB on every request | A suspended account loses access immediately | One extra query per request |
+| Twilio Verify issues a 10-minute, phone-bound signup token | The OTP state lives at Twilio; the server only signs "this phone was verified" | Token is reusable within 10 minutes (M17) |
+
+## Issues log
+
+Severity: **Critical** = exploitable now, money/accounts at stake. **High** = serious security/logic flaw. **Medium** = correctness/robustness/defence in depth. **Low** = hygiene.
+"Ravi#" maps to the numbered known-issues list Ravi gave. All are confirmed by reading the code unless the row says otherwise.
+
+### Critical
+| ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
+|---|---|---|---|---|---|---|---|---|
+| C1 | Critical | Secrets | original project (not this repo) | The original project's own git history contained a `.env`. | Not applicable to this repo. | Won't fix here (not ours) | This repo was started fresh without `.git` or `.env` and never contained a credential; the original project's owners handle their own secrets. | baseline |
+| C2 | Critical | Auth | `server.js:4491`; UI `vybera_26.html:6744`, Cordova + `VYBERA.html` copies | Ravi#1. The legacy `POST /auth/reset-password` resets super admin → admin → staff → creator → buyer with only an identifier and a new password. Creator matching is by email, **name**, or **email prefix**. | Anyone can take over the super admin account. | Open | Delete the route. Wire the UI to `/auth/forgot-password` → email → `/auth/reset-password-by-token`. **Note:** the UI has no `reset_token` handler today, so the token flow is backend-only and needs a UI screen. Non-buyer roles need their own reset path (Q4). | – |
+| C3 | Critical | Auth | `server.js:4281`; UI `vybera_26.html:6941,6999` (`localGoogleSignInFallback` prompts for "your Google email") | `POST /social-login` issues a 30-day buyer token for **any email in the body**, with no Google verification. It also overwrites that user's name and `auth_provider`. | Account takeover of any buyer; attacker sees their tickets and QR codes. | Open | Delete the route and the prompt fallback. Use only `/auth/google` (ID token verified with `google-auth-library`). On Cordova, send the googleplus plugin's `idToken` to `/auth/google`. | – |
+| C4 | Critical | Payments/Bookings | `server.js:3544-3786`, `3431`; UI `vybera_26.html:3849` (UPI), `3918` (PayU), `4012` (`persistBooking`) | Ravi#2, worse than listed. `POST /bookings` has no auth and trusts the client for `id`, `price`, `total`, `qty`, `status`, `userId`, `bookedAt`. It has **no capacity or tier-inventory check at all**. `ON CONFLICT (id) DO UPDATE` lets anyone overwrite an existing booking's record and attach a staff member. Any `staffRef` credits a staff member with a sale and commission. The UI itself creates paid tickets after a typed "UTR" (manual UPI) or when the client-computed total is ≤0. `/payments/payu/initiate` takes `amount` and `txnid` from the client. | Free tickets for anyone, unlimited overselling, commission fraud, ticket tampering. | Open | Server creates a `pending` order (server ID, price from the DB tier, inventory reserved atomically) → PayU initiate with the server amount → success callback verifies the hash, `status=success`, amount and txnid → booking confirmed in the same transaction. Then remove the client `POST /bookings` path. Manual UPI: see Q3. | – |
+| C5 | Critical | Uploads/XSS | `server.js:1199` `/local-upload`, `1232` `/assets/upload`, `1180` `/r2/upload-url`, `3271` `/r2/ticket-record`, `63` static `/uploads` | All upload endpoints are **unauthenticated**. Any extension is accepted (e.g. `.html`), and files are served from `/uploads` on the app's own origin. `/assets/upload` with `purpose=profile` overwrites **any** user's avatar by `userId`/`email`. `/r2/upload-url` gives anyone a presigned PUT into your bucket. | Stored XSS on the app origin. A victim (e.g. an admin) opens the link, the script reads `localStorage` tokens, and the account is taken over. Also free file hosting and disk/bucket filling. | Open | Require auth per purpose, derive the owner from the token, allowlist MIME types and extensions (images/PDF), cap size, serve with `Content-Disposition`/`X-Content-Type-Options: nosniff` or from R2 only. Remove `/local-upload`, `/r2/upload-url` and `/r2/ticket-record` if the UI doesn't need them. | – |
+| C6 | Critical | Bookings/Access | `server.js:3862`; booking IDs `vybera_26.html:3926` (`'BLT-'+Date.now()`) | Ravi#3. `GET /bookings/:id/ticket` has no auth and returns `qrPayload` + QR image. Online booking IDs are **millisecond timestamps**, so they can be enumerated. | Anyone can walk the ID space, download valid QR codes and get into events on other people's tickets. | Open | Auth: owning buyer, the event's creator, or staff assigned to the event. Server-generated random booking IDs (fixed in C4). | – |
+
+### High
+| ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
+|---|---|---|---|---|---|---|---|---|
+| H1 | High | Static files | `server.js:61-62` | `express.static(__dirname)` serves the whole project root: `/server.js`, `/prev`, `/package.json`, `/README.md`, `/VYBERA.html`, `/vybera-cordova/www/server.js`, … (`.env` is safe only because dotfiles are ignored by default). | Full backend source disclosure. Attackers read every route and query. **This CLAUDE.md would also be public once deployed**, so do not deploy it before H1 is fixed. | Open | Serve only a `public/` folder (HTML + assets + firebaseconfig.js). | – |
+| H2 | High | Auth | `server.js:4454` | Ravi#4. Reset token is reusable for its whole TTL; it is a stateless JWT tied only to the email. | A leaked or forwarded link can be reused after you change your password. | Open | Add a `users.password_version` column (migration), include it in the token, check it and increment it on reset (also invalidates sessions, ties in with H5). | – |
+| H3 | High | OTP/Cost | `server.js:4052` (routes `4163-4168`, duplicated as `/otp/msg91/*`) | Ravi#5. No rate limit on OTP send. Partly mitigated: only `+91` numbers are accepted, and Twilio Verify has per-number limits plus Fraud Guard. | SMS pumping, Twilio bill, and spamming a victim's phone. | Open | Limit per phone (e.g. 3 per 10 min) and per IP (e.g. 10 per hour), stored in Postgres (no Redis yet). Remove the duplicate `/otp/msg91/*` aliases if unused (the UI uses only `/otp/twilio/*`). | – |
+| H4 | High | Auth | `server.js:409` (also `requireScanIdentity` `543`, `requireProfileIdentity` `582`) | Ravi#6. `requireCreator` checks only the token, never `kyc_status` in the DB. | A suspended or rejected creator keeps full access (events, staff, finance, scanning) for up to 30 days. | Open | Same DB check as `requireAdmin`: creator exists and `kyc_status='Approved'`. | – |
+| H5 | High | Sessions | `server.js:168` (30-day default), tokens in `localStorage` (4 keys) | Ravi#7. Long-lived bearer tokens with no revocation, readable by any XSS (C5, H7, H8). | One XSS = a 30-day account takeover; logout and suspension don't revoke anything. | Open | 15-min access token + rotating refresh token (stored hashed) + `token_version`. **Pushback, see Q11:** httpOnly cookies work for the web app, but the Cordova app calls `vybera.onrender.com` cross-site, where Android WebView blocks third-party cookies by default. So Cordova needs a refresh token in secure storage + Bearer access token. | – |
+| H6 | High | Admin | `server.js:2548`, `2700`, `1024-1070` | Ravi#8. Admin login has no rate limit, lockout, 2FA or audit log. Admin temporary passwords are 6 characters minimum and never force a change. | Brute force or credential stuffing on the most powerful accounts, and no record of who did what. | Open | Login rate limit + lockout, email OTP as the second factor, `admin_audit_log` table, re-enter the password for destructive actions. | – |
+| H7 | High | XSS | `vybera_26.html:4317` (and many of its 161 `innerHTML` uses; `escapeHtml` is used in only ~25 places); e.g. `10874` staff-sale buyer name | Creator-supplied event fields (date, city, venue, status) and buyer names are concatenated into `innerHTML` without escaping. | A creator plants script in an event and it runs for every buyer who views it (steals tokens). | Open | Escape every interpolated value (or use `textContent`), plus a CSP. Do this after the HTML consolidation (M14). | – |
+| H8 | High | XSS | `server.js:3392-3400` | `payuReturnHtml` puts POSTed fields (`udf1`, `txnid`, `error`…) inside `<script>` via `JSON.stringify`, which doesn't escape `</script>`. `/payments/payu/success` and `/failure` accept POSTs from any site. | Reflected XSS on the app origin through an auto-submitting form, which steals tokens. | Open | Escape `<`, `>`, `&` and U+2028 (or pass data via a `data-` attribute or a server-side redirect with only an ID); only trust hash-verified fields. | – |
+| H9 | High | Payments | `server.js:3356`, `3451`, `3484` | `txnid` is client-supplied and the upsert overwrites an existing row (e.g. flipping a Success back to Pending). The success handler marks Success whenever the hash matches, without checking `status==='success'` or comparing the amount and txnid with what we initiated. Hash compare is not constant-time. | Payment records can be tampered with. Part of the C4 rewrite. | Open | Server-generated txnid, insert-only on initiate, compare amount/status/key on callback, optionally call PayU's verify API. | – |
+| H10 | High | Money | `server.js:2429-2502`, `2003` | Ravi#9 (withdrawal double-spend): confirmed. The balance check (`staffWalletFor`) and the insert use separate pool queries with no transaction or lock, so N parallel requests each see the full balance. | Staff can withdraw more than they earned. | Open | Transaction + `SELECT … FOR UPDATE` on the staff row, recompute the balance inside it, then insert. **Also see Q5:** cash sales the staff already pocketed count as withdrawable balance. | – |
+| H11 | High | Inventory | `server.js:3544` (online), `1906` (assignments), `1633` (capacity) | Ravi#9 (capacity race), worse than a race: online bookings never check or decrement tier inventory or `capacity`. Staff assignments do decrement tier `qty` under `FOR UPDATE` (OK). `capacity` is never validated against the sum of tier quantities. | Overselling. | Open | Atomic `UPDATE … SET sold = sold + $qty WHERE … AND sold + $qty <= qty RETURNING` per tier. Consider moving tiers from JSONB to a `ticket_tiers` table so the update is a normal row update (migration). Done together with C4. | – |
+| H12 | High | Auth/IDOR | `server.js:4561` `/session`; `582` `requireProfileIdentity` → `3816` `/profile/tickets`, `3845` | `/session` checks no scope and looks up `users.id = sub`, so a creator or admin token with `sub=5` returns buyer #5's profile. `requireProfileIdentity` accepts **any** token with an email (creator, admin, even password-reset tokens) and returns all bookings for that email. Creator emails are never verified. | Someone can apply as a creator using a victim's email; once approved, they read the victim's tickets and QRs and other users' PII. | Open | `/session` and profile routes require a buyer token (`requireBuyer`); match bookings by `user_id`; verify creator email at application. | – |
+| H13 | High | Auth | `server.js:1457-1495` | Creator login matches by email **or name or email prefix** (`john@a.com` ≈ `john@b.com`), still supports plaintext passwords, and returns `reason: creator_not_found/password_mismatch` + echoes `loginReceived`. | Ambiguous logins, account enumeration, and easier guessing across accounts. | Open | Exact `LOWER(email)` match only, one generic error, rate limit; force-reset any remaining plaintext passwords. | – |
+| H14 | High | Privacy (KYC) | `server.js:3256` `/r2/media/*key`, `2919` snapshot | Any R2 object, including Aadhaar/PAN/bank KYC scans, is served to anyone who knows the key (no auth; keys are random but include the creator's email). `/admin/snapshot` sends KYC document data to **non-super** admins too. | Exposure of sensitive government-ID documents. | Open | Separate the public media route (banners/avatars) from a super-admin-only KYC route; strip documents from the snapshot for normal admins. | – |
+| H15 | High | Cordova | `vybera-cordova/www/server.js`, `config.xml:42-52` | The APK bundles the full backend source (stale copy). `config.xml` has `<access origin="*">`, `allow-intent http://*`, and `allow-navigation` to `*.ngrok-free.dev` (a dev leftover). | Anyone can unzip the APK and read the backend; the WebView navigation policy is too loose. | Open | Delete `www/server.js` (ask first), tighten the allowlist to the API host + PayU + Google. | – |
+| H16 | High | CORS | `server.js:27-55` | Ravi#10. `origin: true` plus a second hand-written middleware both reflect **any** Origin. Harmless while tokens are Bearer headers, but it becomes **critical the moment cookies are introduced (H5)**. | Cross-site requests with credentials once cookies exist. | Open | Explicit allowlist (web origin, Cordova `https://localhost`), delete the duplicate middleware. Must ship together with H5. | – |
+
+### Medium
+| ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
+|---|---|---|---|---|---|---|---|---|
+| M1 | Medium | DB/startup | `server.js:1024-1076` | `initDb()` runs **after** `app.listen` starts accepting requests (race on first boot). Every boot deletes `admin_accounts` rows with role 'Super Admin' and **overwrites the super admin password** from env. | Super admin password changes are silently reverted on restart; a startup DELETE runs against live data. | Open | Versioned migrations (node-pg-migrate) run before listen; bootstrap the super admin only if none exists. | – |
+| M2 | Medium | DB perf | (no `CREATE INDEX` anywhere) | Ravi#9 (indexes): confirmed missing: `bookings(event_id)`, `bookings(user_id)`, `bookings(LOWER(buyer_email))`, `staff_assignments(staff_id, event_id)`, `staff_sales(staff_id)`, `staff_sales(booking_id)`, `creator_events(creator_id)`, `payment_transactions(booking_id)`. | Full table scans on every dashboard and analytics query. | Open | One migration adding them. | – |
+| M3 | Medium | DB integrity | `server.js:752-1007`, `4338`, `2086` | `bookings.event_id` has no FK. No `CHECK (qty>0, price>=0)`. `status` columns are free text. Email UNIQUE is case-sensitive while lookups use `LOWER()`. `users.phone` is not unique (phone login bcrypt-compares *every* matching row). Staff email/phone are login identifiers but not unique (`LIMIT 1` picks an arbitrary one). | Inconsistent data, ambiguous logins, slow logins. | Open | Migration: FK, CHECKs, `UNIQUE (LOWER(email))`, decide phone uniqueness (Q). Check existing data first. | – |
+| M4 | Medium | API | `/events` 1558, `/admin/snapshot` 2893, `/bookings/mine` 3788, `/profile/tickets` 3816, `/creator/staff` 1698, `/staff/dashboard` 2221 | Ravi#9 (pagination): no list endpoint paginates. The snapshot dumps **all** users, bookings, payments and staff in one response. Ticket lists render a QR PNG per booking per request. | Slow, memory-heavy, and exposes too much at once. | Open | `limit`/`cursor` params; split the snapshot into per-tab endpoints. | – |
+| M5 | Medium | Errors | e.g. `1158`, `1195`, `1228`, `1291`, `1416`, `1694`, `2736`, `2862`, `3291`, `3476`, `3782`, `4104` | `err.message` (DB, R2, Twilio internals) is returned to clients. `uncaughtException` is swallowed and the process keeps running (`14-20`). | Leaks internals; the process can run on in a broken state. | Open | Phase 3 central error handler `{error}` + request-id logging; exit on uncaughtException. | – |
+| M6 | Medium | Enumeration | `4351` vs `4361`, `2157` `/staff/lookup`, `2101` vs `2107`, `2182` `/staff/share/:token` (accepts email/phone) | Different messages or status codes reveal whether an account exists. There's a public staff lookup by email/phone. | Account discovery for targeted attacks. | Open | Generic errors; remove `/staff/lookup`; share route by `share_token` only. | – |
+| M7 | Medium | OTP | `server.js:3998-4103` (**uncommitted** work) | The local-dev OTP fallback returns the OTP **in the API response** whenever `Host` contains "localhost", or when Twilio replies 401/403. Behind a reverse proxy that forwards `Host: localhost`, every user gets their OTP in the response. | Phone verification bypass in a misconfigured deployment. | Open | Gate it behind an explicit `OTP_DEV_MODE=true` and `NODE_ENV!=='production'`, never on Twilio errors. | – |
+| M8 | Medium | Analytics | `1786` (fee 8%) vs `2539` (net = 94%), `2913`/`2929`/`3082` (no refunded filter), `1989`, staff_owned revenue | The platform fee is 8% in one place and 6% in another. Admin revenue doesn't exclude refunded bookings. `staff_owned` adds the purchase price to `creator_events.revenue`, which the next sale recompute overwrites, and creator gross counts the resale price instead. | Wrong numbers shown to creators and admins. | Open | One fee constant (Q7); one shared revenue query that excludes refunds; define staff_owned accounting (Q5). | – |
+| M9 | Medium | Functionality | (10 reads of `'refunded'`, 0 writes) | No refund or cancel flow exists, even though analytics and scan code check `status='refunded'`. | Can't refund; analytics code paths are dead. | Open | Q8. | – |
+| M10 | Medium | Functionality | `server.js:864` (`status DEFAULT 'live'`) | Events go live instantly; there is no admin approval step for events (only block/pause afterwards). | Doesn't match the expected "admin approves events" flow. | Open | Q6. | – |
+| M11 | Medium | DoS | `server.js:56` | 30 MB JSON body limit on every route, including unauthenticated ones; files are uploaded as base64 inside JSON. | Memory exhaustion with a few parallel requests. | Open | Small global limit (e.g. 100 KB); a larger limit only on authenticated upload routes (or switch uploads to multipart/presigned). | – |
+| M12 | Medium | Auth (APK) | `server.js:1092-1108`; `vybera_26.html:6962`, `7019-7040` | Google token relay: unauthenticated store/fetch of `{token, profile}` under any code; the APK accepts whatever it fetches. InAppBrowser `executeScript` reads `localStorage` from the browser tab. | Session-fixation style attacks; fragile login. | Open | Replace with the googleplus plugin `idToken` → `/auth/google`, then delete the relay. | – |
+| M13 | Medium | Passwords | `4190` (buyer: no minimum), `4460`/`2700`/`1844` (6 characters) | Weak or inconsistent password policy; temporary passwords never have to be changed. | Weak accounts. | Open | Minimum 8 everywhere, `must_change_password` for temporary passwords. | – |
+| M14 | Medium | Frontend | `vybera_26.html`, `vybera-cordova/www/index.html`, `VYBERA.html` | Three diverged copies. The Cordova copy has features web lacks (`admReinstateCreator`, admin permissions, InAppBrowser PayU, back button, `submitCheckoutOnce`); web has Google Identity Services, which Cordova lacks. `VYBERA.html` is dead but served. | Every fix must be made 2-3 times, and the copies drift apart. | Open | Consolidate into one source HTML + a tiny copy script that injects the Cordova config into `www/index.html` (Q9). | – |
+| M15 | Medium | Hardening | `server.js` (no `helmet`, no `trust proxy`) | No CSP, HSTS or `nosniff`. Without `trust proxy`, `req.protocol` is `http` behind Render (share URLs come out as `http://`), while PayU `surl` is hard-coded to `https` (breaks local testing). | Weaker browser defences; broken links. | Open | `helmet` + CSP, `app.set('trust proxy', 1)`, build URLs from `APP_BASE_URL`. | – |
+| M16 | Medium | Finance PIN | `server.js:2504` | The first PIN anyone submits becomes the creator's finance PIN; it's 4 digits with no attempt limit. | Anyone holding a creator token can brute-force it in at most 10,000 tries. | Open | Set the PIN through an explicit flow, add an attempt limit and lockout. | – |
+| M17 | Medium | Signup | `server.js:4036`, `4171` | The OTP token is reusable within 10 min, and the phone is not unique, so one OTP can create several accounts. | Fake account creation. | Open | One-time use (store a jti), decide phone uniqueness. | – |
+| M18 | Medium | Scan rule | `server.js:3921` | Admin-created staff with no `creator_id` and no `primary_event_id` can scan tickets for **any** event. (Scan route is otherwise in the keep-as-is list.) | Possibly unintended global scanner. | Open | Q10. Don't change without your answer. | – |
+| M19 | Medium | Admin | `server.js:2875`, `3222` | Any admin can delete admin-created staff whose `created_by_admin_email` is NULL, and can suspend or activate any creator's staff. | Over-broad admin powers. | Open | Decide the admin vs super admin matrix (with H6). | – |
+
+### Low
+| ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
+|---|---|---|---|---|---|---|---|---|
+| L1 | Low | Abuse | `server.js:1162` `/qr` | Ravi#10. Public endpoint renders any text as a QR (CPU, free QR service). It is only used for the staff share link (`vybera_26.html:2964`). | Minor abuse. | Open | Generate the share QR client-side or only for own share URLs; length cap + rate limit. | – |
+| L2 | Low | Bug | `server.js:59` | Favicon route points to `assets/blak-tickets-logo.svg`; the file is actually `blak-ticket-logo.svg`. | 404 / error log on every page load. | Open | Fix the path. | – |
+| L3 | Low | Cleanup | `prev`, `VYBERA.html` | An old server copy and an old frontend copy are tracked and publicly served. | Confusion, source disclosure (H1). | Open | Delete (ask first). | – |
+| L4 | Low | JWT | `server.js:161-202` | Ravi#11. The hand-written JWT is actually implemented safely (fixed HS256, timing-safe compare, exp checked), but it has no `iss`/`aud`, and one secret serves session, reset and OTP tokens (only `scope` separates them). | Token-confusion risk (see H12). | Open | Switch to `jose` with `aud` per token type; do it together with H5. | – |
+| L5 | Low | Validation | `1928`, `1594-1684` | Commission rate is unbounded (>100%). Event date and time are free text; lat/long, banner URL and visibility are unvalidated. | Bad data. | Open | Input validation on create endpoints. | – |
+| L6 | Low | Repo hygiene | `.gitignore`, `.env.example` | `.env.local` / `.env.*` weren't ignored (fixed in Phase 0). `.env.example` lists the unused `R2_ACCOUNT_ID`. The local `.env` holds commented plaintext login credentials and an unused `PAYU_TEST_MODE`. The `firebase` npm dependency is unused. | Accidental secret commits. | Partly fixed | `.gitignore` updated. Ravi: remove the commented credentials from `.env`. | – |
+| L7 | Low | Firebase | `firebaseconfig.js:16-23` | Public Firebase web config (normal), but the API key should be restricted to your domains/app. | Quota abuse. | Open | Restrict it in Google Cloud console (Ravi). | – |
+
+### Verified "keep as-is" items
+- `POST /bookings/scan`: confirmed (transaction, `FOR UPDATE OF b`, assignment check, 403/409, `scanned_at`). Only M18 is questionable. `requireScanIdentity` inherits H4 for creators (no DB status check); the SQL already checks that staff are active.
+- `qr_token` 18 random bytes: confirmed (24 in backfills).
+- `requireAdmin` / `requireStaff` DB checks: confirmed. Note: `requireAdmin` upgrades a normal admin token to super if its email exists in `super_admin_accounts`. That's fine while the JWT secret is safe (C1).
+- Twilio Verify flow: confirmed (only touched by M7/M17).
+
+## Recommended Phase 2 order
+0. **Ravi:** C1 is handled outside this repo (original project).
+1. Commit the current uncommitted work as a baseline (Q2), so every fix is a clean diff.
+2. C2 → C3 (route deletions + small UI changes in all copies).
+3. C6 (ticket auth) → H1 (static root) → C5 (uploads).
+4. C4 + H9 + H11 (order/payment rewrite, atomic inventory) behind migrations; introduce node-pg-migrate here.
+5. H4, H12, H13, H2, H3, H10, H14, H8.
+6. M14 consolidation, then H7 (escaping) + M15 (helmet/CSP).
+7. H5 + H16 + L4 together (sessions, CORS, jose), then H6 (admin hardening).
+8. Remaining Medium/Low, then Phase 3 restructure + tests.
+
+## Change log
+| Date | Change | Why |
+|---|---|---|
+| 2026-11-21 | Created CLAUDE.md with the Phase 0 inventory and Phase 1 audit. Added `.env.*` (except `.env.example`) to `.gitignore`. | Ravi's audit request; prevent committing env variants. |
+
+## Open questions for Ravi
+1. **Secrets (C1):** handled outside this repo (original project).
+2. **Uncommitted work** (Google ID-token login, local OTP fallback, UI tweaks in all copies): commit it as-is as a baseline before Phase 2 (I'd gate the OTP fallback as part of M7)?
+3. **Manual UPI "I have paid" flow:** remove it (PayU only), or keep it as "pending until an admin verifies the UTR"? It cannot stay as auto-confirm.
+4. **Password reset for non-buyers** once the legacy route is gone: creators → same email-token flow; staff → reset by their creator/admin; admins → by super admin; super admin → DB/CLI only. OK?
+5. **Staff economics:** should cash sales (staff already holds the cash) count toward withdrawable balance? In `staff_owned` mode, does staff pay the creator the purchase price upfront, and who pays withdrawals (platform or creator)?
+6. Should creator events need **admin approval** before going live?
+7. Platform fee: **8% or 6%**?
+8. Are **refunds** needed for v1? Who triggers them, and should they go through the PayU refund API?
+9. OK to **consolidate the frontend** into one source file + a copy script for Cordova, and delete `VYBERA.html`, `prev`, and `vybera-cordova/www/server.js`?
+10. Should admin-created staff with no event be able to scan **any** event (M18)?
+11. **Cookies vs Cordova (H5):** I recommend httpOnly cookie sessions for the web app, and refresh token in secure storage + short Bearer access token for the APK (cross-site cookies are unreliable in Android WebView). Agree?
+12. Phone number unique per buyer account?
+13. Which PayU account will you use for testing (your own test merchant key/salt)?
+
+## Branding/cleanup to do (don't rename until Ravi picks a name)
+- **Names:** "BLAK Tickets" (server.js ×13, vybera_26.html ×51, Cordova index ×49, VYBERA.html ×14, config.xml ×3, Cordova package.json). "VYBERA"/"Vybera" (≈170-250 per HTML file, package name, repo name, README, `localStorage` keys `VYBERA_*`, `window.VYBERA_API_BASE`).
+- **QR prefix:** `VYBERA-TICKET` (`server.js:3403`, `3886`). Renaming breaks already-issued tickets unless scan accepts both prefixes during a transition.
+- **Domains/emails:** `vybera.onrender.com` (HTML, `config.xml`), `vybera.in` / `support@vybera.in` (`config.xml`, `VYBERA.html`), `superadmin@blaktickets.in` (default, `server.js:1025`), `guest@blaktickets.in` (`server.js:3460`), `blaktickets` in the HTML (×5).
+- **App identity:** Cordova id `com.vybera.app`, URL scheme `vybera://`, display name, Firebase project `vybera` (`firebaseconfig.js`), Google client IDs (`config.xml`, `.env`).
+- **Payment identity:** a personal UPI ID and payee name are hardcoded at `vybera_26.html:3808-3809` (and the Cordova copy). These are a real person's payment details; replace with config.
+- **Logos:** `assets/blak-ticket-logo.{svg,jpeg}`, `blak-ticket-name.{svg,jpeg}`, `balk-ticket-logo-2.jpeg` (typo), Cordova `resources/` icons + splash, `www/assets/` copies. Hardcoded HTML pages in `server.js:1111` (Google success) and `3392` (PayU return), and the reset email template `4404-4436`.
+- **Documents:** no privacy/T&C/press/blog PDFs exist in the repo. The signup "Terms" and "Privacy" are non-clickable text (`vybera_26.html:825`), so there is nothing to link yet.
+- **Dead files:** `prev`, `VYBERA.html`, `vybera-cordova/www/server.js`.
+
+## Interview notes
+_(One entry per fixed issue: a 2-line explanation to say out loud. Empty until Phase 2 fixes land.)_

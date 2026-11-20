@@ -1,0 +1,29 @@
+{
+  "name": "vybera",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node --check server.js && node --check firebaseconfig.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "firebase": "^12.13.0",
+    "google-auth-library": "^10.9.1",
+    "nodemailer": "^9.0.1",
+    "pg": "^8.20.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "cordova": "^13.0.0"
+  }
+}

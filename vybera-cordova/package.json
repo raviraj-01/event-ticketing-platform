@@ -1,0 +1,40 @@
+{
+  "name": "com.vybera.app",
+  "displayName": "BLAK Tickets",
+  "version": "1.0.0",
+  "description": "BLAK Tickets event discovery and booking app.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ecosystem:cordova"
+  ],
+  "author": "Apache Cordova Team",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "cordova-android": "^15.0.0",
+    "cordova-plugin-android-permissions": "^1.1.5",
+    "cordova-plugin-customurlscheme": "^5.0.2",
+    "cordova-plugin-googleplus": "^8.5.2",
+    "cordova-plugin-inappbrowser": "^6.0.1"
+  },
+  "cordova": {
+    "platforms": [
+      "android"
+    ],
+    "plugins": {
+      "cordova-plugin-inappbrowser": {},
+      "cordova-plugin-customurlscheme": {
+        "URL_SCHEME": "vybera",
+        "ANDROID_SCHEME": "vybera",
+        "ANDROID_HOST": "google-login",
+        "ANDROID_PATHPREFIX": "/"
+      },
+      "cordova-plugin-googleplus": {
+        "PLAY_SERVICES_VERSION": "15.0.1"
+      },
+      "cordova-plugin-android-permissions": {}
+    }
+  }
+}

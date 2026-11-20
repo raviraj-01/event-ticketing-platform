@@ -1,0 +1,13 @@
+.env
+.npm-cache/
+electric-sql-pglite-*.tgz
+node_modules/
+uploads/
+vybera-cordova/node_modules/
+vybera-cordova/platforms/
+vybera-cordova/plugins/
+*.apk
+*.aab
+*.log
+.env.*
+!.env.example
