@@ -4,8 +4,12 @@
 > One issue per change → explain → change → test → update this file → commit (`fix(area): ...`).
 > DB changes go in migrations, not startup `ALTER`s. Frontend changes go into every HTML copy until they are consolidated (see M14).
 > Never delete data, drop tables or delete tracked files without asking Ravi. If intended behaviour is unclear, ask.
+> **Never use credentials from any other project.** This repo runs only on Ravi's own test accounts.
+> **Never push to or touch the old remotes** (`blak`, `change`, `origin`, `raviraj` in the old `VYBERA/` folder). They belong to the collaborator.
 
-**Current phase:** Phase 1 audit complete (2026-11-21). Waiting for Ravi's go-ahead before Phase 2.
+**Repo:** `ticketing-app/` is a fresh repo (2026-11-21) with clean history, created by copying the old `VYBERA/` working tree without `.git` or `.env`. The old folder is left untouched. Ravi will add his own GitHub remote.
+
+**Current phase:** Phase 2 (fixes) in progress, in the order agreed under "Decisions from Ravi".
 
 ---
 
@@ -58,6 +62,22 @@ Verified against the code on 2026-11-21:
 `.env.example` also lists `R2_ACCOUNT_ID`, which is unused. The local `.env` contains `PAYU_TEST_MODE`, which no code reads (`PAYU_ENV` is what selects test or production).
 
 ### External accounts / keys you need (create your own test credentials)
+Ravi creates **all** of these himself. None of the client's live values are used here. `.env.example` lists the same items as a checklist. Items marked **(client)** are currently hardcoded in the repo with the client's identifiers and must be replaced with your own before you test them.
+
+| # | Create | Where | Fills |
+|---|---|---|---|
+| 1 | PostgreSQL database (local install, Docker `postgres:16`, or a free Neon/Render DB) | — | `DATABASE_URL` |
+| 2 | JWT secret | `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` | `JWT_SECRET` |
+| 3 | Twilio trial account + Verify service | twilio.com → Verify → Services | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` (trial can only text verified numbers) |
+| 4 | PayU **test** merchant | PayU dashboard → test mode key/salt | `PAYU_KEY`, `PAYU_SALT`, `PAYU_ENV=test` |
+| 5 | SMTP sender (a Gmail account with an app password, or Mailtrap for safe testing) | — | `SMTP_*` |
+| 6 | Cloudflare R2 bucket + API token (optional; uploads fall back to local disk only where allowed) | Cloudflare → R2 | `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` |
+| 7 | Google Cloud OAuth **web** client ID **(client)** | Google Cloud console → Credentials | `GOOGLE_CLIENT_ID` |
+| 8 | Google OAuth **Android** client ID **(client)** | same; needs your APK signing SHA-1 | `vybera-cordova/config.xml` `GoogleSignInClientId` |
+| 9 | Firebase project **(client)**: `firebaseconfig.js` holds the client's Firebase web config | Firebase console | `firebaseconfig.js` `firebaseConfig` |
+| 10 | Super admin login for your dev DB | your choice | `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD` |
+
+Reference: what each variable does.
 | Service | Used for | Env / config | Notes |
 |---|---|---|---|
 | PostgreSQL | all data | `DATABASE_URL` | SSL turned on automatically unless the URL contains `localhost` (`server.js:80`) |
@@ -183,36 +203,43 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 - `requireAdmin` / `requireStaff` DB checks: confirmed. Note: `requireAdmin` upgrades a normal admin token to super if its email exists in `super_admin_accounts`. That's fine while the JWT secret is safe (C1).
 - Twilio Verify flow: confirmed (only touched by M7/M17).
 
-## Recommended Phase 2 order
-0. **Ravi:** C1 is handled outside this repo (original project).
-1. Commit the current uncommitted work as a baseline (Q2), so every fix is a clean diff.
-2. C2 → C3 (route deletions + small UI changes in all copies).
-3. C6 (ticket auth) → H1 (static root) → C5 (uploads).
-4. C4 + H9 + H11 (order/payment rewrite, atomic inventory) behind migrations; introduce node-pg-migrate here.
-5. H4, H12, H13, H2, H3, H10, H14, H8.
-6. M14 consolidation, then H7 (escaping) + M15 (helmet/CSP).
-7. H5 + H16 + L4 together (sessions, CORS, jose), then H6 (admin hardening).
-8. Remaining Medium/Low, then Phase 3 restructure + tests.
+## Phase 2 order (agreed with Ravi 2026-11-21)
+1. Fresh repo with clean history ✅ (`f915baf`)
+2. Static-serving fix (H1): serve only `public/`; CLAUDE.md must never be public
+3. C2 → C3 → C5 → C4 (with H9, H11) → C6
+4. High items, then Medium/Low, then Phase 3 restructure + tests
+
+Frontend consolidation (M14) happens before the first frontend-touching fix (C2), because otherwise every fix has to be made in 2-3 diverged copies.
+
+## Decisions from Ravi (2026-11-21)
+| # | Topic | Decision |
+|---|---|---|
+| D1 | Other projects' credentials (C1) | Never used here. Ravi creates his own DB, JWT secret, Twilio test account, PayU test keys and SMTP. |
+| D2 | Git history | No force-push, don't touch the old remotes. Fresh repo, current working tree as the baseline commit; Ravi adds his own remote. |
+| D3 | Manual UPI "I have paid" | **Remove.** Payments go only through the gateway (test mode); bookings are confirmed only by a verified callback. |
+| D4 | Staff cash sales | Cash a staff member collects is **money owed to the organizer**, not withdrawable. Only earned commission is withdrawable. Track cash owed separately. |
+| D5 | Platform fee | One constant `PLATFORM_FEE_PERCENT` (default 8), loaded from config; remove every hardcoded copy. |
+| D6 | Frontend cleanup | `vybera_26.html` is the base. Port the Cordova-only features, list them here **before** deleting, then delete `VYBERA.html`, `prev`, `vybera-cordova/www/server.js`. The Cordova build copies from one frontend source. |
+| D7 | Sessions | httpOnly cookies on web; short-lived Bearer access token + refresh token in secure storage on the APK; lock CORS to explicit origins in the same change. |
+| D8 | Static files | Serve only a dedicated `public/` folder; CLAUDE.md is never public. |
+
+Still open (ask when reached): password reset for non-buyers (old Q4), event approval before live (Q6), refunds in v1 (Q8), global scanner staff (Q10, M18), unique phone per buyer (Q12), staff_owned upfront payment (rest of Q5).
 
 ## Change log
 | Date | Change | Why |
 |---|---|---|
 | 2026-11-21 | Created CLAUDE.md with the Phase 0 inventory and Phase 1 audit. Added `.env.*` (except `.env.example`) to `.gitignore`. | Ravi's audit request; prevent committing env variants. |
+| 2026-11-21 | Fresh repo `ticketing-app/` (baseline `f915baf`), copied from the working tree without `.git`/`.env`. Scanned the copy: no live secret value is present in any file. | Remove `.env` from our history without rewriting the collaborator's remotes (D2). |
+| 2026-11-21 | `.env.example` rewritten as a checklist of Ravi's own test accounts (dropped the unused `R2_ACCOUNT_ID`); CLAUDE.md records decisions D1-D8. | C1 / D1. |
 
 ## Open questions for Ravi
-1. **Secrets (C1):** handled outside this repo (original project).
-2. **Uncommitted work** (Google ID-token login, local OTP fallback, UI tweaks in all copies): commit it as-is as a baseline before Phase 2 (I'd gate the OTP fallback as part of M7)?
-3. **Manual UPI "I have paid" flow:** remove it (PayU only), or keep it as "pending until an admin verifies the UTR"? It cannot stay as auto-confirm.
-4. **Password reset for non-buyers** once the legacy route is gone: creators → same email-token flow; staff → reset by their creator/admin; admins → by super admin; super admin → DB/CLI only. OK?
-5. **Staff economics:** should cash sales (staff already holds the cash) count toward withdrawable balance? In `staff_owned` mode, does staff pay the creator the purchase price upfront, and who pays withdrawals (platform or creator)?
-6. Should creator events need **admin approval** before going live?
-7. Platform fee: **8% or 6%**?
-8. Are **refunds** needed for v1? Who triggers them, and should they go through the PayU refund API?
-9. OK to **consolidate the frontend** into one source file + a copy script for Cordova, and delete `VYBERA.html`, `prev`, and `vybera-cordova/www/server.js`?
-10. Should admin-created staff with no event be able to scan **any** event (M18)?
-11. **Cookies vs Cordova (H5):** I recommend httpOnly cookie sessions for the web app, and refresh token in secure storage + short Bearer access token for the APK (cross-site cookies are unreliable in Android WebView). Agree?
-12. Phone number unique per buyer account?
-13. Which PayU account will you use for testing (your own test merchant key/salt)?
+(Answered ones moved to "Decisions from Ravi".)
+- Q4. **Password reset for non-buyers** once the legacy route is gone: creators → same email-token flow; staff → reset by their creator/admin; admins → by super admin; super admin → DB/CLI only. OK?
+- Q5b. In `staff_owned` mode, does staff pay the creator the purchase price upfront? Who pays commission withdrawals (platform or creator)?
+- Q6. Should creator events need **admin approval** before going live?
+- Q8. Are **refunds** needed for v1? Who triggers them, and should they go through the PayU refund API?
+- Q10. Should admin-created staff with no event be able to scan **any** event (M18)?
+- Q12. Phone number unique per buyer account?
 
 ## Branding/cleanup to do (don't rename until Ravi picks a name)
 - **Names:** "BLAK Tickets" (server.js ×13, vybera_26.html ×51, Cordova index ×49, VYBERA.html ×14, config.xml ×3, Cordova package.json). "VYBERA"/"Vybera" (≈170-250 per HTML file, package name, repo name, README, `localStorage` keys `VYBERA_*`, `window.VYBERA_API_BASE`).
