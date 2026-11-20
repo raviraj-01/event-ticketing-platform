@@ -96,16 +96,17 @@ Reference: what each variable does.
 
 ```
 server.js            everything: config, JWT, middleware, R2 presign, initDb (schema), ~63 routes
-vybera_26.html       live web SPA (all roles in one page, "pages" toggled by showPage)
+public/index.html    live web SPA (was vybera_26.html; all roles in one page, "pages" toggled by showPage)
 VYBERA.html          legacy SPA copy (unused, still served)
-firebaseconfig.js    Firebase Google sign-in helper (ES module, CDN imports)
-assets/              logos (BLAK Tickets)
+public/firebaseconfig.js  Firebase Google sign-in helper (ES module, CDN imports)
+public/assets/       logos (BLAK Tickets)
+public/              the ONLY folder served by express.static (H1)
 prev                 old server.js copy from 2026-06-22 (tracked, publicly served!)
 uploads/             local file fallback (git-ignored, publicly served at /uploads)
 vybera-cordova/      Cordova Android project; www/ = app bundle (forked index.html, stale server.js)
 ```
 
-**Request flow:** `cors` (reflects any origin) → a hand-written CORS/COOP middleware → `bodyParser.json({limit:'30mb'})` → `express.static(__dirname)` (**serves the whole repo root**, see H1) → routes. Auth is per-route middleware: `requireCreator`, `requireAdmin`, `requireSuperAdmin`, `requireStaff`, `requireBuyer`, `requireScanIdentity`, `requireProfileIdentity`. Tokens are sent as `Authorization: Bearer`. The frontend stores them in `localStorage` (`VYBERA_BUYER_TOKEN`, `VYBERA_CREATOR_TOKEN`, `VYBERA_STAFF_TOKEN`, `VYBERA_ADMIN_TOKEN`).
+**Request flow:** `cors` (reflects any origin) → a hand-written CORS/COOP middleware → `bodyParser.json({limit:'30mb'})` → `express.static(public/)` (fixed H1; previously the whole repo root) → routes. Auth is per-route middleware: `requireCreator`, `requireAdmin`, `requireSuperAdmin`, `requireStaff`, `requireBuyer`, `requireScanIdentity`, `requireProfileIdentity`. Tokens are sent as `Authorization: Bearer`. The frontend stores them in `localStorage` (`VYBERA_BUYER_TOKEN`, `VYBERA_CREATOR_TOKEN`, `VYBERA_STAFF_TOKEN`, `VYBERA_ADMIN_TOKEN`).
 
 **Key tables** (created in `initDb`, `server.js:750-1071`):
 - `users`: buyers. `email` UNIQUE (case-sensitive); `phone` not unique; `status` Active/Suspended.
@@ -146,7 +147,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 ### High
 | ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
 |---|---|---|---|---|---|---|---|---|
-| H1 | High | Static files | `server.js:61-62` | `express.static(__dirname)` serves the whole project root: `/server.js`, `/prev`, `/package.json`, `/README.md`, `/VYBERA.html`, `/vybera-cordova/www/server.js`, … (`.env` is safe only because dotfiles are ignored by default). | Full backend source disclosure. Attackers read every route and query. **This CLAUDE.md would also be public once deployed**, so do not deploy it before H1 is fixed. | Open | Serve only a `public/` folder (HTML + assets + firebaseconfig.js). | – |
+| H1 | High | Static files | `server.js:61-62` | `express.static(__dirname)` serves the whole project root: `/server.js`, `/prev`, `/package.json`, `/README.md`, `/VYBERA.html`, `/vybera-cordova/www/server.js`, … (`.env` is safe only because dotfiles are ignored by default). | Full backend source disclosure. Attackers read every route and query. **This CLAUDE.md would also be public once deployed**, so do not deploy it before H1 is fixed. | Fixed | Moved browser files to `public/` (`vybera_26.html` → `public/index.html`, `firebaseconfig.js`, `assets/`); `express.static(publicDir, {index:false})`; removed the `/VYBERA` mount and the explicit firebaseconfig route. Verified: source files, CLAUDE.md, `.env` → 404. | see git log `fix(static)` |
 | H2 | High | Auth | `server.js:4454` | Ravi#4. Reset token is reusable for its whole TTL; it is a stateless JWT tied only to the email. | A leaked or forwarded link can be reused after you change your password. | Open | Add a `users.password_version` column (migration), include it in the token, check it and increment it on reset (also invalidates sessions, ties in with H5). | – |
 | H3 | High | OTP/Cost | `server.js:4052` (routes `4163-4168`, duplicated as `/otp/msg91/*`) | Ravi#5. No rate limit on OTP send. Partly mitigated: only `+91` numbers are accepted, and Twilio Verify has per-number limits plus Fraud Guard. | SMS pumping, Twilio bill, and spamming a victim's phone. | Open | Limit per phone (e.g. 3 per 10 min) and per IP (e.g. 10 per hour), stored in Postgres (no Redis yet). Remove the duplicate `/otp/msg91/*` aliases if unused (the UI uses only `/otp/twilio/*`). | – |
 | H4 | High | Auth | `server.js:409` (also `requireScanIdentity` `543`, `requireProfileIdentity` `582`) | Ravi#6. `requireCreator` checks only the token, never `kyc_status` in the DB. | A suspended or rejected creator keeps full access (events, staff, finance, scanning) for up to 30 days. | Open | Same DB check as `requireAdmin`: creator exists and `kyc_status='Approved'`. | – |
@@ -190,7 +191,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 | ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
 |---|---|---|---|---|---|---|---|---|
 | L1 | Low | Abuse | `server.js:1162` `/qr` | Ravi#10. Public endpoint renders any text as a QR (CPU, free QR service). It is only used for the staff share link (`vybera_26.html:2964`). | Minor abuse. | Open | Generate the share QR client-side or only for own share URLs; length cap + rate limit. | – |
-| L2 | Low | Bug | `server.js:59` | Favicon route points to `assets/blak-tickets-logo.svg`; the file is actually `blak-ticket-logo.svg`. | 404 / error log on every page load. | Open | Fix the path. | – |
+| L2 | Low | Bug | `server.js:59` | Favicon route points to `assets/blak-tickets-logo.svg`; the file is actually `blak-ticket-logo.svg`. | 404 / error log on every page load. | Fixed | Path corrected while moving assets (part of the H1 commit). | see git log `fix(static)` |
 | L3 | Low | Cleanup | `prev`, `VYBERA.html` | An old server copy and an old frontend copy are tracked and publicly served. | Confusion, source disclosure (H1). | Open | Delete (ask first). | – |
 | L4 | Low | JWT | `server.js:161-202` | Ravi#11. The hand-written JWT is actually implemented safely (fixed HS256, timing-safe compare, exp checked), but it has no `iss`/`aud`, and one secret serves session, reset and OTP tokens (only `scope` separates them). | Token-confusion risk (see H12). | Open | Switch to `jose` with `aud` per token type; do it together with H5. | – |
 | L5 | Low | Validation | `1928`, `1594-1684` | Commission rate is unbounded (>100%). Event date and time are free text; lat/long, banner URL and visibility are unvalidated. | Bad data. | Open | Input validation on create endpoints. | – |
@@ -230,6 +231,7 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 |---|---|---|
 | 2026-11-21 | Created CLAUDE.md with the Phase 0 inventory and Phase 1 audit. Added `.env.*` (except `.env.example`) to `.gitignore`. | Ravi's audit request; prevent committing env variants. |
 | 2026-11-21 | Fresh repo `ticketing-app/` (baseline `f915baf`), copied from the working tree without `.git`/`.env`. Scanned the copy: no live secret value is present in any file. | Remove `.env` from our history without rewriting the collaborator's remotes (D2). |
+| 2026-11-21 | H1: only `public/` is served; app HTML is now `public/index.html` (alias `/vybera_26.html` kept). L2 favicon path fixed. | Source code and CLAUDE.md were publicly downloadable (D8). |
 | 2026-11-21 | `.env.example` rewritten as a checklist of Ravi's own test accounts (dropped the unused `R2_ACCOUNT_ID`); CLAUDE.md records decisions D1-D8. | C1 / D1. |
 
 ## Open questions for Ravi
@@ -252,4 +254,6 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 - **Dead files:** `prev`, `VYBERA.html`, `vybera-cordova/www/server.js`.
 
 ## Interview notes
-_(One entry per fixed issue: a 2-line explanation to say out loud. Empty until Phase 2 fixes land.)_
+_(One entry per fixed issue: a 2-line explanation to say out loud.)_
+
+- **H1 static files:** "The server used `express.static` on the project root, so anyone could download `server.js` and internal docs. I moved browser files into a `public/` folder and serve only that, so the attack surface is an explicit allowlist instead of everything on disk."

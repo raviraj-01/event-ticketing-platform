@@ -20,7 +20,10 @@ process.on("uncaughtException", (err) => {
 });
 
 const app = express();
-const appHtmlPath = path.join(__dirname, "vybera_26.html");
+// Only files inside public/ are reachable from the browser. Never point
+// express.static at __dirname: that would publish server.js, CLAUDE.md, etc.
+const publicDir = path.join(__dirname, "public");
+const appHtmlPath = path.join(publicDir, "index.html");
 const uploadsDir = path.join(__dirname, "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -56,17 +59,11 @@ app.use((req, res, next) => {
 app.use(bodyParser.json({ limit: "30mb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.get("/favicon.ico", (req, res) => {
-  res.type("image/svg+xml").sendFile(path.join(__dirname, "assets", "blak-tickets-logo.svg"));
+  res.type("image/svg+xml").sendFile(path.join(publicDir, "assets", "blak-ticket-logo.svg"));
 });
-app.use(express.static(path.join(__dirname)));
-app.use("/VYBERA", express.static(path.join(__dirname)));
+// index:false so "/" always goes through the no-cache route below.
+app.use(express.static(publicDir, { index: false }));
 app.use("/uploads", express.static(uploadsDir));
-
-app.get(["/firebaseconfig.js", "/VYBERA/firebaseconfig.js"], (req, res) => {
-  res
-    .type("text/javascript")
-    .sendFile(path.join(__dirname, "firebaseconfig.js"));
-});
 
 if (!process.env.DATABASE_URL) {
   console.error(
