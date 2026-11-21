@@ -10427,16 +10427,37 @@ VyberaEventBus.on('sale_completed', function(data){
     vyberaActivity.log('Sale: ' + (data.staffName||'Staff') + ' → ' + (data.buyerName||'Customer') + ' — ₹' + (data.total||0).toLocaleString('en-IN'));
 });
 
+// D4: the organizer records cash a staff member handed over.
+async function recordCashReceived(staffPk){
+  var st=STORE.getStaffByPk(staffPk);if(!st)return;
+  var owed=Number(st.cashOwed||0);
+  var raw=prompt('Cash received from '+st.name+' (owed: \u20b9'+owed.toLocaleString('en-IN')+')', String(owed));
+  if(raw===null)return;
+  var amount=Number(String(raw).replace(/[^0-9.]/g,''));
+  if(!(amount>0)){showToast('Enter a valid amount');return;}
+  try{
+    var resp=await fetch(apiUrl('/creator/staff/'+encodeURIComponent(staffPk)+'/cash-settlements'),{
+      method:'POST',headers:authHeaders('creator',{'Content-Type':'application/json'}),body:JSON.stringify({amount:amount})
+    });
+    var data=await readAuthResponse(resp);
+    if(!resp.ok)throw new Error(data.error||'Could not record cash received');
+    showToast('Recorded \u20b9'+amount.toLocaleString('en-IN')+' from '+st.name);
+    await loadCreatorStaff();
+    if(typeof refreshStaffManagePage==='function')refreshStaffManagePage();
+  }catch(err){showToast(err.message||'Could not record cash received');}
+}
+
 // ── ENHANCED refreshWalletTab ──
 function refreshWalletTab(){
   var st = STORE.currentStaff; if(!st) return;
   var stats = STORE.getStaffStats(st.id);
   var wallet = STORE.staffWallet || {};
-  var online = Number(wallet.onlineRevenue||0);
-  var cash   = Number(wallet.cashRevenue||0);
-  var total  = Number(wallet.totalEarned||stats.earnings||0);
+  // D4: only commission is withdrawable; cash collected is owed to the organizer.
+  var commission = Number(wallet.commissionEarned||wallet.totalEarned||0);
+  var cashOwed   = Number(wallet.cashOwed||0);
+  var total  = commission;
   var withdrawn = Number(wallet.withdrawn||0);
-  var balance = Number(wallet.availableBalance||Math.max(0,total-withdrawn));
+  var balance = Number(wallet.availableBalance||0);
 
   // Balance card
   var balEl = document.getElementById('staffWalletBalance');
@@ -10453,11 +10474,11 @@ function refreshWalletTab(){
     breakEl.innerHTML = ''
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
       +'<div style="padding:12px;background:rgba(0,212,212,.08);border:1px solid rgba(0,212,212,.2);border-radius:12px;text-align:center;">'
-      +'<div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Online Revenue</div>'
-      +'<div style="font-size:18px;font-weight:700;color:#00D4D4;">&#8377;'+online.toLocaleString('en-IN')+'</div></div>'
+      +'<div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Commission earned</div>'
+      +'<div style="font-size:18px;font-weight:700;color:#00D4D4;">&#8377;'+commission.toLocaleString('en-IN')+'</div></div>'
       +'<div style="padding:12px;background:rgba(139,32,16,.12);border:1px solid rgba(139,32,16,.25);border-radius:12px;text-align:center;">'
-      +'<div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Cash Revenue</div>'
-      +'<div style="font-size:18px;font-weight:700;color:#e87461;">&#8377;'+cash.toLocaleString('en-IN')+'</div></div></div>'
+      +'<div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Cash owed to organizer</div>'
+      +'<div style="font-size:18px;font-weight:700;color:#e87461;">&#8377;'+cashOwed.toLocaleString('en-IN')+'</div></div></div>'
       +(activePayments
         ?'<button onclick="openWithdrawalModal()" style="width:100%;padding:13px;background:linear-gradient(135deg,#8B2010,#c0392b);border:none;border-radius:14px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;letter-spacing:.3px;margin-bottom:12px;">💸 Withdraw Funds</button>'
         :'<button disabled style="width:100%;padding:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:14px;color:rgba(255,255,255,.35);font-size:13px;font-weight:700;cursor:not-allowed;font-family:\'DM Sans\',sans-serif;margin-bottom:12px;">Event completed — payments locked</button>');
@@ -10592,7 +10613,7 @@ function renderStaffPerformance(){
   var wallet = STORE.staffWallet || {};
   var cashTotal = Number(wallet.cashRevenue||0);
   var onlineTotal = Number(wallet.onlineRevenue||0);
-  var grandTotal = Number(wallet.totalEarned||cashTotal+onlineTotal);
+  var grandTotal = cashTotal+onlineTotal; // ticket sales value
   var soldTotal = Number(wallet.ticketsSold||stats.sold||0);
 
   perfEl.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;font-weight:600;">Performance</div>'
@@ -10602,7 +10623,7 @@ function renderStaffPerformance(){
     +'<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:3px;">Total Tickets Sold</div></div>'
     +'<div style="padding:12px;background:rgba(255,255,255,.04);border-radius:12px;text-align:center;">'
     +'<div style="font-size:20px;font-weight:700;color:#4ade80;">&#8377;'+grandTotal.toLocaleString('en-IN')+'</div>'
-    +'<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:3px;">Total Revenue</div></div></div>'
+    +'<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:3px;">Total sales</div></div></div>'
     +'<div style="padding:10px 14px;background:rgba(255,255,255,.03);border-radius:10px;">'
     +'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);">'
     +'<span style="font-size:12px;color:rgba(255,255,255,.5);">Online sales</span>'
@@ -11056,6 +11077,11 @@ function refreshStaffManagePage(){
       +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:#00D4D4;">'+formatTicketCount(ss.sold)+'</div><div style="font-size:9px;color:rgba(255,255,255,0.4);">Sold</div></div>'
       +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:#4ade80;">\u20b9'+earnings.toLocaleString('en-IN')+'</div><div style="font-size:9px;color:rgba(255,255,255,0.4);">Earned</div></div></div>'
       +'<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:4px;margin-bottom:10px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#00D4D4);border-radius:4px;"></div></div>'
+      +(Number(s.cashOwed||0)>0
+        ?'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;padding:10px;background:rgba(232,116,97,0.08);border:1px solid rgba(232,116,97,0.25);border-radius:10px;">'
+          +'<span style="font-size:12px;color:#e87461;">Cash owed: \u20b9'+Number(s.cashOwed).toLocaleString('en-IN')+'</span>'
+          +'<button onclick="recordCashReceived(\''+jsStr(s.id)+'\')" style="padding:6px 10px;background:transparent;border:1px solid rgba(232,116,97,0.5);color:#e87461;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;">Record cash received</button></div>'
+        :'')
       +'<div style="display:flex;gap:8px;"><button onclick="shareStaffInventoryLink(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(0,212,212,0.1);border:1px solid rgba(0,212,212,0.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:600;cursor:pointer;">Share Link</button>'
       +'<button onclick="assignMoreTickets(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;cursor:pointer;">Assign More</button></div>';
     list.appendChild(card);

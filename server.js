@@ -11,6 +11,7 @@ const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const { runMigrations } = require("./src/db/migrate");
 const { AUDIENCE, configureTokens, signToken, verifyToken } = require("./src/utils/tokens");
+const { WalletError, staffWallet, requestWithdrawal, recordCashSettlement } = require("./src/services/staffWallet");
 const { parseCookies } = require("./src/utils/cookies");
 const { USER_ACTIVE_STATUS, normalizeUserStatus, isUserActive } = require("./src/utils/accounts");
 const {
@@ -391,6 +392,7 @@ const publicStaff = (member) => ({
   assignedTickets: Number(member.assigned_tickets || 0),
   soldTickets: Number(member.sold_tickets || 0),
   earnings: Number(member.earnings || 0),
+  cashOwed: Number(member.cash_owed || 0),
   createdByAdminEmail: member.created_by_admin_email || null,
   createdAt: member.created_at,
 });
@@ -1232,7 +1234,7 @@ app.get("/creator/staff", requireCreator, async (req, res) => {
       pool.query(
         `SELECT s.*,
            COALESCE(SUM(ss.qty),0)::INTEGER AS db_sold_tickets,
-           COALESCE(SUM(CASE WHEN ss.revenue_owner='staff' THEN ss.total ELSE ss.commission END),0)::NUMERIC AS db_earnings
+           COALESCE(SUM(ss.commission),0)::NUMERIC AS db_earnings
          FROM staff_accounts s
          LEFT JOIN staff_sales ss ON ss.staff_id=s.id AND ss.status='active'
          WHERE s.creator_id=$1
@@ -1254,10 +1256,12 @@ app.get("/creator/staff", requireCreator, async (req, res) => {
       ),
     ]);
     const summary = salesSummary.rows[0] || {};
+    const wallets = await Promise.all(staff.rows.map((member) => staffWalletFor(member.id)));
     res.json({
-      staff: staff.rows.map((member) => {
+      staff: staff.rows.map((member, index) => {
         const mapped = {
           ...member,
+          cash_owed: wallets[index].cashOwed,
           sold_tickets: Number(
             member.db_sold_tickets || member.sold_tickets || 0,
           ),
@@ -1278,6 +1282,21 @@ app.get("/creator/staff", requireCreator, async (req, res) => {
   } catch (err) {
     console.error("Creator staff list failed:", err);
     res.status(500).json({ error: "Could not load staff" });
+  }
+});
+
+// The organizer records cash a staff member handed over (reduces cash owed).
+app.post("/creator/staff/:staffId/cash-settlements", requireCreator, async (req, res) => {
+  try {
+    const wallet = await recordCashSettlement(pool, req.creator.sub, String(req.params.staffId || ""), {
+      amount: req.body && req.body.amount,
+      note: req.body && req.body.note,
+    });
+    res.status(201).json({ wallet });
+  } catch (err) {
+    if (err instanceof WalletError) return res.status(err.status).json({ error: err.message });
+    console.error("Cash settlement failed:", err);
+    res.status(500).json({ error: "Could not record cash received" });
   }
 });
 
@@ -1525,41 +1544,8 @@ const createStaffAssignment = async (
 };
 
 
-const staffWalletFor = async (staffId) => {
-  const result = await pool.query(
-    `SELECT
-       COALESCE(SUM(CASE WHEN payment_mode='online' THEN
-         CASE WHEN revenue_owner='staff' THEN total ELSE commission END
-       ELSE 0 END),0)::NUMERIC AS online_revenue,
-       COALESCE(SUM(CASE WHEN payment_mode='cash' THEN
-         CASE WHEN revenue_owner='staff' THEN total ELSE commission END
-       ELSE 0 END),0)::NUMERIC AS cash_revenue,
-       COALESCE(SUM(CASE WHEN revenue_owner='staff' THEN total ELSE commission END),0)::NUMERIC AS total_earned,
-       COALESCE(SUM(qty),0)::INTEGER AS tickets_sold
-     FROM staff_sales
-     WHERE staff_id=$1 AND status='active'`,
-    [staffId],
-  );
-  const withdrawals = await pool.query(
-    `SELECT COALESCE(SUM(amount),0)::NUMERIC AS withdrawn
-     FROM staff_withdrawals
-     WHERE staff_id=$1 AND status <> 'Rejected'`,
-    [staffId],
-  );
-  const row = result.rows[0] || {};
-  const withdrawn = Number(
-    (withdrawals.rows[0] && withdrawals.rows[0].withdrawn) || 0,
-  );
-  const totalEarned = Number(row.total_earned || 0);
-  return {
-    onlineRevenue: Number(row.online_revenue || 0),
-    cashRevenue: Number(row.cash_revenue || 0),
-    totalEarned,
-    withdrawn,
-    availableBalance: Math.max(0, totalEarned - withdrawn),
-    ticketsSold: Number(row.tickets_sold || 0),
-  };
-};
+// Commission balance + cash owed to the organizer (H10 / D4).
+const staffWalletFor = (staffId) => staffWallet(pool, staffId);
 
 app.post(
   "/creator/staff/:staffId/assignments",
@@ -1921,76 +1907,30 @@ app.post("/staff/sales", requireStaff, async (req, res) => {
 
 app.post("/staff/withdrawals", requireStaff, async (req, res) => {
   try {
-    const amount = Number(req.body && req.body.amount);
-    const method =
-      String((req.body && req.body.method) || "upi")
-        .trim()
-        .toLowerCase() === "bank"
-        ? "bank"
-        : "upi";
-    if (!Number.isFinite(amount) || amount <= 0)
-      return res.status(400).json({ error: "Enter a valid withdrawal amount" });
-    const staff = await pool.query(
-      "SELECT * FROM staff_accounts WHERE id=$1 AND status='active'",
-      [req.staff.sub],
-    );
-    if (!staff.rows.length)
-      return res.status(404).json({ error: "Staff account not found" });
-    const wallet = await staffWalletFor(req.staff.sub);
-    if (amount > wallet.availableBalance)
-      return res
-        .status(400)
-        .json({ error: "Amount exceeds available balance" });
-    const bankAccountName = String(
-      (req.body && req.body.bankAccountName) || "",
-    ).trim();
-    const bankAccountNumber = String(
-      (req.body && req.body.bankAccountNumber) || "",
-    ).trim();
-    const bankIfsc = String((req.body && req.body.bankIfsc) || "")
-      .trim()
-      .toUpperCase();
-    const upiId = String((req.body && req.body.upiId) || "").trim();
-    if (
-      method === "bank" &&
-      (!bankAccountName || !bankAccountNumber || !bankIfsc)
-    ) {
-      return res.status(400).json({
-        error:
-          "Add bank account name, account number, and IFSC before withdrawal",
-      });
+    const body = req.body || {};
+    const method = String(body.method || "upi").trim().toLowerCase() === "bank" ? "bank" : "upi";
+    const bankAccountName = String(body.bankAccountName || "").trim();
+    const bankAccountNumber = String(body.bankAccountNumber || "").trim();
+    const bankIfsc = String(body.bankIfsc || "").trim().toUpperCase();
+    const upiId = String(body.upiId || "").trim();
+    if (method === "bank" && (!bankAccountName || !bankAccountNumber || !bankIfsc)) {
+      return res.status(400).json({ error: "Add bank account name, account number, and IFSC before withdrawal" });
     }
     if (method === "upi" && !upiId) {
       return res.status(400).json({ error: "Add a UPI ID before withdrawal" });
     }
-    const id = `WD-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
-    const result = await pool.query(
-      `INSERT INTO staff_withdrawals (
-        id, creator_id, staff_id, amount, method, bank_account_name, bank_account_number, bank_ifsc, upi_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING *`,
-      [
-        id,
-        staff.rows[0].creator_id,
-        staff.rows[0].id,
-        amount,
-        method,
-        bankAccountName || null,
-        bankAccountNumber || null,
-        bankIfsc || null,
-        upiId || null,
-      ],
-    );
+    const result = await requestWithdrawal(pool, req.staff.sub, {
+      amount: body.amount, method, bankAccountName, bankAccountNumber, bankIfsc, upiId,
+    });
     res.status(201).json({
       message: "Withdrawal requested successfully",
-      withdrawal: publicStaffWithdrawal(result.rows[0]),
-      wallet: await staffWalletFor(req.staff.sub),
+      withdrawal: publicStaffWithdrawal(result.withdrawal),
+      wallet: result.wallet,
     });
   } catch (err) {
+    if (err instanceof WalletError) return res.status(err.status).json({ error: err.message });
     console.error("Staff withdrawal failed:", err);
-    res
-      .status(400)
-      .json({ error: err.message || "Could not request withdrawal" });
+    res.status(500).json({ error: "Could not request withdrawal" });
   }
 });
 
