@@ -83,6 +83,7 @@ const publicCreatorEvent = (event) => ({
   bannerKey: event.banner_key,
   visibility: event.visibility,
   status: event.status,
+  reviewNote: event.review_note || "",
   tickets: event.tickets || [],
   bookingCount: Number(event.booking_count || 0),
   revenue: Number(event.revenue || 0),

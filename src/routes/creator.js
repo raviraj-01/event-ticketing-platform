@@ -359,8 +359,8 @@ router.post("/creator/events", requireCreator, async (req, res) => {
       `INSERT INTO creator_events (
         id, creator_id, creator_name, name, category, description, event_date,
         start_time, end_time, venue, city, capacity, latitude, longitude,
-        banner_url, banner_key, visibility, tickets
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        banner_url, banner_key, visibility, tickets, status
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'pending')
       RETURNING *`,
       [
         id,
@@ -387,7 +387,8 @@ router.post("/creator/events", requireCreator, async (req, res) => {
       throw new Error("Event was not saved in the database");
     }
     res.status(201).json({
-      message: "Event published successfully",
+      // Q6 / D20: buyers see it only after an admin approves it.
+      message: "Event submitted. It goes live once an admin approves it.",
       event: publicCreatorEvent(result.rows[0]),
     });
   } catch (err) {

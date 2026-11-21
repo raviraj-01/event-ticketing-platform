@@ -2100,7 +2100,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
     <div id="createAssignSummary" class="staff-flow-note">Select staff and ticket tier.</div>
   </div>
 </div>
-<button class="cta-full" onclick="publishEvent()">🎉 Publish Event Live</button></div>
+<button class="cta-full" onclick="publishEvent()">🎉 Submit Event for Approval</button></div>
 </div>
 
 <div class="venue-map-modal" id="venueMapModal" aria-hidden="true">
@@ -5548,6 +5548,8 @@ function refreshCreatorDashboard() {
           +'<div class="ce-body"><div class="ce-title">'+escapeHtml(ev.name)+'</div>'
           +'<div class="pb-wrap"><div class="pb-fill" style="width:'+pct+'%"></div></div>'
           +'<div class="ce-meta"><span>'+formatTicketCount(ev.bookingCount)+' sold</span><span>'+escapeHtml(ev.date)+'</span></div>'
+          +(ev.status==='pending'?'<div style="font-size:11px;color:#eab308;margin-top:4px;">Waiting for admin approval</div>':'')
+          +(ev.status==='rejected'?'<div style="font-size:11px;color:#ef4444;margin-top:4px;">Rejected: '+escapeHtml(ev.reviewNote||'no reason given')+'</div>':'')
           +'<div class="ce-actions">'
           +'<button class="ce-btn" data-evid="'+escapeHtml(ev.id)+'">View</button>'
           +'<button class="ce-btn" data-scan="1">Scan</button>'
@@ -10036,10 +10038,24 @@ VyberaEventBus.on('event_submitted', function(data){
 });
 
 // ── WIRE EVENT BUS INTO admApproveEvent ──
-function admApproveEvent(id){
+// Q6 / D20: approve/reject are saved on the server (they used to change only
+// this browser's copy).
+async function admReviewEvent(id, decision, reason){
+  var resp=await fetch(apiUrl('/admin/events/'+encodeURIComponent(id)+'/'+decision),{
+    method:'POST',
+    headers:authHeaders('admin',{'Content-Type':'application/json'}),
+    body:JSON.stringify(reason?{reason:reason}:{})
+  });
+  var data=await readAuthResponse(resp);
+  if(!resp.ok) throw new Error(data.error||'Could not update event');
+  return data.event||{};
+}
+
+async function admApproveEvent(id){
   var ev = STORE.events.find(function(e){ return e.id===id; });
   if(!ev) return;
-  ev.status = 'live';
+  try{ ev.status = (await admReviewEvent(id,'approve')).status || 'live'; }
+  catch(err){ admShowToast(err.message||'Could not approve event'); return; }
   admRenderEvents(admCurrentEventTab||'all');
   admShowToast('✅ Event approved: ' + ev.name);
   STORE.addAdminLog('Approve Event', ev.name);
@@ -10051,12 +10067,16 @@ function admApproveEvent(id){
   if(typeof refreshExplore === 'function') refreshExplore();
 }
 
-function admRejectEvent(id){
+async function admRejectEvent(id){
   var ev = STORE.events.find(function(e){ return e.id===id; });
   if(!ev) return;
   var reason = prompt('Reason for rejection:');
   if(!reason) return;
-  ev.status = 'rejected';
+  try{
+    var updated = await admReviewEvent(id,'reject',reason);
+    ev.status = updated.status || 'rejected';
+    ev.reviewNote = updated.reviewNote || reason;
+  }catch(err){ admShowToast(err.message||'Could not reject event'); return; }
   admRenderEvents(admCurrentEventTab||'all');
   admShowToast('Event rejected: ' + ev.name);
   STORE.addAdminLog('Reject Event', ev.name + ' — ' + reason);

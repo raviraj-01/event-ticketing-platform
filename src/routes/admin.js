@@ -442,7 +442,9 @@ router.patch("/admin/events/:eventId/status", requireAdmin, confirmed, audit("ev
     if (!eventId || !status) {
       return res.status(400).json({ error: "eventId and status are required" });
     }
-    const validStatuses = ["live", "paused", "blocked", "completed", "cancelled"];
+    // "pending" sends a live event back for re-approval: new sales stop, but
+    // existing ticket holders keep their tickets and can still get in (D20).
+    const validStatuses = ["live", "paused", "blocked", "completed", "cancelled", "pending"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
@@ -461,6 +463,45 @@ router.patch("/admin/events/:eventId/status", requireAdmin, confirmed, audit("ev
     res.status(500).json({ error: "Could not update event status" });
   }
 });
+
+// Q6 / D20: approve or reject an event waiting for review. Only a pending
+// event can be reviewed, so two admins clicking at once can't both act on it.
+router.post("/admin/events/:eventId/approve", requireAdmin, audit("event.approve", (req) => ({ targetType: "event", targetId: req.params.eventId })), async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE creator_events SET status='live', review_note=NULL WHERE id=$1 AND status='pending' RETURNING *",
+      [req.params.eventId],
+    );
+    if (!result.rows.length) return eventNotReviewable(req, res);
+    res.json({ success: true, event: publicCreatorEvent(result.rows[0]) });
+  } catch (err) {
+    console.error("Event approval failed:", err);
+    res.status(500).json({ error: "Could not approve event" });
+  }
+});
+
+router.post("/admin/events/:eventId/reject", requireAdmin, audit("event.reject", (req) => ({ targetType: "event", targetId: req.params.eventId, details: { reason: req.body && req.body.reason } })), async (req, res) => {
+  try {
+    const reason = String((req.body && req.body.reason) || "").trim().slice(0, 500);
+    if (!reason) return res.status(400).json({ error: "A reason is required" });
+    const result = await pool.query(
+      "UPDATE creator_events SET status='rejected', review_note=$2 WHERE id=$1 AND status='pending' RETURNING *",
+      [req.params.eventId, reason],
+    );
+    if (!result.rows.length) return eventNotReviewable(req, res);
+    res.json({ success: true, event: publicCreatorEvent(result.rows[0]) });
+  } catch (err) {
+    console.error("Event rejection failed:", err);
+    res.status(500).json({ error: "Could not reject event" });
+  }
+});
+
+// 404 when the event does not exist, 409 when it is not waiting for review.
+async function eventNotReviewable(req, res) {
+  const found = await pool.query("SELECT status FROM creator_events WHERE id=$1", [req.params.eventId]);
+  if (!found.rows.length) return res.status(404).json({ error: "Event not found" });
+  return res.status(409).json({ error: `Event is ${found.rows[0].status}, not waiting for review` });
+}
 
 router.patch("/admin/users/:userId/status", requireAdmin, confirmed, audit("user.status", (req) => ({ targetType: "user", targetId: req.params.userId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
