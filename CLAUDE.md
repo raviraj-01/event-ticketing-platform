@@ -308,6 +308,7 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 | 2026-11-21 | Created CLAUDE.md with the Phase 0 inventory and Phase 1 audit. Added `.env.*` (except `.env.example`) to `.gitignore`. | Ravi's audit request; prevent committing env variants. |
 | 2026-11-21 | Fresh repo `ticketing-app/` (baseline `f915baf`), copied from the working tree without `.git`/`.env`. Scanned the copy: no live secret value is present in any file. | Remove `.env` from our history without rewriting the collaborator's remotes (D2). |
 | 2026-11-21 | H1: only `public/` is served; app HTML is now `public/index.html` (alias `/vybera_26.html` kept). L2 favicon path fixed. | Source code and CLAUDE.md were publicly downloadable (D8). |
+| 2026-11-21 | Q5b: staff resale disabled in UI (allocation option removed) and API (no new resale assignments, no sales from old ones); README "Future work" lists resale, refunds, coupons. | Decision D19. |
 | 2026-11-21 | Q4: emailed reset for organizers/staff (migration 0010), temporary passwords + forced change (migration 0011), super admin CLI recovery; M1 bootstrap insert-only. SMTP sink for email tests. | Decision D18. |
 | 2026-11-21 | H15: Cordova WebView allowlists made explicit; build checks the backend is allowed. All High items now fixed. | `access *`, http intents and dev ngrok navigation were allowed. |
 | 2026-11-21 | H14: KYC files only via an audited super-admin route with 60 s links; public media limited to banners/profiles; snapshot hides KYC from normal admins. | Government ID scans were reachable by anyone with the object key. |
@@ -345,7 +346,6 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 (Answered ones moved to "Decisions from Ravi".)
 - Q14. PayU requires a phone number. Google-only buyers may have none; we send the placeholder `9999999999`. Collect a phone before checkout instead?
 - Q15. Share-token regeneration (D12) needs a UI button and an endpoint. Should staff do it, the creator, or both?
-- Q5b. In `staff_owned` mode, does staff pay the creator the purchase price upfront? Who pays commission withdrawals (platform or creator)?
 - Q6. Should creator events need **admin approval** before going live?
 - Q8. Are **refunds** needed for v1? Who triggers them, and should they go through the PayU refund API?
 - Q10. Should admin-created staff with no event be able to scan **any** event (M18)?

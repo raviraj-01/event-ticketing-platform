@@ -1468,10 +1468,12 @@ const createStaffAssignment = async (
   const cleanQty = Number(qty);
   if (!Number.isInteger(cleanQty) || cleanQty < 1)
     throw new Error("Enter a valid ticket quantity");
-  const cleanMode =
-    String(allocationMode || mode || "creator_quota") === "staff_owned"
-      ? "staff_owned"
-      : "creator_quota";
+  // Q5b: staff resale ("staff_owned") is out of scope for now; only
+  // commission-based selling for the creator is allowed.
+  if (String(allocationMode || mode || "creator_quota") === "staff_owned") {
+    throw new Error("Staff resale is not available yet");
+  }
+  const cleanMode = "creator_quota";
   const cleanCommissionRate = Math.max(0, Number(commissionRate || 0));
   const staff = await client.query(
     "SELECT id FROM staff_accounts WHERE id=$1 AND creator_id=$2",
@@ -1797,6 +1799,8 @@ app.post("/staff/sales", requireStaff, async (req, res) => {
       String(assigned.allocation_mode || "creator_quota") === "staff_owned"
         ? "staff_owned"
         : "creator_quota";
+    // Q5b: older resale assignments cannot be sold from while resale is disabled.
+    if (assignmentMode === "staff_owned") throw new Error("Staff resale is not available yet");
     const salePrice =
       assignmentMode === "staff_owned"
         ? Number(assigned.resale_price || assigned.price || 0)

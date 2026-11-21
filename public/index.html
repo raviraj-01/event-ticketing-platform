@@ -2088,7 +2088,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
       <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;">Staff Member</label><select id="createAssignStaff" class="form-input"></select></div>
       <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;">Ticket Tier</label><select id="createAssignTier" class="form-input" onchange="updateCreateStaffAllocationSummary()"></select></div>
     </div>
-    <div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;">Allocation Type</label><select id="createAssignMode" class="form-input" onchange="updateCreateStaffAllocationMode('create')"><option value="creator_quota">Staff sells on behalf of Creator</option><option value="staff_owned">Staff purchases inventory from Creator</option></select></div>
+    <div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;">Allocation Type</label><select id="createAssignMode" class="form-input" onchange="updateCreateStaffAllocationMode('create')"><option value="creator_quota">Staff sells on behalf of Creator</option></select></div>
     <div class="staff-flow-grid" style="margin-bottom:8px;">
       <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;">Quantity</label><input id="createAssignQty" class="form-input" type="number" min="1" value="20" oninput="updateCreateStaffAllocationSummary()"/></div>
       <div id="createCommissionWrap"><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;">Commission %</label><input id="createAssignCommission" class="form-input" type="number" min="0" max="100" value="0" oninput="updateCreateStaffAllocationSummary()"/></div>
@@ -2523,7 +2523,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
   <div style="margin-bottom:12px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Ticket Allocation Type</label>
   <select id="addStaffAllocationMode" onchange="updateStaffAllocationMode('addStaff')" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
     <option value="creator_quota">Staff sells on behalf of Creator</option>
-    <option value="staff_owned">Staff purchases inventory from Creator</option>
+    
   </select>
   <div id="addStaffAllocationHelp" class="staff-flow-note">Buyer revenue is credited to the creator. Staff sees quota, sold, remaining, sales history and commission.</div></div>
   <div style="margin-bottom:12px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Tickets to Assign</label>
@@ -2559,7 +2559,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
   <div style="margin-bottom:12px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Allocation Type</label>
   <select id="assignMoreMode" onchange="updateStaffAllocationMode('assignMore')" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
     <option value="creator_quota">Staff sells on behalf of Creator</option>
-    <option value="staff_owned">Staff purchases inventory from Creator</option>
+    
   </select>
   <div id="assignMoreHelp" class="staff-flow-note">Buyer revenue goes to creator; staff commission is tracked separately.</div></div>
   <div style="margin-bottom:18px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Tickets to Assign</label>

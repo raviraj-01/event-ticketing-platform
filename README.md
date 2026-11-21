@@ -68,3 +68,9 @@ After starting the server, this URL should return database status:
 ```text
 http://localhost:3003/health
 ```
+
+## Future work (out of scope for the current release)
+
+- **Staff resale** ("staff buys inventory from the organizer and resells it"): disabled in the UI and API. Needs a decision on how the staff member pays the organizer up front and who pays out the resale money.
+- **Refunds**: no refund flow yet. Orders paid after their seats sold out are listed for admins as "needs refund" and must be refunded manually in the PayU dashboard.
+- **Coupons**: the checkout coupon box is hidden; coupons need server-side storage and validation in `POST /orders`.

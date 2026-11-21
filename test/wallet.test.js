@@ -81,3 +81,26 @@ test("D4: the organizer records cash received, which lowers cash owed", async ()
   const list = await api(server.baseUrl, "GET", "/creator/staff", { token: creator.token });
   assert.equal(list.body.staff.find((m) => m.id === staff.id).cashOwed, 600);
 });
+
+test("Q5b: staff resale is disabled (no new resale assignments, no sales from old ones)", async () => {
+  const creator = await fx.createCreator();
+  const eventId = await fx.createEvent({ creatorId: creator.id });
+  const staff = await fx.createStaff({ creatorId: creator.id, eventId, assignedTier: null });
+  const assign = await api(server.baseUrl, "POST", `/creator/staff/${staff.id}/assignments`, {
+    token: creator.token,
+    json: { eventId, tierName: "General", qty: 2, allocationMode: "staff_owned", purchasePrice: 400, resalePrice: 600 },
+  });
+  assert.equal(assign.status, 400);
+  assert.match(assign.body.error, /resale is not available/);
+  await server.db.query(
+    `INSERT INTO staff_assignments (id, creator_id, staff_id, event_id, event_name, tier_name, qty, price, allocation_mode)
+     VALUES ('ASN-old-resale', $1, $2, $3, 'Test Event', 'General', 2, 500, 'staff_owned')`,
+    [creator.id, staff.id, eventId],
+  );
+  const sale = await api(server.baseUrl, "POST", "/staff/sales", { token: staff.token, json: { assignmentId: "ASN-old-resale", qty: 1 } });
+  assert.equal(sale.status, 400);
+  const normal = await api(server.baseUrl, "POST", `/creator/staff/${staff.id}/assignments`, {
+    token: creator.token, json: { eventId, tierName: "General", qty: 2, commissionRate: 10 },
+  });
+  assert.equal(normal.status, 201, "commission-based assignment still works");
+});
