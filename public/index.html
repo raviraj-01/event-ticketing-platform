@@ -814,6 +814,42 @@ img.vylogo { background: transparent; mix-blend-mode: multiply; }
 </head>
 <body class="on-splash">
 <script>
+// ── Output encoding helpers (H7) ───────────────────────────────────────────
+// Anything that came from the server (event names, venues, buyer names, staff
+// IDs...) is untrusted text. When building HTML strings, pass it through the
+// helper that matches WHERE it lands:
+//   '<div>'+escapeHtml(v)+'</div>'            text or a quoted attribute value
+//   'onclick="fn(\''+jsStr(v)+'\')"'           inside a JS string in onclick="..."
+//   'onclick="fn('+jsArg(v)+')"'               a whole JS value in onclick="..."
+//   'src="'+safeUrl(v)+'"' / cssUrl(v)          URLs (blocks javascript: etc.)
+// Defined first, before every other script, so they always exist.
+function escapeHtml(value){
+  return String(value==null?'':value).replace(/[&<>"']/g,function(ch){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+  });
+}
+// Content of a single-quoted JS string inside an HTML attribute: escape for
+// JS first (backslash, quotes, line breaks), then for HTML.
+function jsStr(value){
+  var js=JSON.stringify(String(value==null?'':value)).slice(1,-1).replace(/'/g,"\\'");
+  return escapeHtml(js);
+}
+// A complete JS value (number or quoted string) inside an HTML attribute.
+function jsArg(value){
+  return escapeHtml(JSON.stringify(value==null?'':value));
+}
+// Only http(s), same-site paths and inline images; quotes, parentheses and
+// spaces are percent-encoded so the URL cannot break out of url('') or an attribute.
+function safeUrl(value){
+  var url=String(value==null?'':value).trim();
+  if(!/^(https?:\/\/|\/(?!\/)|data:image\/(png|jpe?g|webp|gif);base64,)/i.test(url))return '';
+  return url.replace(/["'()\s<>\\]/g,function(ch){return encodeURIComponent(ch);});
+}
+function cssUrl(value){
+  return "url('"+safeUrl(value)+"')";
+}
+</script>
+<script>
 window.VYBERA_DEBUG=false;
 if(!window.VYBERA_DEBUG&&window.console){
   ['log','debug','info','warn','error'].forEach(function(k){window.console[k]=function(){};});
@@ -3791,7 +3827,7 @@ function updateEventReviewSection(ev){
   }
   header.textContent='⭐ Reviews ('+stats.avg.toFixed(1)+'/5)';
   body.innerHTML=stats.ratings.slice(-3).reverse().map(function(item){
-    return '<div style="padding:10px 0;border-bottom:1px solid var(--glass-border);"><div style="font-weight:700;color:#fff;">'+Number(item.rating).toFixed(1)+'/5</div><div style="color:var(--grey);font-size:13px;margin-top:4px;">'+(item.review||'No written review')+'</div></div>';
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--glass-border);"><div style="font-weight:700;color:#fff;">'+Number(item.rating).toFixed(1)+'/5</div><div style="color:var(--grey);font-size:13px;margin-top:4px;">'+(escapeHtml(item.review||'No written review'))+'</div></div>';
   }).join('')+'<button class="btn-red" style="margin-top:12px;padding:9px 14px;" onclick="rateCurrentEvent()">Add Rating</button>';
 }
 
@@ -3800,7 +3836,7 @@ function openEventDetail(ev) {
   CURRENT_EVENT = ev;
   // Populate detail page
   var tags = document.getElementById('detailTags');
-  if(tags) tags.innerHTML = (ev.tags||[ev.category||'Event']).map(function(t){ return '<span class="tag-pill">'+t+'</span>'; }).join('');
+  if(tags) tags.innerHTML = (ev.tags||[ev.category||'Event']).map(function(t){ return '<span class="tag-pill">'+escapeHtml(t)+'</span>'; }).join('');
   var title = document.getElementById('detailTitle');
   if(title) title.textContent = ev.name || '—';
   var orgName = document.getElementById('orgName');
@@ -3864,9 +3900,9 @@ function populateBookingTickets(ev) {
     if(selected)selectedSet=true;
     var availText=soldOut?'Sold out':formatTicketCount(remaining)+' available';
     var soldText=getTierSold(t)?' · '+formatTicketCount(getTierSold(t))+' sold':'';
-    html += '<div class="ticket-option'+(selected?' selected':'')+(soldOut?' sold-out':'')+'" onclick="selTicket(this)" data-price="'+Number(t.price||0)+'" data-name="'+String(t.name||'Ticket').replace(/"/g,'&quot;')+'" data-remaining="'+remaining+'">';
-    html += '<div><div class="ticket-option-name">'+(t.name||'Ticket')+'</div><div class="ticket-option-perks">'+(t.perks||'Standing access')+'</div></div>';
-    html += '<div style="text-align:right;"><div class="ticket-price">'+formatPrice(t.price)+'</div><div class="ticket-avail">'+availText+soldText+'</div></div>';
+    html += '<div class="ticket-option'+(selected?' selected':'')+(soldOut?' sold-out':'')+'" onclick="selTicket(this)" data-price="'+Number(t.price||0)+'" data-name="'+escapeHtml(String(t.name||'Ticket').replace(/"/g,'&quot;'))+'" data-remaining="'+escapeHtml(remaining)+'">';
+    html += '<div><div class="ticket-option-name">'+(escapeHtml(t.name||'Ticket'))+'</div><div class="ticket-option-perks">'+(escapeHtml(t.perks||'Standing access'))+'</div></div>';
+    html += '<div style="text-align:right;"><div class="ticket-price">'+formatPrice(t.price)+'</div><div class="ticket-avail">'+escapeHtml(availText)+escapeHtml(soldText)+'</div></div>';
     html += '</div>';
   });
   html += '<button class="cta-full" onclick="nextBStep(2)">Continue →</button>';
@@ -4489,7 +4525,7 @@ function renderProfileCreatorEvents(){
     title.textContent=event.name||'Event';
     var meta=document.createElement('div');
     meta.className='tl-meta';
-    meta.innerHTML='<span>'+(event.date||'Date pending')+' · '+(event.city||event.venue||'Venue pending')+'</span><span class="status-badge status-upcoming">'+(event.status||'live')+'</span>';
+    meta.innerHTML='<span>'+(escapeHtml(event.date||'Date pending'))+' · '+(escapeHtml(event.city||event.venue||'Venue pending'))+'</span><span class="status-badge status-upcoming">'+(escapeHtml(event.status||'live'))+'</span>';
     var totals=document.createElement('div');
     totals.style.cssText='font-size:12px;color:var(--grey);margin-top:9px;';
     totals.textContent=formatTicketCount(event.bookingCount)+' tickets sold · ₹'+Number(event.revenue||0).toLocaleString('en-IN')+' revenue';
@@ -4760,7 +4796,7 @@ function renderLocationResults(results,title){
   var list=document.getElementById('locationResults');
   if(!list)return;
   results=results||[];
-  var html=title?'<div style="font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;padding:6px 12px;">'+title+'</div>':'';
+  var html=title?'<div style="font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;padding:6px 12px;">'+escapeHtml(title)+'</div>':'';
   if(!results.length){
     list.innerHTML=html+'<div style="padding:18px 12px;color:#6b7280;font-size:13px;">No locations found. Try a nearby city or area.</div>';
     return;
@@ -4952,11 +4988,11 @@ function makeCard(ev){
   div.setAttribute('data-evid', ev.id);
   div.innerHTML =
     '<div class="card-img"><div class="card-gradient"></div>'
-    +'<div class="date-pill">'+(ev.date||'—')+'</div></div>'
-    +'<div class="card-body"><div class="card-title">'+ev.name+'</div>'
-    +'<div class="card-meta"><span>'+(ev.city||'—')+'</span>'
+    +'<div class="date-pill">'+(escapeHtml(ev.date||'—'))+'</div></div>'
+    +'<div class="card-body"><div class="card-title">'+escapeHtml(ev.name)+'</div>'
+    +'<div class="card-meta"><span>'+(escapeHtml(ev.city||'—'))+'</span>'
     +'<span class="'+(isFree?'free-badge':'price-badge')+'">'+priceLabel+'</span></div>'
-    +'<div style="font-size:10px;color:var(--muted);margin-top:6px;">'+sold+' sold · '+remaining+' left</div>'
+    +'<div style="font-size:10px;color:var(--muted);margin-top:6px;">'+escapeHtml(sold)+' sold · '+escapeHtml(remaining)+' left</div>'
     +'</div>';
   setBannerBackground(div.querySelector('.card-img'),ev.banner,'Event banner');
   div.addEventListener('click', function(){ openById(this.getAttribute('data-evid')); });
@@ -5022,20 +5058,20 @@ function refreshBuyerHome() {
         var priceStr=formatPrice(minPrice);
         var priceColor=minPrice===0?'#4ade80':'var(--neon)';
         var saved=SAVED_EVENT_IDS.indexOf(ev.id)>=0;
-        var imgStyle=ev.banner?'background-image:url('+JSON.stringify(mediaUrl(ev.banner))+')':'background:var(--bg3)';
+        var imgStyle=ev.banner?'background-image:'+cssUrl(mediaUrl(ev.banner)):'background:var(--bg3)';
         var slide=document.createElement('div');
         slide.className='hero-slide';
         slide.setAttribute('data-evid',ev.id);
         slide.style.cssText=imgStyle+';min-width:100%;height:100%;position:relative;flex-shrink:0;background-size:cover;background-position:center;';
         slide.innerHTML='<div class="hero-gradient"></div>'
           +'<div class="hero-content">'
-          +'<div class="hero-tags"><span class="tag-pill">'+(ev.category||'Event')+'</span></div>'
-          +'<div class="hero-title">'+ev.name+'</div>'
-          +'<div class="hero-meta"><span>\ud83d\udcc5 '+(ev.date||'—')+'</span><span>\ud83d\udccd '+(ev.city||'—')+'</span>'
-          +'<span style="color:'+priceColor+'">'+priceStr+'</span><span>'+formatTicketCount(getEventSoldCount(ev))+' sold</span></div>'
+          +'<div class="hero-tags"><span class="tag-pill">'+(escapeHtml(ev.category||'Event'))+'</span></div>'
+          +'<div class="hero-title">'+escapeHtml(ev.name)+'</div>'
+          +'<div class="hero-meta"><span>\ud83d\udcc5 '+(escapeHtml(ev.date||'—'))+'</span><span>\ud83d\udccd '+(escapeHtml(ev.city||'—'))+'</span>'
+          +'<span style="color:'+escapeHtml(priceColor)+'">'+escapeHtml(priceStr)+'</span><span>'+formatTicketCount(getEventSoldCount(ev))+' sold</span></div>'
           +'<div class="hero-actions">'
-          +'<button class="btn-red" data-evid="'+ev.id+'">&#9654; Book Now</button>'
-          +'<button class="btn-ghost" data-save-evid="'+ev.id+'">'+(saved?'\u2665 Saved':'\u2661 Save')+'</button>'
+          +'<button class="btn-red" data-evid="'+escapeHtml(ev.id)+'">&#9654; Book Now</button>'
+          +'<button class="btn-ghost" data-save-evid="'+escapeHtml(ev.id)+'">'+(saved?'\u2665 Saved':'\u2661 Save')+'</button>'
           +'</div></div>';
         slide.querySelector('.btn-red').addEventListener('click', function(){ openById(this.getAttribute('data-evid')); });
         slide.querySelector('[data-save-evid]').addEventListener('click', function(event){ event.stopPropagation(); toggleSaveEvent(this.getAttribute('data-save-evid')); });
@@ -5069,8 +5105,8 @@ function refreshExplore() {
       card.className='explore-card';
       card.setAttribute('data-evid',ev.id);
       card.innerHTML='<div class="explore-card-img"><div class="card-gradient"></div></div>'
-        +'<div class="explore-card-body"><div class="explore-card-title">'+ev.name+'</div>'
-        +'<div class="explore-card-meta">'+(ev.city||'—')+' \u00b7 <span class="'+(isFree?'free-badge':'price-badge')+'">'+priceLabel+'</span></div>'
+        +'<div class="explore-card-body"><div class="explore-card-title">'+escapeHtml(ev.name)+'</div>'
+        +'<div class="explore-card-meta">'+(escapeHtml(ev.city||'—'))+' \u00b7 <span class="'+(isFree?'free-badge':'price-badge')+'">'+priceLabel+'</span></div>'
         +'<div style="font-size:10px;color:var(--muted);margin-top:6px;">'+formatTicketCount(getEventSoldCount(ev))+' sold</div></div>';
       setBannerBackground(card.querySelector('.explore-card-img'),ev.banner,'Event banner');
       card.addEventListener('click',function(){ openById(this.getAttribute('data-evid')); });
@@ -5096,8 +5132,8 @@ filterExplore = function(q) {
       card.className='explore-card';
       card.setAttribute('data-evid',ev.id);
       card.innerHTML='<div class="explore-card-img"><div class="card-gradient"></div></div>'
-        +'<div class="explore-card-body"><div class="explore-card-title">'+ev.name+'</div>'
-        +'<div class="explore-card-meta">'+(ev.city||'—')+' \u00b7 <span class="'+(isFree?'free-badge':'price-badge')+'">'+priceLabel+'</span></div>'
+        +'<div class="explore-card-body"><div class="explore-card-title">'+escapeHtml(ev.name)+'</div>'
+        +'<div class="explore-card-meta">'+(escapeHtml(ev.city||'—'))+' \u00b7 <span class="'+(isFree?'free-badge':'price-badge')+'">'+priceLabel+'</span></div>'
         +'<div style="font-size:10px;color:var(--muted);margin-top:6px;">'+formatTicketCount(getEventSoldCount(ev))+' sold</div></div>';
       setBannerBackground(card.querySelector('.explore-card-img'),ev.banner,'Event banner');
       card.addEventListener('click',function(){ openById(this.getAttribute('data-evid')); });
@@ -5123,8 +5159,8 @@ populateTickets = function(f) {
       card.className='tl-card';
       var minPrice=getEventMinPrice(ev);
       card.innerHTML='<div class="tl-img"><div class="card-gradient"></div></div>'
-        +'<div class="tl-body"><div class="tl-title">'+(ev.name||'Event')+'</div>'
-        +'<div class="tl-meta"><span>'+(ev.date||'Date pending')+' · '+(ev.city||ev.venue||'Venue pending')+'</span><span class="'+(minPrice===0?'free-badge':'price-badge')+'">'+formatPrice(minPrice)+'</span></div>'
+        +'<div class="tl-body"><div class="tl-title">'+(escapeHtml(ev.name||'Event'))+'</div>'
+        +'<div class="tl-meta"><span>'+(escapeHtml(ev.date||'Date pending'))+' · '+(escapeHtml(ev.city||ev.venue||'Venue pending'))+'</span><span class="'+(minPrice===0?'free-badge':'price-badge')+'">'+formatPrice(minPrice)+'</span></div>'
         +'<div style="font-size:12px;color:var(--grey);margin-top:9px;">'+formatTicketCount(getEventSoldCount(ev))+' sold · '+formatTicketCount(getEventRemainingCount(ev))+' available</div>'
         +'<div class="ticket-actions" style="margin-top:12px;"><button class="t-action-btn" data-open="1">Open</button><button class="t-action-btn" data-unsave="1">Remove</button></div></div>';
       setBannerBackground(card.querySelector('.tl-img'),ev.banner,'Event banner');
@@ -5137,17 +5173,17 @@ populateTickets = function(f) {
   }
   var filtered = STORE.bookings.filter(function(b){ return f==='past'?b.status==='past':b.status==='upcoming'; });
   if(!filtered.length){
-    list.innerHTML='<div style="text-align:center;color:var(--muted);padding:40px;font-size:14px;">No '+f+' bookings</div>';
+    list.innerHTML='<div style="text-align:center;color:var(--muted);padding:40px;font-size:14px;">No '+escapeHtml(f)+' bookings</div>';
     return;
   }
   list.innerHTML='';
   filtered.forEach(function(b){
-    var imgStyle=b.eventBanner?'background-image:url('+JSON.stringify(b.eventBanner)+')':'background:var(--bg3)';
+    var imgStyle=b.eventBanner?'background-image:'+cssUrl(mediaUrl(b.eventBanner)):'background:var(--bg3)';
     var card=document.createElement('div');
     card.className='tl-card';
-    card.innerHTML='<div class="tl-img" style="'+imgStyle+'"><div class="card-gradient"></div></div>'
-      +'<div class="tl-body"><div class="tl-title">'+b.eventName+'</div>'
-      +'<div class="tl-meta"><span>'+b.ticketType+' \u00b7 '+b.eventDate+'</span>'
+    card.innerHTML='<div class="tl-img" style="'+escapeHtml(imgStyle)+'"><div class="card-gradient"></div></div>'
+      +'<div class="tl-body"><div class="tl-title">'+escapeHtml(b.eventName)+'</div>'
+      +'<div class="tl-meta"><span>'+escapeHtml(b.ticketType)+' \u00b7 '+escapeHtml(b.eventDate)+'</span>'
       +'<span class="status-badge status-upcoming">Upcoming</span></div>'
       +'<div class="ticket-actions" style="margin-top:12px;"><button class="t-action-btn" data-ticket-action="view">View QR</button><button class="t-action-btn" data-ticket-action="whatsapp">WhatsApp</button><button class="t-action-btn" data-ticket-action="sms">SMS</button></div></div>';
     card.addEventListener('click',function(){ openHistoryTicket(b.id); });
@@ -5366,11 +5402,11 @@ function refreshCreatorDashboard() {
         var card=document.createElement('div');
         card.className='ce-card';
         card.innerHTML='<div class="ce-img"></div>'
-          +'<div class="ce-body"><div class="ce-title">'+ev.name+'</div>'
+          +'<div class="ce-body"><div class="ce-title">'+escapeHtml(ev.name)+'</div>'
           +'<div class="pb-wrap"><div class="pb-fill" style="width:'+pct+'%"></div></div>'
-          +'<div class="ce-meta"><span>'+formatTicketCount(ev.bookingCount)+' sold</span><span>'+ev.date+'</span></div>'
+          +'<div class="ce-meta"><span>'+formatTicketCount(ev.bookingCount)+' sold</span><span>'+escapeHtml(ev.date)+'</span></div>'
           +'<div class="ce-actions">'
-          +'<button class="ce-btn" data-evid="'+ev.id+'">View</button>'
+          +'<button class="ce-btn" data-evid="'+escapeHtml(ev.id)+'">View</button>'
           +'<button class="ce-btn" data-scan="1">Scan</button>'
           +'</div></div>';
         card.querySelector('[data-evid]').addEventListener('click',function(){ openById(this.getAttribute('data-evid')); });
@@ -5389,7 +5425,7 @@ function refreshCreatorDashboard() {
     if(!types.length){
       salesChart.innerHTML='<div class="chart-title">🎟️ Ticket Sales by Type</div><div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No ticket sales yet</div>';
     } else {
-      salesChart.innerHTML='<div class="chart-title">🎟️ Ticket Sales by Type</div>'+types.map(function(type){return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--glass-border);font-size:13px;"><span>'+type+'</span><b>'+salesByType[type]+'</b></div>';}).join('');
+      salesChart.innerHTML='<div class="chart-title">🎟️ Ticket Sales by Type</div>'+types.map(function(type){return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--glass-border);font-size:13px;"><span>'+escapeHtml(type)+'</span><b>'+escapeHtml(salesByType[type])+'</b></div>';}).join('');
     }
   }
 
@@ -5494,10 +5530,10 @@ function renderCal(){
   var grid = document.getElementById('calDays');
   if(!monthSelect || !yearSelect || !grid) return;
   var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  if(!monthSelect.options.length) monthSelect.innerHTML=months.map(function(month,index){return '<option value="'+index+'">'+month+'</option>';}).join('');
+  if(!monthSelect.options.length) monthSelect.innerHTML=months.map(function(month,index){return '<option value="'+index+'">'+escapeHtml(month)+'</option>';}).join('');
   if(!yearSelect.options.length){
     var currentYear=new Date().getFullYear(), years=[];
-    for(var year=currentYear;year<=currentYear+10;year++) years.push('<option value="'+year+'">'+year+'</option>');
+    for(var year=currentYear;year<=currentYear+10;year++) years.push('<option value="'+escapeHtml(year)+'">'+escapeHtml(year)+'</option>');
     yearSelect.innerHTML=years.join('');
   }
   monthSelect.value=String(calMonth);
@@ -5675,7 +5711,7 @@ function renderVenueMap(){
       var wrappedX=((tx%scaleTiles)+scaleTiles)%scaleTiles;
       var left=Math.round(tx*tileSize-topLeft.x);
       var top=Math.round(ty*tileSize-topLeft.y);
-      html+='<img class="venue-map-tile" alt="" src="https://tile.openstreetmap.org/'+z+'/'+wrappedX+'/'+ty+'.png" style="left:'+left+'px;top:'+top+'px;"/>';
+      html+='<img class="venue-map-tile" alt="" src="https://tile.openstreetmap.org/'+escapeHtml(z)+'/'+escapeHtml(wrappedX)+'/'+escapeHtml(ty)+'.png" style="left:'+escapeHtml(left)+'px;top:'+escapeHtml(top)+'px;"/>';
     }
   }
   layer.innerHTML=html;
@@ -5789,7 +5825,7 @@ function setVenueCoordinates(latitude,longitude){
     map.style.backgroundImage='linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)), url('+JSON.stringify(draftEvent.venueMapImage)+')';
     map.style.backgroundSize='cover';
     map.style.backgroundPosition='center';
-    map.innerHTML='<div style="font-size:22px;">📍</div><div style="font-weight:700;color:#fff;">Location selected</div><div id="venueMapCoords" style="font-size:11px;color:var(--neon);">'+draftEvent.latitude+', '+draftEvent.longitude+'</div><div style="font-size:11px;color:var(--muted);">Tap to change location</div>';
+    map.innerHTML='<div style="font-size:22px;">📍</div><div style="font-weight:700;color:#fff;">Location selected</div><div id="venueMapCoords" style="font-size:11px;color:var(--neon);">'+escapeHtml(draftEvent.latitude)+', '+escapeHtml(draftEvent.longitude)+'</div><div style="font-size:11px;color:var(--muted);">Tap to change location</div>';
   }
   showToast('Venue location selected');
 }
@@ -5903,18 +5939,18 @@ function buildTierRow(name, price, qty, perks){
   var grid1 = document.createElement('div');
   grid1.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;';
   grid1.innerHTML='<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Tier Name</label>'
-    +'<input class="form-input tier-name-inp" type="text" value="'+name+'" placeholder="e.g. General"/></div>'
+    +'<input class="form-input tier-name-inp" type="text" value="'+escapeHtml(name)+'" placeholder="e.g. General"/></div>'
     +'<div class="price-inp-wrap"><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">'
     +'Price (₹) '+(price===0?'<span style="color:#4ade80;font-size:10px;">[FREE]</span>':'')+'</label>'
-    +'<input class="form-input tier-price-inp" type="number" value="'+price+'" min="0" placeholder="0 = Free" '+(price===0?'disabled style="opacity:.4"':'')+' /></div>';
+    +'<input class="form-input tier-price-inp" type="number" value="'+escapeHtml(price)+'" min="0" placeholder="0 = Free" '+(price===0?'disabled style="opacity:.4"':'')+' /></div>';
   row.appendChild(grid1);
 
   var grid2 = document.createElement('div');
   grid2.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;';
   grid2.innerHTML='<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Max Tickets</label>'
-    +'<input class="form-input tier-qty-inp" type="number" value="'+qty+'" min="1"/></div>'
+    +'<input class="form-input tier-qty-inp" type="number" value="'+escapeHtml(qty)+'" min="1"/></div>'
     +'<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Perks (optional)</label>'
-    +'<input class="form-input tier-perks-inp" type="text" value="'+perks+'" placeholder="e.g. Front row"/></div>';
+    +'<input class="form-input tier-perks-inp" type="text" value="'+escapeHtml(perks)+'" placeholder="e.g. Front row"/></div>';
   row.appendChild(grid2);
 
   // Remove button
@@ -6342,15 +6378,15 @@ function refreshInventoryList(assignments){
     var commission=getAssignmentCommission(a,sellPrice);
     var c=document.createElement('div');c.style.cssText='padding:14px;margin-bottom:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;';
     c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">'
-      +'<div style="flex:1;"><div style="font-size:14px;font-weight:700;color:#fff;">'+a.eventName+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);">'+a.tierName+' &middot; Sell ₹'+sellPrice.toLocaleString('en-IN')+'</div>'
+      +'<div style="flex:1;"><div style="font-size:14px;font-weight:700;color:#fff;">'+escapeHtml(a.eventName)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);">'+escapeHtml(a.tierName)+' &middot; Sell ₹'+sellPrice.toLocaleString('en-IN')+'</div>'
       +'<div style="margin-top:7px;"><span class="staff-flow-badge '+(mode==='staff_owned'?'staff':'creator')+'">'+getAssignmentModeLabel(a)+'</span></div></div>'
       +'<div style="text-align:right;margin-left:10px;"><div style="font-size:22px;font-weight:700;color:#00D4D4;">'+formatTicketCount(rem)+'</div>'
       +'<div style="font-size:10px;color:var(--muted);">left</div></div></div>'
       +'<div style="height:4px;background:rgba(255,255,255,0.08);border-radius:4px;margin-bottom:6px;overflow:hidden;">'
       +'<div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#4ade80,#00D4D4);"></div></div>'
       +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);"><span>'+formatTicketCount(a.soldCount)+' sold</span><span>'+formatTicketCount(a.qty)+' total</span></div>'
-      +'<div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:7px;">'+getStaffRevenueLabel(a)+(mode==='creator_quota'&&commission?' · Commission ₹'+commission.toLocaleString('en-IN')+' per ticket':'')+'</div>';
+      +'<div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:7px;">'+getStaffRevenueLabel(a)+(mode==='creator_quota'&&commission?escapeHtml(' · Commission ₹'+commission.toLocaleString('en-IN')+' per ticket'):'')+'</div>';
     el.appendChild(c);
   });
 }
@@ -6367,19 +6403,19 @@ function refreshStaffSellTab(){
   Object.keys(byEv).forEach(function(eid){
     var grp=byEv[eid];var ev=STORE.events.find(function(e){return e.id===eid;});
     var card=document.createElement('div');card.style.cssText='margin-bottom:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;';
-    var banner=ev&&ev.banner?'background:url('+JSON.stringify(mediaUrl(ev.banner))+') center/cover':'background:linear-gradient(135deg,#8B2010,#000)';
-    var html='<div style="height:90px;'+banner+'"></div><div style="padding:12px;">'
-      +'<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px;">'+grp.eventName+'</div>'
-      +(ev?'<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">'+(ev.date||'')+' &middot; '+(ev.city||'')+'</div>':'<div style="margin-bottom:10px;"></div>');
+    var banner=ev&&ev.banner?'background:'+cssUrl(mediaUrl(ev.banner))+' center/cover':'background:linear-gradient(135deg,#8B2010,#000)';
+    var html='<div style="height:90px;'+escapeHtml(banner)+'"></div><div style="padding:12px;">'
+      +'<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px;">'+escapeHtml(grp.eventName)+'</div>'
+      +(ev?'<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">'+(escapeHtml(ev.date||''))+' &middot; '+(escapeHtml(ev.city||''))+'</div>':'<div style="margin-bottom:10px;"></div>');
     grp.tiers.forEach(function(t){
       var av=t.qty-t.soldCount;
       var mode=getAssignmentMode(t);
       var sellPrice=getAssignmentSellPrice(t);
       html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(255,255,255,0.05);border-radius:10px;margin-bottom:6px;">'
-        +'<div><div style="font-size:13px;font-weight:600;color:#fff;">'+t.tierName+'</div>'
+        +'<div><div style="font-size:13px;font-weight:600;color:#fff;">'+escapeHtml(t.tierName)+'</div>'
         +'<div style="font-size:11px;color:var(--muted);">\u20b9'+sellPrice.toLocaleString('en-IN')+' &middot; '+formatTicketCount(av)+' left</div>'
         +'<div style="margin-top:5px;"><span class="staff-flow-badge '+(mode==='staff_owned'?'staff':'creator')+'">'+getAssignmentModeLabel(t)+'</span></div></div>'
-        +'<button onclick="openQuickSell(\''+t.id+'\')" style="background:#8B2010;color:#fff;border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;">Sell</button></div>';
+        +'<button onclick="openQuickSell(\''+jsStr(t.id)+'\')" style="background:#8B2010;color:#fff;border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;">Sell</button></div>';
     });
     card.innerHTML=html+'</div>';
     el.appendChild(card);
@@ -6461,12 +6497,12 @@ function refreshClientsTab(){
     var tc=c.sales?c.sales.length:0;var ts=c.sales?c.sales.reduce(function(s,x){return s+x.total;},0):0;
     var card=document.createElement('div');card.style.cssText='padding:14px;margin-bottom:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;';
     card.innerHTML='<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">'
-      +'<div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#8B2010,#4a1008);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0;">'+init+'</div>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#fff;">'+c.name+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);">'+c.phone+(c.note?' &middot; '+c.note:'')+'</div></div>'
-      +'<button onclick="openSellToClient(\''+c.id+'\')" style="background:#8B2010;color:#fff;border:none;border-radius:10px;padding:8px 12px;cursor:pointer;font-size:11px;font-weight:700;font-family:\'DM Sans\',sans-serif;flex-shrink:0;">Sell</button></div>'
+      +'<div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#8B2010,#4a1008);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex-shrink:0;">'+escapeHtml(init)+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#fff;">'+escapeHtml(c.name)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);">'+escapeHtml(c.phone)+(c.note?escapeHtml(' &middot; '+c.note):'')+'</div></div>'
+      +'<button onclick="openSellToClient(\''+jsStr(c.id)+'\')" style="background:#8B2010;color:#fff;border:none;border-radius:10px;padding:8px 12px;cursor:pointer;font-size:11px;font-weight:700;font-family:\'DM Sans\',sans-serif;flex-shrink:0;">Sell</button></div>'
       +'<div style="display:flex;gap:8px;font-size:11px;">'
-      +'<span style="padding:4px 10px;background:rgba(255,255,255,0.06);border-radius:8px;color:rgba(255,255,255,0.6);">'+tc+' tickets</span>'
+      +'<span style="padding:4px 10px;background:rgba(255,255,255,0.06);border-radius:8px;color:rgba(255,255,255,0.6);">'+escapeHtml(tc)+' tickets</span>'
       +'<span style="padding:4px 10px;background:rgba(255,255,255,0.06);border-radius:8px;color:rgba(255,255,255,0.6);">\u20b9'+ts.toLocaleString('en-IN')+' spent</span></div>';
     el.appendChild(card);
   });
@@ -6572,10 +6608,10 @@ function refreshWalletTab(){
     var sc=sl.status==='used'?'#00D4D4':'#4ade80';
     var row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;';
     row.innerHTML='<div style="width:38px;height:38px;border-radius:50%;background:rgba(74,222,128,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">\uD83C\uDFAB</div>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+sl.buyerName+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);">'+sl.tierName+' &middot; '+date+'</div></div>'
-      +'<div style="text-align:right;"><div style="font-size:14px;font-weight:700;color:#4ade80;">+\u20b9'+sl.total+'</div>'
-      +'<div style="font-size:9px;font-weight:700;color:'+sc+';letter-spacing:1px;margin-top:2px;">'+sl.status.toUpperCase()+'</div></div>';
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(sl.buyerName)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);">'+escapeHtml(sl.tierName)+' &middot; '+escapeHtml(date)+'</div></div>'
+      +'<div style="text-align:right;"><div style="font-size:14px;font-weight:700;color:#4ade80;">+\u20b9'+escapeHtml(sl.total)+'</div>'
+      +'<div style="font-size:9px;font-weight:700;color:'+escapeHtml(sc)+';letter-spacing:1px;margin-top:2px;">'+escapeHtml(sl.status.toUpperCase())+'</div></div>';
     txEl.appendChild(row);
   });
 }
@@ -6626,15 +6662,15 @@ function refreshStaffManage(){
     var ss=STORE.getStaffStats(st.id);var init=st.name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
     var card=document.createElement('div');card.style.cssText='margin-bottom:10px;padding:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;';
     card.innerHTML='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
-      +'<div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#00D4D4,#0a8a8a);display:flex;align-items:center;justify-content:center;color:#000;font-weight:700;font-size:14px;flex-shrink:0;">'+init+'</div>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+st.name+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);">@'+st.staffId+'</div></div>'
-      +'<span onclick="confirmDeleteStaff(\''+st.id+'\')" style="cursor:pointer;font-size:20px;color:var(--muted);padding:4px 8px;">&times;</span></div>'
+      +'<div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#00D4D4,#0a8a8a);display:flex;align-items:center;justify-content:center;color:#000;font-weight:700;font-size:14px;flex-shrink:0;">'+escapeHtml(init)+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(st.name)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);">@'+escapeHtml(st.staffId)+'</div></div>'
+      +'<span onclick="confirmDeleteStaff(\''+jsStr(st.id)+'\')" style="cursor:pointer;font-size:20px;color:var(--muted);padding:4px 8px;">&times;</span></div>'
       +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">'
-      +'<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;"><div style="font-size:15px;font-weight:700;color:#fff;">'+ss.assigned+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Assigned</div></div>'
-      +'<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;"><div style="font-size:15px;font-weight:700;color:#4ade80;">'+ss.sold+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Sold</div></div>'
+      +'<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;"><div style="font-size:15px;font-weight:700;color:#fff;">'+escapeHtml(ss.assigned)+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Assigned</div></div>'
+      +'<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;"><div style="font-size:15px;font-weight:700;color:#4ade80;">'+escapeHtml(ss.sold)+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Sold</div></div>'
       +'<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;"><div style="font-size:15px;font-weight:700;color:#fff;">\u20b9'+ss.earnings.toLocaleString('en-IN')+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Sales</div></div></div>'
-      +'<button onclick="openAssignModal(\''+st.id+'\')" style="width:100%;padding:10px;background:rgba(0,212,212,0.08);border:1px solid rgba(0,212,212,0.25);color:#00D4D4;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;">+ Assign Tickets</button>';
+      +'<button onclick="openAssignModal(\''+jsStr(st.id)+'\')" style="width:100%;padding:10px;background:rgba(0,212,212,0.08);border:1px solid rgba(0,212,212,0.25);color:#00D4D4;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;">+ Assign Tickets</button>';
     list.appendChild(card);
   });
 }
@@ -6877,8 +6913,8 @@ function openForgotPasswordModal(){
     'forgotPasswordModal',
     'Reset password',
     'Enter the email of your buyer account. We will send you a link to set a new password.',
-    '<label style="'+RESET_LABEL_STYLE+'">Email</label>'
-      +'<input id="forgotEmail" type="email" autocomplete="email" value="'+escapeHtml(current)+'" style="'+RESET_INPUT_STYLE+'"/>',
+    '<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Email</label>'
+      +'<input id="forgotEmail" type="email" autocomplete="email" value="'+escapeHtml(current)+'" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>',
     'Send link',
     submitForgotPassword
   );
@@ -6908,10 +6944,10 @@ function openResetPasswordModal(token){
     'resetPasswordModal',
     'Set a new password',
     'Choose a new password for your account. This link works for a limited time.',
-    '<label style="'+RESET_LABEL_STYLE+'">New Password</label>'
-      +'<input id="resetPwd" type="password" autocomplete="new-password" style="'+RESET_INPUT_STYLE+'"/>'
-      +'<label style="'+RESET_LABEL_STYLE+'">Confirm Password</label>'
-      +'<input id="resetPwd2" type="password" autocomplete="new-password" style="'+RESET_INPUT_STYLE+'"/>',
+    '<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">New Password</label>'
+      +'<input id="resetPwd" type="password" autocomplete="new-password" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>'
+      +'<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Confirm Password</label>'
+      +'<input id="resetPwd2" type="password" autocomplete="new-password" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>',
     'Update password',
     async function(modal){
       var pwd=(document.getElementById('resetPwd')||{}).value||'';
@@ -6995,12 +7031,6 @@ async function loadAdminSnapshot(){
 
 function adminAuthHeaders(){
   return {'Content-Type':'application/json',Authorization:'Bearer '+(localStorage.getItem('VYBERA_ADMIN_TOKEN')||'')};
-}
-
-function escapeHtml(value){
-  return String(value==null?'':value).replace(/[&<>"']/g,function(ch){
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
-  });
 }
 
 function creatorStatusLabel(status){
@@ -7405,10 +7435,10 @@ function populateNotifs(){
     return;
   }
   list.innerHTML = NOTIFS.map((n,i)=>`
-    <div class="notif-card ${n.unread?'unread':''}" onclick="openNotif(${i})" style="cursor:pointer;">
-      <div class="notif-icon" style="background:${n.bg}">${n.icon}</div>
-      <div class="notif-content"><p>${n.title}</p><span>${n.body}</span></div>
-      <div class="notif-time">${n.time}</div>
+    <div class="notif-card ${n.unread?'unread':''}" onclick="openNotif(${Number(i)})" style="cursor:pointer;">
+      <div class="notif-icon" style="background:${escapeHtml(n.bg)}">${escapeHtml(n.icon)}</div>
+      <div class="notif-content"><p>${escapeHtml(n.title)}</p><span>${escapeHtml(n.body)}</span></div>
+      <div class="notif-time">${escapeHtml(n.time)}</div>
     </div>`).join('');
 }
 function markAllNotificationsRead(){
@@ -7460,7 +7490,7 @@ document.getElementById('notifModal').addEventListener('click', function(e){
 // Empty state for home rows
 function showEmptyRow(id, msg){
   const el = document.getElementById(id);
-  if(el) el.innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">${msg}</div>`;
+  if(el) el.innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">${escapeHtml(msg)}</div>`;
 }
 showEmptyRow('row-trending','No events yet');
 showEmptyRow('row-nearby','No events near you yet');
@@ -7794,8 +7824,8 @@ function admDrawDonut(){
   if(leg){
     leg.innerHTML = cats.map(function(c){
       return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">'
-        +'<div style="width:8px;height:8px;border-radius:2px;background:'+c.color+';flex-shrink:0;"></div>'
-        +'<span style="font-size:11px;color:var(--adm-text2);flex:1;">'+c.label+'</span>'
+        +'<div style="width:8px;height:8px;border-radius:2px;background:'+escapeHtml(c.color)+';flex-shrink:0;"></div>'
+        +'<span style="font-size:11px;color:var(--adm-text2);flex:1;">'+escapeHtml(c.label)+'</span>'
         +'<span style="font-size:11px;font-weight:600;color:var(--adm-text);">'+(c.label==='No events'?0:Math.round(c.val/total*100))+'%</span></div>';
     }).join('');
   }
@@ -7810,7 +7840,7 @@ function admDrawTopEvents(){
     var pct = Math.round((ev.revenue||0)/max*100);
     return '<div style="margin-bottom:8px;">'
       +'<div style="display:flex;justify-content:space-between;margin-bottom:3px;">'
-      +'<span style="font-size:11px;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;">'+ev.name+'</span>'
+      +'<span style="font-size:11px;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;">'+escapeHtml(ev.name)+'</span>'
       +'<span style="font-size:10px;color:var(--adm-text2);">₹'+(ev.revenue||0).toLocaleString('en-IN')+'</span></div>'
       +'<div style="height:4px;background:var(--adm-bg3);border-radius:4px;overflow:hidden;">'
       +'<div style="width:'+pct+'%;height:100%;background:#8B2010;border-radius:4px;"></div></div></div>';
@@ -7833,8 +7863,8 @@ function admDrawFunnel(){
     var dropOff = i>0 ? Math.round((1-s.val/steps[i-1].val)*100) : 0;
     return '<div style="margin-bottom:9px;">'
       +'<div style="display:flex;justify-content:space-between;margin-bottom:3px;">'
-      +'<span style="font-size:11px;color:var(--adm-text);">'+s.label+'</span>'
-      +'<span style="font-size:10px;color:var(--adm-text2);">'+s.val.toLocaleString()+(i>0?' <span style="color:#ef4444;">-'+dropOff+'%</span>':'')+'</span></div>'
+      +'<span style="font-size:11px;color:var(--adm-text);">'+escapeHtml(s.label)+'</span>'
+      +'<span style="font-size:10px;color:var(--adm-text2);">'+s.val.toLocaleString()+(i>0?' <span style="color:#ef4444;">-'+escapeHtml(dropOff)+'%</span>':'')+'</span></div>'
       +'<div style="height:5px;background:var(--adm-bg3);border-radius:4px;overflow:hidden;">'
       +'<div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#c0392b);"></div></div></div>';
   }).join('');
@@ -7856,10 +7886,10 @@ function admDrawCities(){
   el.innerHTML = cities.map(function(c){
     return '<div style="margin-bottom:9px;">'
       +'<div style="display:flex;justify-content:space-between;margin-bottom:3px;">'
-      +'<span style="font-size:11px;color:var(--adm-text);">'+c.city+'</span>'
+      +'<span style="font-size:11px;color:var(--adm-text);">'+escapeHtml(c.city)+'</span>'
       +'<span style="font-size:10px;color:var(--adm-text2);">'+c.bookings.toLocaleString()+' bookings</span></div>'
       +'<div style="height:5px;background:var(--adm-bg3);border-radius:4px;overflow:hidden;">'
-      +'<div style="width:'+c.pct+'%;height:100%;background:#00D4D4;"></div></div></div>';
+      +'<div style="width:'+escapeHtml(c.pct)+'%;height:100%;background:#00D4D4;"></div></div></div>';
   }).join('')||'<div style="font-size:12px;color:var(--adm-text2);">No booking cities yet</div>';
 }
 
@@ -7876,9 +7906,9 @@ function admDrawCreatorLeaderboard(){
   el.innerHTML = sorted.map(function(c,i){
     var medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
     return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--adm-border);">'
-      +'<span style="font-size:16px;flex-shrink:0;">'+medals[i]+'</span>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+c.name+'</div>'
-      +'<div style="font-size:10px;color:var(--adm-text2);">'+c.events+' events</div></div>'
+      +'<span style="font-size:16px;flex-shrink:0;">'+escapeHtml(medals[i])+'</span>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(c.name)+'</div>'
+      +'<div style="font-size:10px;color:var(--adm-text2);">'+escapeHtml(c.events)+' events</div></div>'
       +'<div style="font-size:12px;color:#22c55e;">₹'+c.rev.toLocaleString('en-IN')+'</div></div>';
   }).join('');
 }
@@ -7920,15 +7950,15 @@ function admRenderBuyers(){
     var bc = b.status==='Active'?'green':'red';
     var created=admFormatAccountCreated(b.createdAt||b.created_at);
     return '<tr><td style="color:var(--adm-text2);">'+(i+1)+'</td>'
-      +'<td><div style="font-weight:600;color:var(--adm-text);">'+b.name+'</div><div style="font-size:10px;color:var(--adm-text2);">'+b.email+'</div></td>'
-      +'<td><div style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+created+'</div></td>'
-      +'<td>'+b.bookings+'</td><td>'+b.city+'</td>'
-      +'<td><span class="adm-badge '+bc+'">'+b.status+'</span></td>'
+      +'<td><div style="font-weight:600;color:var(--adm-text);">'+escapeHtml(b.name)+'</div><div style="font-size:10px;color:var(--adm-text2);">'+escapeHtml(b.email)+'</div></td>'
+      +'<td><div style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+escapeHtml(created)+'</div></td>'
+      +'<td>'+escapeHtml(b.bookings)+'</td><td>'+escapeHtml(b.city)+'</td>'
+      +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(b.status)+'</span></td>'
       +'<td><div style="display:flex;gap:4px;">'
       +(b.status==='Active'
-        ? '<button onclick="admSuspendBuyer(\''+b.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>'
-        : '<button onclick="admReinstateUser(\''+b.id+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>')
-      +'<button onclick="admNotifyUser(\''+b.name+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
+        ? '<button onclick="admSuspendBuyer(\''+jsStr(b.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>'
+        : '<button onclick="admReinstateUser(\''+jsStr(b.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>')
+      +'<button onclick="admNotifyUser(\''+jsStr(b.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
       +'</div></td></tr>';
   }).join('');
 }
@@ -7953,15 +7983,15 @@ function admRenderAllUsers(){
     var encodedName=encodeURIComponent(String(user.name||'User')).replace(/'/g,'%27');
     var action=user.source==='buyer'
       ? (suspended
-        ? '<button onclick="admReinstateUser(decodeURIComponent(\''+encodedId+'\'))" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
-        : '<button onclick="admSuspendBuyer(decodeURIComponent(\''+encodedId+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
-      : (suspended?'':'<button onclick="admSuspendCreator(decodeURIComponent(\''+encodedId+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>');
+        ? '<button onclick="admReinstateUser(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
+        : '<button onclick="admSuspendBuyer(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
+      : (suspended?'':'<button onclick="admSuspendCreator(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>');
     return '<tr><td style="color:var(--adm-text2);">'+(index+1)+'</td>'
       +'<td><div style="font-weight:600;color:var(--adm-text);">'+escapeHtml(user.name||'User')+'</div><div style="font-size:10px;color:var(--adm-text2);">'+escapeHtml(user.email||'')+'</div></td>'
-      +'<td><span class="adm-badge blue">'+user.type+'</span></td>'
+      +'<td><span class="adm-badge blue">'+escapeHtml(user.type)+'</span></td>'
       +'<td><div style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+escapeHtml(admFormatAccountCreated(user.createdAt))+'</div></td>'
       +'<td><span class="adm-badge '+(suspended?'red':'green')+'">'+escapeHtml(user.status||'Active')+'</span></td>'
-      +'<td><div style="display:flex;gap:4px;">'+action+'<button onclick="admNotifyUser(decodeURIComponent(\''+encodedName+'\'))" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button></div></td></tr>';
+      +'<td><div style="display:flex;gap:4px;">'+escapeHtml(action)+'<button onclick="admNotifyUser(decodeURIComponent(\''+jsStr(encodedName)+'\'))" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button></div></td></tr>';
   }).join('');
 }
 
@@ -7981,23 +8011,23 @@ function admRenderCreators(){
     var docs=(c.documents||[]).length;
     var documentsVerified=docs>0&&(c.documents||[]).every(function(doc){return doc.verificationStatus==='Verified';});
     var created=admFormatAccountCreated(c.createdAt||c.joinedAt||c.ts||c.created_at);
-    return '<tr onclick="admOpenCreatorReview(\''+escapeHtml(c.id)+'\')" style="cursor:pointer;">'
+    return '<tr onclick="admOpenCreatorReview(\''+jsStr(c.id)+'\')" style="cursor:pointer;">'
       +'<td style="color:var(--adm-text2);">'+(i+1)+'</td>'
       +'<td><div style="font-weight:600;color:var(--adm-text);">'+escapeHtml(c.name)+'</div><div style="font-size:10px;color:var(--adm-text2);">'+escapeHtml(c.email)+'</div></td>'
       +'<td><div style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+escapeHtml(created)+'</div></td>'
       +'<td><span class="adm-badge blue">'+escapeHtml(c.category||'—')+'</span></td>'
-      +'<td>'+c.events+'</td>'
+      +'<td>'+escapeHtml(c.events)+'</td>'
       +'<td style="font-size:11px;">₹'+c.revenue.toLocaleString('en-IN')+'</td>'
-      +'<td><span style="font-size:12px;font-weight:600;color:var(--adm-text);">'+c.fee+'%</span></td>'
-      +'<td><span class="adm-badge '+bc+'">'+escapeHtml(statusLabel)+'</span><div style="font-size:10px;color:var(--adm-text2);margin-top:4px;">'+docs+' document'+(docs===1?'':'s')+'</div>'
-      +(pending&&documentsVerified?'<button onclick="event.stopPropagation();admVerifyCreator(\''+escapeHtml(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green" style="margin-top:6px;">Verify</button>':'')+'</td>'
+      +'<td><span style="font-size:12px;font-weight:600;color:var(--adm-text);">'+escapeHtml(c.fee)+'%</span></td>'
+      +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(statusLabel)+'</span><div style="font-size:10px;color:var(--adm-text2);margin-top:4px;">'+escapeHtml(docs)+' document'+(docs===1?'':'s')+'</div>'
+      +(pending&&documentsVerified?'<button onclick="event.stopPropagation();admVerifyCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green" style="margin-top:6px;">Verify</button>':'')+'</td>'
       +'<td><div style="display:flex;gap:4px;" onclick="event.stopPropagation();">'
-      +'<button onclick="admOpenCreatorReview(\''+escapeHtml(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-teal">View Documents</button>'
-      +(!pending?'<button onclick="admAdjustFee(\''+c.id+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Fee</button>':'')
+      +'<button onclick="admOpenCreatorReview(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-teal">View Documents</button>'
+      +(!pending?'<button onclick="admAdjustFee(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Fee</button>':'')
       +(c.status==='Suspended'
-        ? '<button onclick="admReinstateCreator(\''+c.id+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
-        : '<button onclick="admSuspendCreator(\''+c.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
-      +'<button onclick="admNotifyUser(\''+escapeHtml(c.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
+        ? '<button onclick="admReinstateCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
+        : '<button onclick="admSuspendCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
+      +'<button onclick="admNotifyUser(\''+jsStr(c.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
       +'</div></td></tr>';
   }).join('');
 }
@@ -8075,10 +8105,10 @@ function admCreatorDocumentHtml(doc){
   }
   var isImage=/^image\//i.test(doc.contentType||'') || /\.(png|jpe?g|webp|gif)$/i.test(name);
   return '<div style="display:block;border:1px solid '+(verified?'rgba(34,197,94,.45)':'var(--adm-border)')+';border-radius:8px;overflow:hidden;background:var(--adm-bg2);">'
-    +(isImage?'<a href="'+escapeHtml(url)+'" target="_blank" rel="noopener"><img src="'+escapeHtml(url)+'" alt="'+escapeHtml(name)+'" style="width:100%;height:150px;object-fit:cover;display:block;background:#000;"></a>':'')
+    +(isImage?'<a href="'+safeUrl(url)+'" target="_blank" rel="noopener"><img src="'+safeUrl(url)+'" alt="'+escapeHtml(name)+'" style="width:100%;height:150px;object-fit:cover;display:block;background:#000;"></a>':'')
     +'<div style="padding:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">'
     +'<div style="min-width:0;"><div style="font-size:11px;font-weight:800;color:var(--adm-text);">'+escapeHtml(type)+'</div><div style="font-size:10px;color:var(--adm-text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(name)+'</div></div>'
-    +'<div style="display:flex;gap:5px;align-items:center;"><a href="'+escapeHtml(url)+'" target="_blank" rel="noopener" class="adm-btn adm-btn-sm adm-btn-ghost" style="text-decoration:none;">Open</a>'
+    +'<div style="display:flex;gap:5px;align-items:center;"><a href="'+safeUrl(url)+'" target="_blank" rel="noopener" class="adm-btn adm-btn-sm adm-btn-ghost" style="text-decoration:none;">Open</a>'
     +(verified?'<span class="adm-badge green">Verified</span>':'<button data-verify-doc="'+escapeHtml(doc.id)+'" class="adm-btn adm-btn-sm adm-btn-green">Mark Verified</button>')
     +'</div></div></div>';
 }
@@ -8314,14 +8344,14 @@ function admRenderDisputes(){
   tbody.innerHTML=STORE.disputes.map(function(d){
     var bc=d.status==='Pending'?'yellow':d.status==='Resolved'?'green':'red';
     return '<tr>'
-      +'<td style="font-size:10px;color:var(--adm-text2);">'+d.id+'</td>'
-      +'<td style="font-weight:600;color:var(--adm-text);">'+d.buyerName+'</td>'
-      +'<td style="font-size:11px;">'+d.event+'</td>'
+      +'<td style="font-size:10px;color:var(--adm-text2);">'+escapeHtml(d.id)+'</td>'
+      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(d.buyerName)+'</td>'
+      +'<td style="font-size:11px;">'+escapeHtml(d.event)+'</td>'
       +'<td style="">₹'+d.amount.toLocaleString('en-IN')+'</td>'
-      +'<td style="font-size:11px;">'+d.reason+'</td>'
-      +'<td><span class="adm-badge '+bc+'">'+d.status+'</span></td>'
+      +'<td style="font-size:11px;">'+escapeHtml(d.reason)+'</td>'
+      +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(d.status)+'</span></td>'
       +'<td>'+(d.status==='Pending'
-        ? '<button onclick="admResolveDispute(\''+d.id+'\')" class="adm-btn adm-btn-sm adm-btn-green">Resolve</button>'
+        ? '<button onclick="admResolveDispute(\''+jsStr(d.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Resolve</button>'
         : '—')+'</td></tr>';
   }).join('');
 }
@@ -8348,12 +8378,12 @@ function admRefreshStaff(){
   tbody.innerHTML=STORE.staff.map(function(s){
     var ss=STORE.getStaffStats(s.id);
     return '<tr>'
-      +'<td style="font-weight:600;color:var(--adm-text);">'+s.name+'</td>'
-      +'<td style="font-size:10px;color:var(--adm-text2);">@'+s.staffId+'</td>'
-      +'<td>'+ss.assigned+'</td><td>'+ss.sold+'</td>'
+      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(s.name)+'</td>'
+      +'<td style="font-size:10px;color:var(--adm-text2);">@'+escapeHtml(s.staffId)+'</td>'
+      +'<td>'+escapeHtml(ss.assigned)+'</td><td>'+escapeHtml(ss.sold)+'</td>'
       +'<td style="font-size:11px;">₹'+ss.earnings.toLocaleString('en-IN')+'</td>'
       +'<td><span class="adm-badge '+(s.status==='active'?'green':s.status==='pending'?'yellow':'red')+'">'+(s.status==='active'?'Active':s.status==='pending'?'Pending Verification':'Suspended')+'</span></td>'
-      +'<td><button onclick="admDisableStaff(\''+s.id+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':s.status==='pending'?'Verify':'Enable')+'</button></td></tr>';
+      +'<td><button onclick="admDisableStaff(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':s.status==='pending'?'Verify':'Enable')+'</button></td></tr>';
   }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff members yet</td></tr>';
 }
 
@@ -8401,17 +8431,17 @@ function admRenderCoupons(){
     var bc=c.status==='Active'?'green':'red';
     var valLabel=c.type==='Percentage'?c.value+'%':c.type==='Flat'?'₹'+c.value:'Free';
     return '<tr>'
-      +'<td style="font-weight:700;letter-spacing:1px;color:var(--adm-text);">'+c.code+'</td>'
-      +'<td><span class="adm-badge blue">'+c.type+'</span></td>'
-      +'<td style="font-weight:600;color:var(--adm-text);">'+valLabel+'</td>'
-      +'<td>₹'+c.minOrder+'</td>'
-      +'<td>'+c.used+' / '+c.maxUses+'</td>'
-      +'<td>'+c.expiry+'</td>'
-      +'<td><span class="adm-badge '+bc+'">'+c.status+'</span></td>'
+      +'<td style="font-weight:700;letter-spacing:1px;color:var(--adm-text);">'+escapeHtml(c.code)+'</td>'
+      +'<td><span class="adm-badge blue">'+escapeHtml(c.type)+'</span></td>'
+      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(valLabel)+'</td>'
+      +'<td>₹'+escapeHtml(c.minOrder)+'</td>'
+      +'<td>'+escapeHtml(c.used)+' / '+escapeHtml(c.maxUses)+'</td>'
+      +'<td>'+escapeHtml(c.expiry)+'</td>'
+      +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(c.status)+'</span></td>'
       +'<td><div style="display:flex;gap:3px;">'
       +(c.status==='Active'
-        ? '<button onclick="admDeactivateCoupon(\''+c.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Deactivate</button>'
-        : '<button onclick="admReactivateCoupon(\''+c.id+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reactivate</button>')
+        ? '<button onclick="admDeactivateCoupon(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Deactivate</button>'
+        : '<button onclick="admReactivateCoupon(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reactivate</button>')
       +'</div></td></tr>';
   }).join('');
 }
@@ -8451,8 +8481,8 @@ function admRefreshNotifs(){
   }
   hist.innerHTML=admNotifHistory.map(function(n){
     return '<div style="padding:10px 0;border-bottom:1px solid var(--adm-border);">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--adm-text);">'+n.title+'</div>'
-      +'<div style="font-size:11px;color:var(--adm-text2);">→ '+n.target+' · '+n.time+'</div></div>';
+      +'<div style="font-size:12px;font-weight:600;color:var(--adm-text);">'+escapeHtml(n.title)+'</div>'
+      +'<div style="font-size:11px;color:var(--adm-text2);">→ '+escapeHtml(n.target)+' · '+escapeHtml(n.time)+'</div></div>';
   }).join('');
 }
 function admSendNotif(){
@@ -8486,10 +8516,10 @@ function admRefreshConfig(){
   var el=document.getElementById('featureFlags'); if(!el) return;
   el.innerHTML=flags.map(function(f){
     return '<div class="adm-toggle-row">'
-      +'<div><div style="font-size:13px;color:var(--adm-text);">'+f.label+'</div>'
-      +'<div style="font-size:11px;color:var(--adm-text2);">'+f.desc+'</div></div>'
+      +'<div><div style="font-size:13px;color:var(--adm-text);">'+escapeHtml(f.label)+'</div>'
+      +'<div style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(f.desc)+'</div></div>'
       +'<label class="adm-sw"><input type="checkbox" '+(cfg[f.key]?'checked':'')
-      +' onchange="STORE.platformConfig[\''+f.key+'\']=this.checked;STORE.addAdminLog(\'Feature Flag\',\''+f.label+': \'+this.checked);admShowToast(\'✅ '+f.label+': \'+(this.checked?\'ON\':\'OFF\'));" />'
+      +' onchange="STORE.platformConfig[\''+jsStr(f.key)+'\']=this.checked;STORE.addAdminLog(\'Feature Flag\',\''+jsStr(f.label)+': \'+this.checked);admShowToast(\'✅ '+jsStr(f.label)+': \'+(this.checked?\'ON\':\'OFF\'));" />'
       +'<span class="adm-sw-slider"></span></label></div>';
   }).join('');
 }
@@ -8532,13 +8562,13 @@ function admRenderAdmins(){
       var created=s.createdAt?new Date(s.createdAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-';
       var active=s.status==='active' || s.status==='Active';
       return '<tr>'
-        +'<td><div style="font-weight:600;color:var(--adm-text);">'+s.name+'</div></td>'
-        +'<td style="font-size:11px;color:var(--adm-text2);">'+(s.email||'-')+'</td>'
-        +'<td style="font-size:11px;color:var(--adm-text2);">@'+(s.staffId||s.id)+'</td>'
-        +'<td><span class="adm-badge blue">'+admRoleStaffPermissionText(s)+'</span></td>'
+        +'<td><div style="font-weight:600;color:var(--adm-text);">'+escapeHtml(s.name)+'</div></td>'
+        +'<td style="font-size:11px;color:var(--adm-text2);">'+(escapeHtml(s.email||'-'))+'</td>'
+        +'<td style="font-size:11px;color:var(--adm-text2);">@'+(escapeHtml(s.staffId||s.id))+'</td>'
+        +'<td><span class="adm-badge blue">'+escapeHtml(admRoleStaffPermissionText(s))+'</span></td>'
         +'<td><span class="adm-badge '+(active?'green':'red')+'">'+(active?'Active':'Suspended')+'</span></td>'
-        +'<td style="font-size:11px;color:var(--adm-text2);">'+created+'</td>'
-        +'<td><button onclick="admRevokeRoleStaff(\''+s.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Delete</button></td></tr>';
+        +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(created)+'</td>'
+        +'<td><button onclick="admRevokeRoleStaff(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Delete</button></td></tr>';
     }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff created yet</td></tr>';
     return;
   }
@@ -8550,15 +8580,15 @@ function admRenderAdmins(){
     var lastLogin=a.lastLogin?new Date(a.lastLogin).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Never';
     var permCount=Array.isArray(a.permissions)?a.permissions.length:'Role default';
     return '<tr>'
-      +'<td><div style="font-weight:600;color:var(--adm-text);">'+a.name+'</div></td>'
-      +'<td style="font-size:11px;color:var(--adm-text2);">'+a.email+'</td>'
-      +'<td><span class="adm-badge '+bc+'">'+a.role+'</span></td>'
-      +'<td><span class="adm-badge blue">'+permCount+'</span></td>'
-      +'<td><span class="adm-badge '+sc+'">'+a.status+'</span></td>'
-      +'<td style="font-size:11px;color:var(--adm-text2);">'+lastLogin+'</td>'
+      +'<td><div style="font-weight:600;color:var(--adm-text);">'+escapeHtml(a.name)+'</div></td>'
+      +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(a.email)+'</td>'
+      +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(a.role)+'</span></td>'
+      +'<td><span class="adm-badge blue">'+escapeHtml(permCount)+'</span></td>'
+      +'<td><span class="adm-badge '+escapeHtml(sc)+'">'+escapeHtml(a.status)+'</span></td>'
+      +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(lastLogin)+'</td>'
       +'<td>'+(isSuperAdmin() && a.role!=='Super Admin'
         ? (a.status==='Active'
-          ? '<button onclick="admRevokeAdmin(\''+a.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Revoke</button>'
+          ? '<button onclick="admRevokeAdmin(\''+jsStr(a.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Revoke</button>'
           : '<span style="font-size:10px;color:var(--adm-text2);">Revoked</span>')
         : '<span style="font-size:10px;color:var(--adm-text2);">—</span>')+'</td></tr>';
   }).join('');
@@ -8598,7 +8628,7 @@ function confirmAdminRevoke(a){
   modal.innerHTML='<div style="width:100%;max-width:380px;background:#111;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;box-shadow:0 18px 70px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
     +'<div style="width:48px;height:48px;border-radius:16px;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.32);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:#ef4444;font-size:24px;">!</div>'
     +'<div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">Delete admin?</div>'
-    +'<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,.58);margin-bottom:18px;">This will permanently remove <b style="color:#fff;">'+a.name+'</b> from admin access.</div>'
+    +'<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,.58);margin-bottom:18px;">This will permanently remove <b style="color:#fff;">'+escapeHtml(a.name)+'</b> from admin access.</div>'
     +'<div style="display:flex;gap:10px;">'
     +'<button data-cancel="1" style="flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Cancel</button>'
     +'<button data-confirm="1" style="flex:1;padding:12px;border-radius:12px;border:none;background:#8B2010;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Delete</button>'
@@ -8642,7 +8672,7 @@ function confirmRoleStaffRevoke(s){
   modal.innerHTML='<div style="width:100%;max-width:380px;background:#111;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;box-shadow:0 18px 70px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
     +'<div style="width:48px;height:48px;border-radius:16px;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.32);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:#ef4444;font-size:24px;">!</div>'
     +'<div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">Delete staff?</div>'
-    +'<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,.58);margin-bottom:18px;">This will permanently remove <b style="color:#fff;">'+s.name+'</b> from staff access.</div>'
+    +'<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,.58);margin-bottom:18px;">This will permanently remove <b style="color:#fff;">'+escapeHtml(s.name)+'</b> from staff access.</div>'
     +'<div style="display:flex;gap:10px;">'
     +'<button data-cancel="1" style="flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Cancel</button>'
     +'<button data-confirm="1" style="flex:1;padding:12px;border-radius:12px;border:none;background:#8B2010;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Delete</button>'
@@ -8682,10 +8712,10 @@ function admRefreshAudit(){
     var adminName=((STORE.adminUsers||[]).find(function(a){return a.id===l.adminId;})||{}).name||'System';
     var ts=new Date(l.timestamp).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
     return '<tr>'
-      +'<td><span class="adm-badge blue" style="font-size:9px;">'+l.action+'</span></td>'
-      +'<td style="font-size:12px;color:var(--adm-text);">'+l.detail+'</td>'
-      +'<td style="font-size:11px;color:var(--adm-text2);">'+adminName+'</td>'
-      +'<td style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+ts+'</td></tr>';
+      +'<td><span class="adm-badge blue" style="font-size:9px;">'+escapeHtml(l.action)+'</span></td>'
+      +'<td style="font-size:12px;color:var(--adm-text);">'+escapeHtml(l.detail)+'</td>'
+      +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(adminName)+'</td>'
+      +'<td style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+escapeHtml(ts)+'</td></tr>';
   }).join('');
 }
 
@@ -8825,9 +8855,9 @@ function admShowRolePerms(role){
   _adminPerms = Object.assign({}, def);
   grid.innerHTML=Object.keys(ADM_PERM_LABELS).map(function(key){
     var checked=!!_adminPerms[key];
-    return '<div class="admin-perm-row" data-admin-perm="'+key+'" onclick="toggleAdminPerm(\''+key+'\',this)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:'+(checked?'rgba(139,32,16,0.16)':'rgba(255,255,255,0.04)')+';border-radius:8px;border:1px solid '+(checked?'rgba(139,32,16,0.6)':'rgba(255,255,255,0.12)')+';cursor:pointer;">'
-      +'<span style="font-size:12px;color:var(--adm-text);">'+ADM_PERM_LABELS[key]+'</span>'
-      +'<span class="adm-sw" style="width:34px;height:19px;pointer-events:none;"><input type="checkbox" '+(checked?'checked':'')+' name="perm_'+key+'" tabindex="-1" aria-hidden="true" /><span class="adm-sw-slider"></span></span></div>';
+    return '<div class="admin-perm-row" data-admin-perm="'+escapeHtml(key)+'" onclick="toggleAdminPerm(\''+jsStr(key)+'\',this)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:'+(checked?'rgba(139,32,16,0.16)':'rgba(255,255,255,0.04)')+';border-radius:8px;border:1px solid '+(checked?'rgba(139,32,16,0.6)':'rgba(255,255,255,0.12)')+';cursor:pointer;">'
+      +'<span style="font-size:12px;color:var(--adm-text);">'+escapeHtml(ADM_PERM_LABELS[key])+'</span>'
+      +'<span class="adm-sw" style="width:34px;height:19px;pointer-events:none;"><input type="checkbox" '+(checked?'checked':'')+' name="perm_'+escapeHtml(key)+'" tabindex="-1" aria-hidden="true" /><span class="adm-sw-slider"></span></span></div>';
   }).join('');
 }
 
@@ -8909,16 +8939,16 @@ function admRenderLedgerFiltered(period, status){
     var tot=b.total==null?b.subtotal+fA+gA:b.total;
     var bc=b.status==='Success'?'green':b.status==='Refunded'?'yellow':'red';
     return '<tr>'
-      +'<td style="font-size:10px;color:var(--adm-text2);"><div>'+b.id+'</div>'+(b.txnid?'<div style="font-size:9px;color:var(--adm-text2);">'+(b.gateway||'PayU')+' '+b.txnid+'</div>':'')+'</td>'
-      +'<td style="font-weight:600;color:var(--adm-text);">'+b.buyer+'</td>'
-      +'<td style="max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+b.event+'</td>'
-      +'<td style="text-align:center;">'+b.qty+'</td>'
+      +'<td style="font-size:10px;color:var(--adm-text2);"><div>'+escapeHtml(b.id)+'</div>'+(b.txnid?'<div style="font-size:9px;color:var(--adm-text2);">'+(escapeHtml(b.gateway||'PayU'))+' '+escapeHtml(b.txnid)+'</div>':'')+'</td>'
+      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(b.buyer)+'</td>'
+      +'<td style="max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+escapeHtml(b.event)+'</td>'
+      +'<td style="text-align:center;">'+escapeHtml(b.qty)+'</td>'
       +'<td style="font-size:11px;">\u20b9'+b.subtotal.toLocaleString('en-IN')+'</td>'
       +'<td style="font-size:11px;color:#22c55e;">\u20b9'+fA.toLocaleString('en-IN')+'</td>'
       +'<td style="font-size:11px;color:#60a5fa;">\u20b9'+gA.toLocaleString('en-IN')+'</td>'
       +'<td style="font-size:11px;font-weight:700;color:var(--adm-text);">\u20b9'+tot.toLocaleString('en-IN')+'</td>'
-      +'<td><span class="adm-badge '+bc+'">'+b.status+'</span></td>'
-      +'<td style="font-size:11px;color:var(--adm-text2);">'+b.date+'</td>'
+      +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(b.status)+'</span></td>'
+      +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(b.date)+'</td>'
       +'</tr>';
   }).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--adm-text2);padding:24px;">No payment transactions yet</td></tr>';
 }
@@ -8972,8 +9002,8 @@ function admRefreshNotifs(){
   }
   hist.innerHTML = admNotifHistory.map(function(n){
     return '<div style="padding:10px 0;border-bottom:1px solid var(--adm-border);">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--adm-text);">'+n.title+'</div>'
-      +'<div style="font-size:11px;color:var(--adm-text2);">' + n.target + ' &middot; ' + n.time+'</div></div>';
+      +'<div style="font-size:12px;font-weight:600;color:var(--adm-text);">'+escapeHtml(n.title)+'</div>'
+      +'<div style="font-size:11px;color:var(--adm-text2);">' + escapeHtml(n.target) + ' &middot; ' + escapeHtml(n.time)+'</div></div>';
   }).join('');
 }
 
@@ -9152,8 +9182,8 @@ function admRefreshDashboard(){
     } else {
       pl.innerHTML = pending.map(function(d){
         return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--adm-border);">'
-          +'<div><div style="font-size:12px;color:var(--adm-text);font-weight:600;">'+d.buyerName+' — '+d.event+'</div>'
-          +'<div style="font-size:11px;color:var(--adm-text2);">'+d.reason+' &middot; ₹'+d.amount+'</div></div>'
+          +'<div><div style="font-size:12px;color:var(--adm-text);font-weight:600;">'+escapeHtml(d.buyerName)+' — '+escapeHtml(d.event)+'</div>'
+          +'<div style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(d.reason)+' &middot; ₹'+escapeHtml(d.amount)+'</div></div>'
           +'<button onclick="admQuickNav(\'payments\')" class="adm-btn adm-btn-sm adm-btn-green">Resolve</button></div>';
       }).join('');
     }
@@ -9262,7 +9292,7 @@ function toggleStaffPerm(perm, el){
 }
 
 function setAdminPermState(perm, value, row){
-  if(!row) row=document.querySelector('[data-admin-perm="'+perm+'"]');
+  if(!row) row=document.querySelector('[data-admin-perm="'+escapeHtml(perm)+'"]');
   _adminPerms[perm]=!!value;
   var input=row?row.querySelector('input[type=checkbox]'):null;
   if(input) input.checked=!!_adminPerms[perm];
@@ -9370,8 +9400,8 @@ function inviteBuildConfirmation(){
   if(notes) rows.push({label:'Notes',value:notes});
   box.innerHTML=rows.map(function(r){
     return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--adm-border);">'
-      +'<span style="font-size:12px;color:var(--adm-text2);">'+r.label+'</span>'
-      +'<span style="font-size:12px;font-weight:600;color:var(--adm-text);text-align:right;max-width:240px;word-break:break-all;">'+r.value+'</span></div>';
+      +'<span style="font-size:12px;color:var(--adm-text2);">'+escapeHtml(r.label)+'</span>'
+      +'<span style="font-size:12px;font-weight:600;color:var(--adm-text);text-align:right;max-width:240px;word-break:break-all;">'+escapeHtml(r.value)+'</span></div>';
   }).join('');
 }
 
@@ -9533,37 +9563,37 @@ function admUpdateNotifPreview(){
 
   var html = '';
   if(type==='banner'){
-    html = '<div style="background:'+_notifColor+';padding:10px 14px;display:flex;align-items:center;gap:10px;">'
-      +(img?'<img src="'+img+'" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;"/>':'<span style="font-size:20px;">'+_notifIcon+'</span>')
-      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'
-      +(body?'<div style="font-size:11px;color:rgba(255,255,255,0.8);">'+body+'</div>':'')+'</div>'
-      +(cta?'<button style="background:rgba(255,255,255,0.2);border:none;border-radius:8px;color:#fff;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+cta+'</button>':'')
+    html = '<div style="background:'+escapeHtml(_notifColor)+';padding:10px 14px;display:flex;align-items:center;gap:10px;">'
+      +(img?'<img src="'+safeUrl(img)+'" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;"/>':'<span style="font-size:20px;">'+escapeHtml(_notifIcon)+'</span>')
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(title)+'</div>'
+      +(body?'<div style="font-size:11px;color:rgba(255,255,255,0.8);">'+escapeHtml(body)+'</div>':'')+'</div>'
+      +(cta?'<button style="background:rgba(255,255,255,0.2);border:none;border-radius:8px;color:#fff;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+escapeHtml(cta)+'</button>':'')
       +'</div>';
   } else if(type==='ribbon'){
-    html = '<div style="background:linear-gradient(90deg,'+_notifColor+','+_notifColor+'cc);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;">'
-      +'<span style="font-size:12px;font-weight:700;color:#fff;">'+_notifIcon+' '+title+'</span>'
-      +(cta?'<button style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:#fff;padding:4px 10px;font-size:11px;cursor:pointer;">'+cta+'</button>':'')
+    html = '<div style="background:linear-gradient(90deg,'+escapeHtml(_notifColor)+','+escapeHtml(_notifColor)+'cc);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;">'
+      +'<span style="font-size:12px;font-weight:700;color:#fff;">'+escapeHtml(_notifIcon)+' '+escapeHtml(title)+'</span>'
+      +(cta?'<button style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:#fff;padding:4px 10px;font-size:11px;cursor:pointer;">'+escapeHtml(cta)+'</button>':'')
       +'</div>';
   } else if(type==='popup'){
     html = '<div style="padding:20px;text-align:center;">'
-      +(img?'<img src="'+img+'" style="width:100%;height:100px;object-fit:cover;border-radius:10px;margin-bottom:12px;"/>':'<div style="font-size:40px;margin-bottom:8px;">'+_notifIcon+'</div>')
-      +'<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">'+title+'</div>'
-      +(body?'<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:12px;">'+body+'</div>':'')
-      +(cta?'<button style="background:'+_notifColor+';border:none;border-radius:10px;color:#fff;padding:10px 24px;font-size:13px;font-weight:700;cursor:pointer;">'+cta+'</button>':'')
+      +(img?'<img src="'+safeUrl(img)+'" style="width:100%;height:100px;object-fit:cover;border-radius:10px;margin-bottom:12px;"/>':'<div style="font-size:40px;margin-bottom:8px;">'+escapeHtml(_notifIcon)+'</div>')
+      +'<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">'+escapeHtml(title)+'</div>'
+      +(body?'<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:12px;">'+escapeHtml(body)+'</div>':'')
+      +(cta?'<button style="background:'+escapeHtml(_notifColor)+';border:none;border-radius:10px;color:#fff;padding:10px 24px;font-size:13px;font-weight:700;cursor:pointer;">'+escapeHtml(cta)+'</button>':'')
       +'</div>';
   } else if(type==='emergency'){
     html = '<div style="background:#ef4444;padding:12px 14px;">'
       +'<div style="font-size:11px;font-weight:700;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">⚠️ Emergency Alert</div>'
-      +'<div style="font-size:13px;font-weight:700;color:#fff;">'+title+'</div>'
-      +(body?'<div style="font-size:12px;color:rgba(255,255,255,0.85);margin-top:4px;">'+body+'</div>':'')
+      +'<div style="font-size:13px;font-weight:700;color:#fff;">'+escapeHtml(title)+'</div>'
+      +(body?'<div style="font-size:12px;color:rgba(255,255,255,0.85);margin-top:4px;">'+escapeHtml(body)+'</div>':'')
       +'</div>';
   } else {
     // push
     html = '<div style="padding:12px;display:flex;align-items:flex-start;gap:10px;">'
-      +(img?'<img src="'+img+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;"/>':'<span style="font-size:24px;flex-shrink:0;">'+_notifIcon+'</span>')
-      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#fff;">'+title+'</div>'
-      +(body?'<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px;">'+body+'</div>':'')
-      +(cta?'<button style="margin-top:8px;background:'+_notifColor+';border:none;border-radius:8px;color:#fff;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;">'+cta+'</button>':'')
+      +(img?'<img src="'+safeUrl(img)+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;"/>':'<span style="font-size:24px;flex-shrink:0;">'+escapeHtml(_notifIcon)+'</span>')
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#fff;">'+escapeHtml(title)+'</div>'
+      +(body?'<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px;">'+escapeHtml(body)+'</div>':'')
+      +(cta?'<button style="margin-top:8px;background:'+escapeHtml(_notifColor)+';border:none;border-radius:8px;color:#fff;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;">'+escapeHtml(cta)+'</button>':'')
       +'</div></div>';
   }
   box.innerHTML = html;
@@ -9607,11 +9637,11 @@ function admRefreshNotifs(){
     var bc = typeColors[n.type]||'blue';
     return '<div style="padding:10px 0;border-bottom:1px solid var(--adm-border);">'
       +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
-      +'<span style="font-size:14px;">'+n.icon+'</span>'
-      +'<span style="font-size:12px;font-weight:600;color:var(--adm-text);flex:1;">'+n.title+'</span>'
-      +'<span class="adm-badge '+bc+'" style="font-size:9px;">'+n.type+'</span></div>'
-      +'<div style="font-size:11px;color:var(--adm-text2);">'+n.target+' &middot; '+n.time+'</div>'
-      +(n.cta?'<div style="font-size:11px;color:var(--adm-text2);">CTA: '+n.cta+'</div>':'')
+      +'<span style="font-size:14px;">'+escapeHtml(n.icon)+'</span>'
+      +'<span style="font-size:12px;font-weight:600;color:var(--adm-text);flex:1;">'+escapeHtml(n.title)+'</span>'
+      +'<span class="adm-badge '+escapeHtml(bc)+'" style="font-size:9px;">'+escapeHtml(n.type)+'</span></div>'
+      +'<div style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(n.target)+' &middot; '+escapeHtml(n.time)+'</div>'
+      +(n.cta?'<div style="font-size:11px;color:var(--adm-text2);">CTA: '+escapeHtml(n.cta)+'</div>':'')
       +'</div>';
   }).join('');
 }
@@ -9951,12 +9981,12 @@ function admRefreshFraudPanel(){
     var sCol = a.severity==='CRITICAL'?'#ef4444':'#eab308';
     return '<div style="padding:10px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:6px;">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
-      +'<span style="font-size:11px;font-weight:700;color:'+sCol+';">🚨 '+a.severity+'</span>'
-      +'<span style="font-size:10px;color:var(--adm-text2);">'+new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+'</span></div>'
-      +'<div style="font-size:12px;color:var(--adm-text);margin-bottom:6px;">'+a.detail+'</div>'
+      +'<span style="font-size:11px;font-weight:700;color:'+escapeHtml(sCol)+';">🚨 '+escapeHtml(a.severity)+'</span>'
+      +'<span style="font-size:10px;color:var(--adm-text2);">'+escapeHtml(new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}))+'</span></div>'
+      +'<div style="font-size:12px;color:var(--adm-text);margin-bottom:6px;">'+escapeHtml(a.detail)+'</div>'
       +'<div style="display:flex;gap:5px;">'
-      +'<button onclick="VyberaFraud.resolveAlert(\''+a.id+'\');admRefreshFraudPanel();" style="padding:4px 10px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:6px;color:#22c55e;font-size:10px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Resolve</button>'
-      +(a.eventId?'<button onclick="admPauseSales(\''+a.eventId+'\');" style="padding:4px 10px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:6px;color:#eab308;font-size:10px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Pause Sales</button>':'')
+      +'<button onclick="VyberaFraud.resolveAlert(\''+jsStr(a.id)+'\');admRefreshFraudPanel();" style="padding:4px 10px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:6px;color:#22c55e;font-size:10px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Resolve</button>'
+      +(a.eventId?'<button onclick="admPauseSales(\''+jsStr(a.eventId)+'\');" style="padding:4px 10px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:6px;color:#eab308;font-size:10px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Pause Sales</button>':'')
       +'</div></div>';
   }).join('');
 }
@@ -9989,28 +10019,28 @@ function admRenderEvents(tab){
     var riskCol = risk>70?'#ef4444':risk>40?'#eab308':'#22c55e';
 
     return '<tr>'
-      +'<td style="max-width:140px;"><div style="font-weight:600;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+ev.name+'</div>'
+      +'<td style="max-width:140px;"><div style="font-weight:600;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(ev.name)+'</div>'
       +(paused?'<div style="font-size:9px;color:#eab308;">⏸ SALES PAUSED</div>':'')+'</td>'
-      +'<td style="font-size:11px;color:var(--adm-text2);">'+ev.creatorName+'</td>'
-      +'<td style="font-size:11px;white-space:nowrap;">'+ev.date+'</td>'
-      +'<td style="font-size:11px;">'+ev.city+'</td>'
-      +'<td>'+(ev.bookingCount||0)+'</td>'
+      +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(ev.creatorName)+'</td>'
+      +'<td style="font-size:11px;white-space:nowrap;">'+escapeHtml(ev.date)+'</td>'
+      +'<td style="font-size:11px;">'+escapeHtml(ev.city)+'</td>'
+      +'<td>'+(escapeHtml(ev.bookingCount||0))+'</td>'
       +'<td style="font-size:11px;">₹'+(ev.revenue||0).toLocaleString('en-IN')+'</td>'
-      +'<td style="font-size:10px;font-weight:700;color:'+riskCol+';">'+risk+'</td>'
-      +'<td><span class="adm-badge '+statusCol+'">'+(ev.status||'live')+(paused?' ⏸':'')+'</span></td>'
+      +'<td style="font-size:10px;font-weight:700;color:'+escapeHtml(riskCol)+';">'+escapeHtml(risk)+'</td>'
+      +'<td><span class="adm-badge '+escapeHtml(statusCol)+'">'+(escapeHtml(ev.status||'live'))+(paused?' ⏸':'')+'</span></td>'
       +'<td><div style="display:flex;gap:3px;flex-wrap:wrap;">'
       +(tab==='pending'
-        ?'<button onclick="admApproveEvent(\''+ev.id+'\')" class="adm-btn adm-btn-sm adm-btn-green">Approve</button>'
-         +'<button onclick="admRejectEvent(\''+ev.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Reject</button>'
+        ?'<button onclick="admApproveEvent(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Approve</button>'
+         +'<button onclick="admRejectEvent(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Reject</button>'
         :''
       )
       +(ev.status==='live'||ev.status==='paused'
         ?(ev.status==='paused'||paused
-          ?'<button onclick="admResumeSales(\''+ev.id+'\')" class="adm-btn adm-btn-sm adm-btn-green">Resume</button>'
-          :'<button onclick="admPauseSales(\''+ev.id+'\')" class="adm-btn adm-btn-sm adm-btn-yellow">Pause</button>')
+          ?'<button onclick="admResumeSales(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Resume</button>'
+          :'<button onclick="admPauseSales(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm adm-btn-yellow">Pause</button>')
         :'')
       +(ev.status!=='blocked'
-        ?'<button onclick="admEmergencyBlock(\''+ev.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.25);font-size:9px;">🚨 Block</button>'
+        ?'<button onclick="admEmergencyBlock(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.25);font-size:9px;">🚨 Block</button>'
         :'<span style="font-size:9px;color:#ef4444;">BLOCKED</span>')
       +'</div></td></tr>';
   }).join('');
@@ -10028,16 +10058,16 @@ function admRenderPayouts(){
     var payout  = c.revenue - platFee - gstAmt;
     var bc = c.status==='Pending'?'yellow':'green';
     return '<tr>'
-      +'<td style="font-weight:600;color:var(--adm-text);">'+c.name+'</td><td>'+c.events+'</td>'
+      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(c.name)+'</td><td>'+escapeHtml(c.events)+'</td>'
       +'<td style="font-size:11px;">₹'+c.revenue.toLocaleString('en-IN')+'</td>'
       +'<td style="font-size:11px;color:#ef4444;">₹'+platFee.toLocaleString('en-IN')+'</td>'
       +'<td style="font-size:11px;color:#60a5fa;">₹'+gstAmt.toLocaleString('en-IN')+'</td>'
       +'<td style="font-size:11px;color:#22c55e;font-weight:700;">₹'+payout.toLocaleString('en-IN')+'</td>'
-      +'<td><span class="adm-badge '+bc+'">'+c.status+'</span></td>'
+      +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(c.status)+'</span></td>'
       +'<td><div style="display:flex;gap:4px;">'
       +(c.status==='Pending'
-        ?'<button onclick="admTriggerPayout(\''+c.name+'\')" class="adm-btn adm-btn-sm adm-btn-green">Pay Now</button>'
-         +'<button onclick="admFreezePayout(\''+c.name+'\')" class="adm-btn adm-btn-sm" style="background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.3);">Freeze</button>'
+        ?'<button onclick="admTriggerPayout(\''+jsStr(c.name)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Pay Now</button>'
+         +'<button onclick="admFreezePayout(\''+jsStr(c.name)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.3);">Freeze</button>'
         :'<span style="font-size:10px;color:var(--adm-text2);">Done ✓</span>')
       +'</div></td></tr>';
   }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--adm-text2);padding:24px;">No payout data</td></tr>';
@@ -10062,7 +10092,7 @@ admRefreshDashboard = function(){
 function admGetRiskBadge(score){
   if(!score) return '';
   var col = score>70?'red':score>40?'yellow':'green';
-  return '<span class="adm-badge '+col+'" style="font-size:9px;">Risk: '+score+'</span>';
+  return '<span class="adm-badge '+escapeHtml(col)+'" style="font-size:9px;">Risk: '+escapeHtml(score)+'</span>';
 }
 
 // ── WIRE admSuspendCreator → full freeze ──
@@ -10121,7 +10151,7 @@ function openCashSaleModal(){
   var options = assignments.map(function(a,i){
     var ev = STORE.events.find(function(e){ return e.id===a.eventId; })||{name:'Event',tickets:[]};
     var price = getAssignmentSellPrice(a);
-    return '<option value="'+i+'">'+ev.name+' — '+a.tierName+' (₹'+price+') · '+getAssignmentModeLabel(a)+' ['+formatTicketCount((a.qty||0)-(a.soldCount||0))+' left]</option>';
+    return '<option value="'+i+'">'+escapeHtml(ev.name)+' — '+escapeHtml(a.tierName)+' (₹'+escapeHtml(price)+') · '+getAssignmentModeLabel(a)+' ['+formatTicketCount((a.qty||0)-(a.soldCount||0))+' left]</option>';
   }).join('');
 
   modal.innerHTML = '<div style="background:#111;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;">'
@@ -10212,7 +10242,7 @@ function openWithdrawalModal(){
     +'<span style="color:rgba(255,255,255,.6);font-size:14px;">Available to withdraw</span>'
     +'<span style="font-size:20px;font-weight:700;color:#4ade80;">₹'+bal.toLocaleString('en-IN')+'</span></div>'
     +'<div style="margin-bottom:12px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Amount (₹)</label>'
-    +'<input id="withdrawAmt" type="number" max="'+bal+'" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:18px;font-weight:700;box-sizing:border-box;outline:none;" placeholder="Enter amount"/></div>'
+    +'<input id="withdrawAmt" type="number" max="'+escapeHtml(bal)+'" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:18px;font-weight:700;box-sizing:border-box;outline:none;" placeholder="Enter amount"/></div>'
     +'<div style="margin-bottom:16px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Transfer Method</label>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
     +'<div id="wm-upi" onclick="selectWithdrawMethod(\'upi\',this)" style="padding:12px;background:rgba(0,212,212,.1);border:1.5px solid #00D4D4;border-radius:10px;text-align:center;cursor:pointer;">'
@@ -10373,9 +10403,9 @@ function refreshWalletTab(){
         var d = new Date(tx.ts);
         var timeStr = d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
         return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05);">'
-          +'<div><div style="font-size:13px;color:#fff;font-weight:500;">'+tx.label+'</div>'
-          +'<div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:2px;">'+timeStr+'</div></div>'
-          +'<span style="font-size:14px;font-weight:700;color:'+tx.col+';">'+tx.amount+'</span></div>';
+          +'<div><div style="font-size:13px;color:#fff;font-weight:500;">'+escapeHtml(tx.label)+'</div>'
+          +'<div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:2px;">'+escapeHtml(timeStr)+'</div></div>'
+          +'<span style="font-size:14px;font-weight:700;color:'+escapeHtml(tx.col)+';">'+escapeHtml(tx.amount)+'</span></div>';
       }).join('');
     }
   }
@@ -10566,15 +10596,15 @@ function admRefreshStaff(){
     var frozen = s._inventoryFrozen;
     var locked = s._walletLocked;
     return '<tr>'
-      +'<td style="font-weight:600;color:var(--adm-text);">'+s.name+(frozen?'<span style="font-size:9px;color:#ef4444;display:block;">🔒 INV FROZEN</span>':'')+(locked?'<span style="font-size:9px;color:#eab308;display:block;">🔒 WALLET LOCKED</span>':'')+'</td>'
-      +'<td style="font-size:10px;color:var(--adm-text2);">@'+s.staffId+'</td>'
-      +'<td>'+ss.assigned+'</td><td>'+ss.sold+'</td>'
+      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(s.name)+(frozen?'<span style="font-size:9px;color:#ef4444;display:block;">🔒 INV FROZEN</span>':'')+(locked?'<span style="font-size:9px;color:#eab308;display:block;">🔒 WALLET LOCKED</span>':'')+'</td>'
+      +'<td style="font-size:10px;color:var(--adm-text2);">@'+escapeHtml(s.staffId)+'</td>'
+      +'<td>'+escapeHtml(ss.assigned)+'</td><td>'+escapeHtml(ss.sold)+'</td>'
       +'<td style="font-size:11px;">₹'+earnings.toLocaleString('en-IN')+'</td>'
       +'<td><span class="adm-badge '+(s.status==='active'?'green':'red')+'">'+(s.status==='active'?'Active':'Suspended')+'</span></td>'
       +'<td><div style="display:flex;gap:3px;flex-wrap:wrap;">'
-      +'<button onclick="admDisableStaff(\''+s.id+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':'Enable')+'</button>'
-      +(frozen?'':'<button onclick="admFreezeInventory(\''+s.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:9px;">Freeze Inv</button>')
-      +(locked?'':'<button onclick="admLockWallet(\''+s.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(234,179,8,.1);color:#eab308;border:1px solid rgba(234,179,8,.3);font-size:9px;">Lock Wallet</button>')
+      +'<button onclick="admDisableStaff(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':'Enable')+'</button>'
+      +(frozen?'':'<button onclick="admFreezeInventory(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:9px;">Freeze Inv</button>')
+      +(locked?'':'<button onclick="admLockWallet(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(234,179,8,.1);color:#eab308;border:1px solid rgba(234,179,8,.3);font-size:9px;">Lock Wallet</button>')
       +'</div></td></tr>';
   }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff yet</td></tr>';
 }
@@ -10935,18 +10965,18 @@ function refreshStaffManagePage(){
     var card=document.createElement('div');
     card.style.cssText='padding:16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;margin-bottom:10px;';
     card.innerHTML='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
-      +'<div style="width:44px;height:44px;border-radius:50%;background:rgba(139,32,16,0.2);border:1px solid rgba(139,32,16,0.4);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#8B2010;flex-shrink:0;">'+s.name.charAt(0).toUpperCase()+'</div>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#fff;">'+s.name+'</div>'
-      +'<div style="font-size:11px;color:rgba(255,255,255,0.4);">@'+s.staffId+' &bull; '+(s.role||'Staff')+'</div></div>'
-      +'<span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:8px;background:rgba(34,197,94,0.12);color:#4ade80;">'+s.status+'</span></div>'
-      +(evName?'<div style="font-size:11px;color:rgba(0,212,212,0.8);margin-bottom:8px;">\uD83D\uDCC5 '+evName+'</div>':'')
+      +'<div style="width:44px;height:44px;border-radius:50%;background:rgba(139,32,16,0.2);border:1px solid rgba(139,32,16,0.4);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#8B2010;flex-shrink:0;">'+escapeHtml(s.name.charAt(0).toUpperCase())+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#fff;">'+escapeHtml(s.name)+'</div>'
+      +'<div style="font-size:11px;color:rgba(255,255,255,0.4);">@'+escapeHtml(s.staffId)+' &bull; '+(escapeHtml(s.role||'Staff'))+'</div></div>'
+      +'<span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:8px;background:rgba(34,197,94,0.12);color:#4ade80;">'+escapeHtml(s.status)+'</span></div>'
+      +(evName?'<div style="font-size:11px;color:rgba(0,212,212,0.8);margin-bottom:8px;">\uD83D\uDCC5 '+escapeHtml(evName)+'</div>':'')
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">'
       +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:#fff;">'+formatTicketCount(ss.assigned)+'</div><div style="font-size:9px;color:rgba(255,255,255,0.4);">Assigned</div></div>'
       +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:#00D4D4;">'+formatTicketCount(ss.sold)+'</div><div style="font-size:9px;color:rgba(255,255,255,0.4);">Sold</div></div>'
       +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:#4ade80;">\u20b9'+earnings.toLocaleString('en-IN')+'</div><div style="font-size:9px;color:rgba(255,255,255,0.4);">Earned</div></div></div>'
       +'<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:4px;margin-bottom:10px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#00D4D4);border-radius:4px;"></div></div>'
-      +'<div style="display:flex;gap:8px;"><button onclick="shareStaffInventoryLink(\''+s.id+'\')" style="flex:1;padding:8px;background:rgba(0,212,212,0.1);border:1px solid rgba(0,212,212,0.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:600;cursor:pointer;">Share Link</button>'
-      +'<button onclick="assignMoreTickets(\''+s.id+'\')" style="flex:1;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;cursor:pointer;">Assign More</button></div>';
+      +'<div style="display:flex;gap:8px;"><button onclick="shareStaffInventoryLink(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(0,212,212,0.1);border:1px solid rgba(0,212,212,0.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:600;cursor:pointer;">Share Link</button>'
+      +'<button onclick="assignMoreTickets(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;cursor:pointer;">Assign More</button></div>';
     list.appendChild(card);
   });
 }
@@ -11091,12 +11121,12 @@ function refreshRevenuePage(){
         var d=document.createElement('div');
         d.style.cssText='padding:14px;background:rgba(255,255,255,0.04);border-radius:12px;margin-bottom:8px;';
         d.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
-          +'<span style="font-size:13px;font-weight:600;color:#fff;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+ev.name+'</span>'
+          +'<span style="font-size:13px;font-weight:600;color:#fff;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(ev.name)+'</span>'
           +'<span style="font-size:14px;font-weight:700;color:#4ade80;">\u20b9'+(ev.revenue||0).toLocaleString('en-IN')+'</span></div>'
           +'<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:4px;margin-bottom:6px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#c0392b);border-radius:4px;"></div></div>'
           +'<div style="display:flex;justify-content:space-between;">'
           +'<span style="font-size:11px;color:rgba(255,255,255,.4);">'+formatTicketCount(ev.tickets)+' tickets</span>'
-          +'<span style="font-size:10px;font-weight:700;color:'+statusCol+';">'+ev.status+'</span></div>';
+          +'<span style="font-size:10px;font-weight:700;color:'+escapeHtml(statusCol)+';">'+escapeHtml(ev.status)+'</span></div>';
         evList.appendChild(d);
       });
     }
@@ -11111,8 +11141,8 @@ function refreshRevenuePage(){
       var medals=['\uD83E\uDD47','\uD83E\uDD48','\uD83E\uDD49'];
       topStaffEl.innerHTML=topStaff.map(function(st,i){
         return '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.04);border-radius:12px;margin-bottom:8px;">'
-          +'<span style="font-size:20px;">'+medals[i]+'</span>'
-          +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#fff;">'+st.name+'</div>'
+          +'<span style="font-size:20px;">'+escapeHtml(medals[i])+'</span>'
+          +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#fff;">'+escapeHtml(st.name)+'</div>'
           +'<div style="font-size:11px;color:rgba(255,255,255,0.4);">'+formatTicketCount(st.sold)+' sold</div></div>'
           +'<span style="font-size:13px;font-weight:700;color:#4ade80;">\u20b9'+st.rev.toLocaleString('en-IN')+'</span></div>';
       }).join('');
@@ -11254,8 +11284,8 @@ function showScanResult(type, msg){
   };
   var cfg = configs[type]||configs.invalid;
   el.style.cssText = 'display:block;padding:14px;border-radius:14px;margin-bottom:14px;text-align:center;background:'+cfg.bg+';border:1px solid '+cfg.border+';';
-  el.innerHTML = '<div style="font-size:24px;margin-bottom:6px;">'+cfg.icon+'</div>'
-    +'<div style="font-size:14px;font-weight:700;color:'+cfg.color+';">'+msg+'</div>';
+  el.innerHTML = '<div style="font-size:24px;margin-bottom:6px;">'+escapeHtml(cfg.icon)+'</div>'
+    +'<div style="font-size:14px;font-weight:700;color:'+escapeHtml(cfg.color)+';">'+escapeHtml(msg)+'</div>';
   setTimeout(function(){ el.style.display='none'; }, 3000);
 }
 
@@ -11271,10 +11301,10 @@ function addRecentScan(b, num){
   var row = document.createElement('div');
   row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;animation:fadeIn .3s ease;';
   var time = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  row.innerHTML = '<div><div style="font-size:12px;font-weight:600;color:#fff;">'+(b.buyerName||'Buyer')+'</div>'
-    +'<div style="font-size:10px;color:rgba(255,255,255,0.4);">'+b.id+'</div></div>'
+  row.innerHTML = '<div><div style="font-size:12px;font-weight:600;color:#fff;">'+(escapeHtml(b.buyerName||'Buyer'))+'</div>'
+    +'<div style="font-size:10px;color:rgba(255,255,255,0.4);">'+escapeHtml(b.id)+'</div></div>'
     +'<div style="text-align:right;"><div style="font-size:11px;font-weight:700;color:#4ade80;margin-bottom:2px;">SCANNED</div>'
-    +'<div style="font-size:10px;color:rgba(255,255,255,0.35);">'+time+'</div></div>';
+    +'<div style="font-size:10px;color:rgba(255,255,255,0.35);">'+escapeHtml(time)+'</div></div>';
   // Remove "no scans" message
   if(el.children.length===1 && el.children[0].style.textAlign==='center') el.innerHTML='';
   el.insertBefore(row, el.firstChild);
@@ -11458,17 +11488,17 @@ function admRenderApplications(){
       var bc=a.status==='Approved'?'green':a.status==='Rejected'?'red':'yellow';
       var d=new Date(a.ts); var ds=d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
       var docCount=(a.documents||[]).length;
-      return '<tr onclick="admOpenCreatorAppReview('+i+')" style="cursor:pointer;">'
+      return '<tr onclick="admOpenCreatorAppReview('+jsArg(i)+')" style="cursor:pointer;">'
         +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(a.name)+'</td>'
         +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(a.email)+'</td>'
         +'<td>'+escapeHtml(a.category)+'</td>'
-        +'<td><span style="font-size:10px;color:'+(a.docs?'#22c55e':'#eab308')+';">'+(a.docs?'Uploaded ('+docCount+')':'Pending')+'</span></td>'
-        +'<td style="font-size:11px;color:var(--adm-text2);">'+ds+'</td>'
-        +'<td><span class="adm-badge '+bc+'">'+escapeHtml(creatorStatusLabel(a.status))+'</span></td>'
+        +'<td><span style="font-size:10px;color:'+(a.docs?'#22c55e':'#eab308')+';">'+(a.docs?escapeHtml('Uploaded ('+docCount+')'):'Pending')+'</span></td>'
+        +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(ds)+'</td>'
+        +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(creatorStatusLabel(a.status))+'</span></td>'
         +'<td><div style="display:flex;gap:4px;" onclick="event.stopPropagation();">'
         +(a.status==='Pending'?
-          '<button onclick="admOpenCreatorAppReview('+i+')" class="adm-btn adm-btn-sm adm-btn-green">Review</button>'
-          +'<button onclick="admRejectCreatorApp('+i+')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Reject</button>'
+          '<button onclick="admOpenCreatorAppReview('+jsArg(i)+')" class="adm-btn adm-btn-sm adm-btn-green">Review</button>'
+          +'<button onclick="admRejectCreatorApp('+jsArg(i)+')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Reject</button>'
           :'<span style="font-size:10px;color:var(--adm-text2);">Done</span>')
         +'</div></td></tr>';
     }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No applications yet</td></tr>')
@@ -11532,7 +11562,7 @@ function openBuyInventoryModal(){
     +'<span onclick="document.getElementById(\'buyInventoryModal\').remove()" style="color:rgba(255,255,255,.5);cursor:pointer;font-size:22px;">&#215;</span></div>'
     +'<div style="margin-bottom:12px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Event</label>'
     +'<select id="buyInvEvent" onchange="updateBuyInventoryTotal(true)" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:\'DM Sans\',sans-serif;font-size:13px;outline:none;">'
-    +evs.map(function(e){return '<option value="'+e.id+'">'+e.name+' · '+(e.date||'Date not set')+'</option>';}).join('')+'</select></div>'
+    +evs.map(function(e){return '<option value="'+escapeHtml(e.id)+'">'+escapeHtml(e.name)+' · '+(escapeHtml(e.date||'Date not set'))+'</option>';}).join('')+'</select></div>'
     +'<div style="margin-bottom:12px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Ticket Tier</label>'
     +'<select id="buyInvTier" onchange="updateBuyInventoryTotal(false)" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:\'DM Sans\',sans-serif;font-size:13px;outline:none;"></select></div>'
     +'<div class="staff-flow-grid" style="margin-bottom:12px;">'
@@ -11551,7 +11581,7 @@ function updateBuyInventoryTierOptions(){
   var ev = (STORE.events||[]).find(function(e){ return e.id===evId; });
   var sel = document.getElementById('buyInvTier'); if(!sel) return;
   sel.innerHTML = (ev&&ev.tickets||[]).map(function(t){
-    return '<option value="'+t.name+'">'+t.name+' — ₹'+t.price+'</option>';
+    return '<option value="'+escapeHtml(t.name)+'">'+escapeHtml(t.name)+' — ₹'+escapeHtml(t.price)+'</option>';
   }).join('') || '<option>General Admission</option>';
   updateBuyInventoryTotal(false);
 }
@@ -11572,7 +11602,7 @@ function updateBuyInventoryTotal(refreshTiers){
     sumEl.innerHTML = '';
     var r1 = document.createElement('div');
     r1.style.cssText = 'display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);';
-    r1.innerHTML = '<span style="font-size:12px;color:rgba(255,255,255,.5);">'+tier+' × '+qty+'</span><span style="font-size:12px;font-weight:600;color:#fff;">₹'+total.toLocaleString('en-IN')+'</span>';
+    r1.innerHTML = '<span style="font-size:12px;color:rgba(255,255,255,.5);">'+escapeHtml(tier)+' × '+escapeHtml(qty)+'</span><span style="font-size:12px;font-weight:600;color:#fff;">₹'+total.toLocaleString('en-IN')+'</span>';
     var r2 = document.createElement('div');
     r2.style.cssText = 'display:flex;justify-content:space-between;padding:8px 0;';
     r2.innerHTML = '<span style="font-size:13px;font-weight:700;color:#fff;">Total to pay</span><span style="font-size:16px;font-weight:700;color:#00D4D4;">₹'+total.toLocaleString('en-IN')+'</span>';
@@ -11671,7 +11701,7 @@ function showStaffOTPModal(staffName){
   box.style.cssText='background:#111;border-radius:20px;padding:28px;width:100%;max-width:340px;text-align:center;';
   var ic=document.createElement('div');ic.style.cssText='font-size:36px;margin-bottom:12px;';ic.textContent='OTP';box.appendChild(ic);
   var t1=document.createElement('div');t1.style.cssText='font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;';t1.textContent='OTP Verification';box.appendChild(t1);
-  var t2=document.createElement('div');t2.style.cssText='font-size:12px;color:rgba(255,255,255,.5);margin-bottom:20px;';t2.innerHTML='Sent to: <b style="color:#fff;">'+staffName+'</b>';box.appendChild(t2);
+  var t2=document.createElement('div');t2.style.cssText='font-size:12px;color:rgba(255,255,255,.5);margin-bottom:20px;';t2.innerHTML='Sent to: <b style="color:#fff;">'+escapeHtml(staffName)+'</b>';box.appendChild(t2);
   var cb=document.createElement('div');cb.style.cssText='padding:14px;background:rgba(0,212,212,0.1);border-radius:12px;margin-bottom:16px;';
   var cl=document.createElement('div');cl.style.cssText='font-size:11px;color:rgba(0,212,212,.7);margin-bottom:6px;';cl.textContent='Demo OTP';cb.appendChild(cl);
   var cd=document.createElement('div');cd.style.cssText='font-size:28px;font-weight:700;color:#00D4D4;letter-spacing:8px;';cd.textContent=code;cb.appendChild(cd);box.appendChild(cb);
