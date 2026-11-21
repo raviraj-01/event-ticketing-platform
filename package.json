@@ -5,9 +5,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --check server.js && node --check public/firebaseconfig.js",
+    "test": "node --check server.js && node --test --test-force-exit --test-concurrency=1 \"test/*.test.js\"",
     "build:cordova": "node scripts/build-cordova.js",
-    "migrate": "node src/db/migrate.js"
+    "migrate": "node src/db/migrate.js",
+    "test:syntax": "node --check server.js && node --check public/firebaseconfig.js"
   },
   "keywords": [],
   "author": "",

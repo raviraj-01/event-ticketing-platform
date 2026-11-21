@@ -1348,7 +1348,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div style="font-size:18px;font-weight:700;margin-bottom:16px;">Quantity &amp; Coupon</div>
 <div class="qty-row"><div style="font-size:14px;font-weight:600;" id="ticketTierLabel">General Admission</div><div class="qty-control"><div class="qty-btn" onclick="changeQty(-1)">−</div><div class="qty-num" id="qtyNum">1</div><div class="qty-btn" onclick="changeQty(1)">+</div></div></div>
 
-<div class="coupon-row" style="display:flex;gap:8px;margin:12px 0;">
+<div class="coupon-row" style="display:none;gap:8px;margin:12px 0;"><!-- Hidden: coupons need server support (CLAUDE.md open question) -->
   <input class="coupon-input" id="couponInput" type="text" placeholder="Enter coupon code" style="flex:1;text-transform:uppercase;color:#202124;"/>
   <button class="apply-btn" onclick="applyCouponCode()" style="padding:0 16px;">Apply</button>
   <button id="removeCouponBtn" onclick="removeCoupon()" style="display:none;padding:0 12px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:10px;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;">✕</button>
@@ -1373,9 +1373,6 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div class="pay-option" onclick="selPay(this)"><div class="pay-icon">👛</div><div class="pay-info"><p>Wallet</p><span>Mobikwik, Freecharge</span></div><div class="pay-radio"></div></div>
 <div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:20px;border:1px solid var(--glass-border);"><div style="font-size:13px;color:var(--muted);margin-bottom:4px;">Amount to pay</div><div id="payAmountLabel" style="font-family:'Space Mono',monospace;font-size:24px;font-weight:700;color:var(--neon)">₹4,836</div></div>
 <button class="cta-full" id="payNowBtn" onclick="payWithPayU()">🔒 Pay via PayU — ₹4,836</button>
-<div id="cancelPayBtnWrap" style="display:none;text-align:center;margin-top:12px;">
-  <span onclick="cancelPendingPaymentFlow()" style="font-size:12px;color:var(--red);cursor:pointer;text-decoration:underline;">Cancel &amp; Retry</span>
-</div>
 </div>
 </div>
 
@@ -2551,8 +2548,6 @@ function goBack(){
       if(ind) ind.classList.add('active');
     }
     if(bookingStep===2){
-      localStorage.removeItem('VYBERA_PENDING_PAYU_BOOKING');
-      localStorage.removeItem('VYBERA_PENDING_UPI_BOOKING');
       var btn=document.getElementById('payNowBtn');
       if(btn){
         btn.disabled=false;
@@ -2814,6 +2809,11 @@ function applySignedInProfileState(){
   var createdItem=document.getElementById('profileCreatedEventsItem');if(createdItem)createdItem.style.display='';
 }
 function continueAfterBuyerAuth(){
+  if(sessionStorage.getItem('VYBERA_AFTER_AUTH')==='checkout'){
+    sessionStorage.removeItem('VYBERA_AFTER_AUTH');
+    resumeCheckoutAfterLogin().then(function(resumed){if(!resumed)navigateBuyerHome();});
+    return true;
+  }
   if(sessionStorage.getItem('VYBERA_AFTER_AUTH')==='creator'){
     sessionStorage.removeItem('VYBERA_AFTER_AUTH');
     showPage('page-creator-login');
@@ -3164,7 +3164,9 @@ function getStaffShareUrl(){
   var st=STORE.currentStaff;if(!st)return location.origin;
   if(st.shareUrl)return st.shareUrl;
   var eventId=getStaffPrimaryEventId();
-  var url=location.origin+location.pathname+'?staff='+encodeURIComponent(st.email||st.staffId||st.shareToken||st.id);
+  if(!st.shareToken)return location.origin;
+  // Only the secret share token earns referral credit (never email/login ID).
+  var url=location.origin+location.pathname+'?staff='+encodeURIComponent(st.shareToken);
   if(eventId)url+='&event='+encodeURIComponent(eventId);
   return url;
 }
@@ -3348,9 +3350,6 @@ function resetBookingFlow(){
   bookingStep=1;
   qty=1;
   APPLIED_COUPON=null;
-  // Clear any stale pending payment so fresh booking starts clean
-  localStorage.removeItem('VYBERA_PENDING_UPI_BOOKING');
-  localStorage.removeItem('VYBERA_PENDING_PAYU_BOOKING');
   [1,2,3].forEach(function(step){
     var panel=document.getElementById('bstep'+step);
     var indicator=document.getElementById('bstep-ind-'+step);
@@ -3697,6 +3696,8 @@ function getOrganizerKey(ev){
   return String(ev&&((ev.creatorId||ev.creatorName||ev.organizerId||ev.name))||'creator').trim();
 }
 function getTierRemaining(tier){
+  // `available` comes from GET /events and already subtracts sold tickets and live holds.
+  if(tier&&tier.available!=null)return Math.max(0,Number(tier.available)||0);
   return Math.max(0,Number(tier&&tier.qty||0));
 }
 function getTierSold(tier){
@@ -3926,6 +3927,8 @@ function getCurrentBookingTotals(){
 }
 
 function calculateCouponDiscount(subtotal){
+  // Server-side pricing has no coupons yet, so never show a discount it won't apply.
+  return 0;
   if(!APPLIED_COUPON||subtotal<=0)return 0;
   var type=String(APPLIED_COUPON.type||'').toLowerCase();
   var value=Number(APPLIED_COUPON.value||0);
@@ -3975,7 +3978,7 @@ nextBStep = function(step){
     var selected=document.querySelector('.ticket-option.selected');
     if(!selected){showToast('Select an available ticket type');return;}
     if(getSelectedTicketRemaining()<=0){showToast('Selected ticket type is sold out');return;}
-    qty=Math.min(qty,getSelectedTicketRemaining(),4);
+    qty=Math.min(qty,maxQtyForSelectedTier());
     updateOrderSummary();
   }
   if(step===3){
@@ -3985,46 +3988,65 @@ nextBStep = function(step){
   _nextBStepBase(step);
 };
 
-function getBuyerForPayment(){
-  var nameEl=document.getElementById('profileName');
-  var emailEl=document.getElementById('profileEmail');
-  var name=(nameEl&&nameEl.textContent&&nameEl.textContent!=='—')?nameEl.textContent:'BLAK Tickets Guest';
-  var email=(emailEl&&emailEl.textContent&&emailEl.textContent!=='—')?emailEl.textContent:'guest@blaktickets.in';
-  return {name:name,email:email,phone:'9999999999'};
+// ── CHECKOUT (C4) ──────────────────────────────────────────────────────────
+// The browser only says WHAT the buyer wants (event, tier, qty). The server
+// prices it, reserves seats and either confirms (free) or returns a PayU form.
+// A ticket exists only after the server confirms the order.
+
+// Limits come from GET /config/public (loaded at startup).
+function maxQtyForSelectedTier(){
+  var limits=STORE.orderLimits||{maxTicketsPerOrder:10,freeTicketsPerUserPerEvent:2};
+  var selected=document.querySelector('.ticket-option.selected');
+  var isFree=selected&&Number(selected.getAttribute('data-price')||0)===0;
+  var cap=isFree?limits.freeTicketsPerUserPerEvent:limits.maxTicketsPerOrder;
+  return Math.max(1,Math.min(cap,getSelectedTicketRemaining()||1));
 }
 
-function getPayUPendingBooking(){
-  var pendingRaw=localStorage.getItem('VYBERA_PENDING_PAYU_BOOKING');
-  try{return pendingRaw?JSON.parse(pendingRaw):null;}catch(err){return null;}
+// Remember the selection so a logged-out buyer comes back to the same event
+// and tier after logging in (see continueAfterBuyerAuth).
+function rememberCheckoutSelection(){
+  var selected=document.querySelector('.ticket-option.selected');
+  if(!CURRENT_EVENT||!selected)return;
+  sessionStorage.setItem('VYBERA_PENDING_CHECKOUT',JSON.stringify({
+    eventId:CURRENT_EVENT.id,
+    tierName:selected.getAttribute('data-name'),
+    qty:qty||1
+  }));
+  sessionStorage.setItem('VYBERA_AFTER_AUTH','checkout');
 }
 
-function handlePayUInAppResult(resultJson, payuWindow){
-  if(!resultJson)return false;
-  try{
-    JSON.parse(resultJson);
-  }catch(err){
-    console.error('Invalid PayU result from app browser:',err);
-    return false;
-  }
-  localStorage.setItem('VYBERA_PAYU_RESULT', resultJson);
-  if(payuWindow){
-    try{payuWindow.close();}catch(closeErr){}
-  }
-  setTimeout(completePayUReturn, 50);
+async function resumeCheckoutAfterLogin(){
+  var saved=null;
+  try{saved=JSON.parse(sessionStorage.getItem('VYBERA_PENDING_CHECKOUT')||'null');}catch(_){saved=null;}
+  sessionStorage.removeItem('VYBERA_PENDING_CHECKOUT');
+  if(!saved||!saved.eventId)return false;
+  await loadPublishedEvents();
+  var event=(STORE.events||[]).find(function(e){return e.id===saved.eventId;});
+  if(!event){showToast('This event is no longer available');return false;}
+  CURRENT_EVENT=event;
+  populateBookingTickets(event);
+  var target=[].slice.call(document.querySelectorAll('.ticket-option')).find(function(el){return el.getAttribute('data-name')===saved.tierName;});
+  if(target)selTicket(target);
+  qty=Math.min(Number(saved.qty)||1,maxQtyForSelectedTier());
+  updateOrderSummary();
+  showPage('page-booking');
+  showToast('Signed in. Continue your booking.');
   return true;
 }
 
+function resetPayButton(){
+  var btn=document.getElementById('payNowBtn');
+  if(!btn)return;
+  btn.disabled=false;
+  updateOrderSummary();
+}
+
+// Cordova: PayU runs inside an InAppBrowser. When PayU's callback redirects
+// to our app URL (?payment=payu&order=...), read the order ID and close it.
 function submitPayUFormInAppBrowser(action, fields){
   var browser=cordova.InAppBrowser.open('about:blank','_blank','location=no,hidden=no,clearcache=no,clearsessioncache=no');
   var submitted=false;
   var completed=false;
-  var fallbackTimer=setTimeout(function(){
-    if(completed)return;
-    var pending=getPayUPendingBooking();
-    if(pending&&pending.bookingId){
-      showToast('Complete payment in the opened checkout window');
-    }
-  },6000);
 
   function submitCheckoutOnce(){
     if(submitted)return;
@@ -4049,39 +4071,28 @@ function submitPayUFormInAppBrowser(action, fields){
     browser.executeScript({code:script});
   }
 
-  browser.addEventListener('loadstop',function(event){
+  function checkReturnUrl(event){
+    if(completed)return;
     var url=String((event&&event.url)||'');
-    if(!submitted){
-      submitCheckoutOnce();
-      return;
-    }
+    if(url.indexOf('payment=payu')<0)return;
+    var orderId='';
+    try{orderId=new URL(url).searchParams.get('order')||'';}catch(_){}
+    completed=true;
+    try{browser.close();}catch(_){}
+    completePayUReturn(orderId);
+  }
 
-    if(url.indexOf('/payments/payu/')>=0 || url.indexOf('payment=payu')>=0 || url.indexOf('vybera.onrender.com')>=0){
-      browser.executeScript({code:"localStorage.getItem('VYBERA_PAYU_RESULT');"},function(values){
-        if(completed)return;
-        var resultJson=values&&values.length?values[0]:'';
-        if(handlePayUInAppResult(resultJson,browser)){
-          completed=true;
-          clearTimeout(fallbackTimer);
-        }
-      });
-    }
+  browser.addEventListener('loadstart',checkReturnUrl);
+  browser.addEventListener('loadstop',function(event){
+    if(!submitted){submitCheckoutOnce();return;}
+    checkReturnUrl(event);
   });
   setTimeout(submitCheckoutOnce,500);
-
   browser.addEventListener('loaderror',function(event){
     console.error('PayU app browser load failed:',event);
   });
-
   browser.addEventListener('exit',function(){
-    clearTimeout(fallbackTimer);
-    if(completed)return;
-    var btn=document.getElementById('payNowBtn');
-    if(btn){
-      btn.disabled=false;
-      var totals=getCurrentBookingTotals();
-      btn.textContent='🔒 Pay via PayU — ₹'+totals.total.toLocaleString('en-IN');
-    }
+    if(!completed)resetPayButton();
   });
 }
 
@@ -4113,152 +4124,61 @@ function submitPayUForm(action, fields){
   HTMLFormElement.prototype.submit.call(form);
 }
 
-var VYBERA_PAYMENT_UPI_ID='demo@upi';
-var VYBERA_PAYMENT_UPI_NAME='Demo Payee';
-
-function makeUpiPaymentUrl(pending){
-  var totals=(pending&&pending.totals)||{};
-  var amount=Number(totals.total||0).toFixed(2);
-  var note='BLAK Tickets '+((pending&&pending.bookingId)||'Booking');
-  var params=[
-    ['pa',VYBERA_PAYMENT_UPI_ID],
-    ['pn',VYBERA_PAYMENT_UPI_NAME],
-    ['am',amount],
-    ['cu','INR'],
-    ['tn',note],
-    ['tr',(pending&&pending.bookingId)||'']
-  ];
-  return 'upi://pay?'+params.map(function(item){return encodeURIComponent(item[0])+'='+encodeURIComponent(item[1]);}).join('&');
-}
-
-function openUpiPaymentUrl(url){
-  if(window.cordova && window.cordova.InAppBrowser){
-    window.cordova.InAppBrowser.open(url,'_system','location=yes');
-    return;
-  }
-  // Try launching UPI app, and if scheme isn't registered, fallback to showing QR completion flow
-  try {
-    window.location.href=url;
-  } catch(e) {
-    console.error('Deep link payment scheme launch failed:', e);
-  }
-}
-
-function setUpiCompletionButton(){
-  var btn=document.getElementById('payNowBtn');
-  if(!btn)return;
-  btn.disabled=false;
-  btn.textContent='I have paid - Show QR';
-  btn.onclick=function(){completePendingUpiPayment();};
-  var cancelWrap=document.getElementById('cancelPayBtnWrap');
-  if(cancelWrap) cancelWrap.style.display='block';
-}
-
-async function completePendingUpiPayment(){
-  var pendingRaw=localStorage.getItem('VYBERA_PENDING_UPI_BOOKING')||localStorage.getItem('VYBERA_PENDING_PAYU_BOOKING');
-  var pending=null;
-  try{ pending=pendingRaw?JSON.parse(pendingRaw):null; }catch(err){ pending=null; }
-  if(!pending){showToast('No pending UPI payment found');return;}
-  var utr=prompt('Have you completed the UPI payment to '+VYBERA_PAYMENT_UPI_NAME+' ('+VYBERA_PAYMENT_UPI_ID+')?\n\nPlease enter the 12-digit UPI Transaction Reference/UTR Number to confirm your payment:');
-  if(utr === null)return;
-  utr = utr.trim();
-  if(!utr){
-    showToast('Payment verification requires a Transaction Reference ID');
-    return;
-  }
-  if(utr.length < 8){
-    showToast('Please enter a valid Transaction Reference ID/UTR');
-    return;
-  }
-  if(pending.staffReferral)STAFF_REFERRAL=pending.staffReferral;
-  await loadPublishedEvents();
-  CURRENT_EVENT=(STORE.events||[]).find(function(e){return e.id===pending.eventId;})||CURRENT_EVENT;
-  if(CURRENT_EVENT){
-    populateBookingTickets(CURRENT_EVENT);
-    var target=[].slice.call(document.querySelectorAll('.ticket-option')).find(function(el){return el.getAttribute('data-name')===pending.ticketType;});
-    if(target) selTicket(target);
-  }
-  qty=parseInt(pending.qty||1,10)||1;
-  updateOrderSummary();
-  await showSuccess({
-    gateway:'UPI',
-    status:'Success',
-    verified:false,
-    txnid:utr,
-    upiId:VYBERA_PAYMENT_UPI_ID,
-    payee:VYBERA_PAYMENT_UPI_NAME,
-    amount:(pending.totals&&pending.totals.total)||0
-  },pending);
-  localStorage.removeItem('VYBERA_PENDING_UPI_BOOKING');
-  localStorage.removeItem('VYBERA_PENDING_PAYU_BOOKING');
-  pageHistory=['page-success'];
-  sessionStorage.setItem('VYBERA_PAYMENT_SUCCESS_ACTIVE','1');
-  if(history&&history.replaceState&&CURRENT_BOOKING){
-    history.replaceState({vyberaPage:'page-success'},'','?payment=upi&booking='+encodeURIComponent(CURRENT_BOOKING.id)+'#page-success');
-  }
-}
-
-function cancelPendingPaymentFlow(){
-  localStorage.removeItem('VYBERA_PENDING_PAYU_BOOKING');
-  localStorage.removeItem('VYBERA_PENDING_UPI_BOOKING');
-  var btn=document.getElementById('payNowBtn');
-  if(btn){
-    btn.disabled=false;
-    var totals=getCurrentBookingTotals();
-    btn.textContent=totals.total<=0?'Confirm Free Booking':'🔒 Pay via PayU — ₹'+totals.total.toLocaleString('en-IN');
-    btn.onclick=payWithPayU;
-  }
-  var cancelWrap=document.getElementById('cancelPayBtnWrap');
-  if(cancelWrap) cancelWrap.style.display='none';
-  showToast('Pending payment cleared. You can start over.');
-}
-window.cancelPendingPaymentFlow=cancelPendingPaymentFlow;
-
+// "Pay" / "Confirm free booking" button.
 async function payWithPayU(){
   if(!CURRENT_EVENT){ showToast('Select an event first'); return; }
   var selected=document.querySelector('.ticket-option.selected');
-  var tierName=selected?selected.getAttribute('data-name'):(CURRENT_EVENT.tickets[0]||{}).name||'General';
-  var totals=getCurrentBookingTotals();
-  if(!selected||getSelectedTicketRemaining()<totals.qty){ showToast('Not enough tickets available for this tier'); return; }
-  if(totals.total<=0){ await showSuccess({gateway:'Free',status:'Success'}); return; }
-  var buyer=getBuyerForPayment();
-  var bookingId='BLT-'+Date.now();
-  var pending={
-    bookingId:bookingId,
-    eventId:CURRENT_EVENT.id,
-    ticketType:tierName,
-    qty:totals.qty,
-    totals:totals,
-    buyer:buyer,
-    staffReferral:STAFF_REFERRAL
-  };
-  localStorage.setItem('VYBERA_PENDING_PAYU_BOOKING', JSON.stringify(pending));
+  if(!selected){ showToast('Select an available ticket type'); return; }
+  if(!isBuyerSignedIn()){
+    rememberCheckoutSelection();
+    switchAuthTab('signin');
+    showPage('page-login');
+    showToast('Log in or sign up to book tickets');
+    return;
+  }
   var btn=document.getElementById('payNowBtn');
-  if(btn){ btn.disabled=true; btn.textContent='Redirecting to PayU...'; }
+  if(btn){ btn.disabled=true; btn.textContent='Please wait...'; }
   try{
-    var resp=await fetch(apiUrl('/payments/payu/initiate'), {
+    var resp=await fetch(apiUrl('/orders'),{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+(localStorage.getItem('VYBERA_BUYER_TOKEN')||'')},
       body:JSON.stringify({
-        txnid:bookingId,
-        bookingId:bookingId,
         eventId:CURRENT_EVENT.id,
-        ticketType:tierName,
-        qty:totals.qty,
-        amount:totals.total,
-        productinfo:'BLAK Tickets - '+(CURRENT_EVENT.name||'Event Booking'),
-        firstname:buyer.name,
-        email:buyer.email,
-        phone:buyer.phone
+        tierName:selected.getAttribute('data-name'),
+        qty:qty||1,
+        shareToken:(STAFF_REFERRAL&&STAFF_REFERRAL.shareToken)||''
       })
     });
-    var data=await resp.json();
-    if(!resp.ok) throw new Error(data.error||'PayU initiation failed');
-    submitPayUForm(data.action, data.fields);
+    var data=await readAuthResponse(resp);
+    if(resp.status===401){
+      rememberCheckoutSelection();
+      showPage('page-login');
+      throw new Error('Your session expired. Please log in again.');
+    }
+    if(!resp.ok) throw new Error(data.error||'Could not start booking');
+    if(data.booking){ renderConfirmedBooking(data.booking); return; }
+    if(btn) btn.textContent='Redirecting to PayU...';
+    submitPayUForm(data.payment.action, data.payment.fields);
   }catch(err){
-    if(btn){ btn.disabled=false; btn.textContent='🔒 Pay via PayU — ₹'+totals.total.toLocaleString('en-IN'); }
+    resetPayButton();
     showToast(err.message||'Payment could not start');
   }
+}
+
+// Show a ticket the server has confirmed.
+function renderConfirmedBooking(booking){
+  CURRENT_BOOKING=booking;
+  renderSuccessBooking(booking);
+  if(typeof loadBuyerBookingHistory==='function'){
+    loadBuyerBookingHistory().then(function(){renderProfileBookingHistory();}).catch(function(){});
+  }
+  if(typeof loadPublishedEvents==='function'){
+    loadPublishedEvents().then(function(){refreshBuyerHome();refreshExplore();}).catch(function(){});
+  }
+  showPage('page-success');
+  pageHistory=['page-success'];
+  sessionStorage.setItem('VYBERA_PAYMENT_SUCCESS_ACTIVE','1');
+  confetti();
 }
 
 // Override selTicket & changeQty to update order summary
@@ -4266,72 +4186,17 @@ selTicket = function(el){
   if(el.classList.contains('sold-out')){showToast('This ticket type is sold out');return;}
   document.querySelectorAll('.ticket-option').forEach(function(t){t.classList.remove('selected');});
   el.classList.add('selected');
-  qty=Math.min(qty||1,Math.max(1,getSelectedTicketRemaining()),4);
+  qty=Math.min(qty||1,maxQtyForSelectedTier());
   updateOrderSummary();
 };
 changeQty = function(d){
-  var maxQty=Math.max(1,Math.min(4,getSelectedTicketRemaining()||1));
+  var maxQty=maxQtyForSelectedTier();
   qty=Math.max(1,Math.min(maxQty,qty+d));
   if(d>0&&qty===maxQty) showToast('Only '+formatTicketCount(maxQty)+' can be selected for this booking');
   document.getElementById('qtyNum').textContent=qty;
   document.getElementById('qtySummary').textContent=qty;
   updateOrderSummary();
 };
-
-// ── SHOW SUCCESS + STORE BOOKING ──
-showSuccess = async function(paymentMeta, pendingBooking){
-  if(CURRENT_EVENT) {
-    var selected = document.querySelector('.ticket-option.selected');
-    var tierName = selected ? selected.getAttribute('data-name') : (CURRENT_EVENT.tickets[0]||{}).name || 'General';
-    var selectedRemaining=selected?getSelectedTicketRemaining():qty;
-    if(selectedRemaining<qty){ showToast('Not enough tickets available for this tier'); return; }
-    CURRENT_BOOKING = STORE.bookEvent(CURRENT_EVENT.id, tierName, qty);
-    if(!CURRENT_BOOKING){ showToast('Ticket type is no longer available'); return; }
-    if(CURRENT_BOOKING) {
-      var totals=(pendingBooking&&pendingBooking.totals)||getCurrentBookingTotals();
-      var buyer=(pendingBooking&&pendingBooking.buyer)||getBuyerForPayment();
-      if(pendingBooking&&pendingBooking.bookingId) CURRENT_BOOKING.id=pendingBooking.bookingId;
-      var staffReferral=(pendingBooking&&pendingBooking.staffReferral)||STAFF_REFERRAL;
-      CURRENT_BOOKING.subtotal = totals.subtotal;
-      CURRENT_BOOKING.fee = totals.fee;
-      CURRENT_BOOKING.gst = totals.gst;
-      CURRENT_BOOKING.total = totals.total;
-      CURRENT_BOOKING.buyer = buyer.name;
-      CURRENT_BOOKING.buyerEmail = buyer.email;
-      if(staffReferral){
-        CURRENT_BOOKING.staffReferral=staffReferral;
-        CURRENT_BOOKING.staffId=staffReferral.staffDbId||staffReferral.staffPk||staffReferral.id||'';
-        CURRENT_BOOKING.staffRef=staffReferral.staffId||staffReferral.staffRef||staffReferral.token||'';
-      }
-      CURRENT_BOOKING.payment = paymentMeta || {gateway:'PayU',status:'Success'};
-      var persisted=await persistBooking(CURRENT_BOOKING);
-      if(persisted) Object.assign(CURRENT_BOOKING,persisted);
-      renderSuccessBooking(CURRENT_BOOKING);
-      renderProfileBookingHistory();
-      refreshBuyerHome();
-      refreshExplore();
-    }
-  }
-  showPage('page-success');
-  if(paymentMeta&&paymentMeta.gateway)sessionStorage.setItem('VYBERA_PAYMENT_SUCCESS_ACTIVE','1');
-  confetti();
-};
-
-async function persistBooking(booking){
-  try {
-    var resp=await fetch(apiUrl('/bookings'),{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(booking)
-    });
-    var data=await readAuthResponse(resp);
-    if(!resp.ok) throw new Error(data.error||'Booking could not be stored');
-    return data.booking;
-  } catch(err) {
-    console.error('Booking persistence failed:',err);
-    showToast(err.message||'Booking could not be stored');
-  }
-}
 
 function renderTicket(booking){
   if(!booking)return;
@@ -4458,7 +4323,7 @@ async function restoreBuyerSession(){
     renderProfileCreatorEvents();
     var active=document.querySelector('.page.active');
     var activeId=active&&active.id;
-    var _payuPending=!!localStorage.getItem('VYBERA_PAYU_RESULT');
+    var _payuPending=new URLSearchParams(location.search).get('payment')==='payu';
     if((activeId==='page-splash'||activeId==='page-login') && !_payuPending)navigateBuyerHome();
     clearSessionRestoring();
     return true;
@@ -4760,98 +4625,39 @@ function renderProfileBookingHistory(){
   });
 }
 
-async function completePayUReturn(){
-  var raw=localStorage.getItem('VYBERA_PAYU_RESULT');
-  if(!raw) return;
-  localStorage.removeItem('VYBERA_PAYU_RESULT');
-  var result={};
-  try{ result=JSON.parse(raw); }catch(err){ result={verified:false,error:'Invalid PayU response'}; }
-  var pendingRaw=localStorage.getItem('VYBERA_PENDING_PAYU_BOOKING');
-  var pending=null;
-  try{ pending=pendingRaw?JSON.parse(pendingRaw):null; }catch(err){ pending=null; }
-  if(pending&&pending.staffReferral)STAFF_REFERRAL=pending.staffReferral;
-  var paymentStatus=String(result.status||'').toLowerCase();
-  if(!result.verified || paymentStatus!=='success'){
-    if(pending&&pending.eventId){
-      await loadPublishedEvents();
-      CURRENT_EVENT=(STORE.events||[]).find(function(e){return e.id===pending.eventId;})||CURRENT_EVENT;
-    }
-    showPage(CURRENT_EVENT?'page-detail':'page-home');
-    showToast(result.error||'Payment failed');
+// Back from PayU: the server already verified the payment in its callback and
+// redirected here with ?payment=payu&order=<id>. Ask the server for the result.
+async function completePayUReturn(orderIdFromApp){
+  var params=new URLSearchParams(location.search);
+  var fromUrl=params.get('payment')==='payu';
+  var orderId=orderIdFromApp||(fromUrl?params.get('order'):'');
+  if(!fromUrl&&!orderIdFromApp)return;
+  if(fromUrl&&history&&history.replaceState){
+    history.replaceState(history.state,'',location.pathname+location.hash);
+  }
+  if(!orderId){
+    showToast('Payment was not completed. No money was taken for a ticket.');
+    resetPayButton();
     return;
   }
-  if(!pending && result.bookingId){
-    try{
-      await loadTicket(result.bookingId);
-      renderSuccessBooking(CURRENT_BOOKING);
-      showPage('page-success');
-      confetti();
-      pageHistory=['page-success'];
-      sessionStorage.setItem('VYBERA_PAYMENT_SUCCESS_ACTIVE','1');
-      if(history&&history.replaceState)history.replaceState({vyberaPage:'page-success'},'','?payment=payu&booking='+encodeURIComponent(result.bookingId)+'#page-success');
-      return;
-    }catch(err){
-      console.error('Could not restore paid booking from return URL:',err);
-    }
-  }
-  if(pending){
-    await loadPublishedEvents();
-    CURRENT_EVENT=(STORE.events||[]).find(function(e){return e.id===pending.eventId;})||CURRENT_EVENT;
-    if(CURRENT_EVENT){
-      populateBookingTickets(CURRENT_EVENT);
-      var target=[].slice.call(document.querySelectorAll('.ticket-option')).find(function(el){return el.getAttribute('data-name')===pending.ticketType;});
-      if(target) selTicket(target);
-    }
-    qty=parseInt(pending.qty||1,10)||1;
-    updateOrderSummary();
-  }
-  await showSuccess({
-    gateway:'PayU',
-    status:'Success',
-    verified:true,
-    txnid:result.txnid,
-    mihpayid:result.mihpayid,
-    amount:result.amount
-  },pending);
-  localStorage.removeItem('VYBERA_PENDING_PAYU_BOOKING');
-  pageHistory=['page-success'];
-  sessionStorage.setItem('VYBERA_PAYMENT_SUCCESS_ACTIVE','1');
-  if(location.search.indexOf('payment=payu')>=0 && history.replaceState){
-    history.replaceState({vyberaPage:'page-success'},'','?payment=payu&booking='+encodeURIComponent((CURRENT_BOOKING&&CURRENT_BOOKING.id)||result.bookingId||'')+'#page-success');
-  }
-}
-
-async function completeUpiReturnFromUrl(){
-  var params=new URLSearchParams(location.search);
-  if(params.get('payment')!=='upi')return;
-  var bookingId=params.get('booking')||'';
-  if(!bookingId)return;
   try{
-    await loadTicket(bookingId);
-    renderSuccessBooking(CURRENT_BOOKING);
-    showPage('page-success');
-    confetti();
-    pageHistory=['page-success'];
-    sessionStorage.setItem('VYBERA_PAYMENT_SUCCESS_ACTIVE','1');
-    if(history&&history.replaceState)history.replaceState({vyberaPage:'page-success'},'','?payment=upi&booking='+encodeURIComponent(bookingId)+'#page-success');
+    var resp=await fetch(apiUrl('/orders/'+encodeURIComponent(orderId)),{
+      headers:{Authorization:'Bearer '+(localStorage.getItem('VYBERA_BUYER_TOKEN')||'')}
+    });
+    var data=await readAuthResponse(resp);
+    if(!resp.ok)throw new Error(data.error||'Could not load your order');
+    var status=data.order&&data.order.status;
+    if(status==='paid'&&data.booking){ renderConfirmedBooking(data.booking); return; }
+    if(status==='paid_needs_refund'){
+      showToast('Payment received, but the tickets sold out while you were paying. You will get a full refund.');
+    }else{
+      showToast('Payment failed or was cancelled. Please try again.');
+    }
+    resetPayButton();
   }catch(err){
-    console.error('Could not restore UPI booking from return URL:',err);
+    console.error('Could not load order after payment:',err);
+    showToast(err.message||'Could not load your order');
   }
-}
-
-function restorePendingUpiPaymentButton(){
-  var pendingRaw=localStorage.getItem('VYBERA_PENDING_UPI_BOOKING');
-  if(!pendingRaw)return;
-  try{
-    var pending=JSON.parse(pendingRaw);
-    if(!pending||!pending.eventId) return;
-    // Only restore the button if the user is actually on the payment step (bstep3)
-    var step3=document.getElementById('bstep3');
-    var isOnStep3=step3&&step3.classList.contains('active');
-    if(!isOnStep3) return;
-    showToast('Pending UPI payment found. Tap "I have paid - Show QR" after payment.');
-    setUpiCompletionButton();
-  }catch(err){}
 }
 
 // ── BUYER HOME REFRESH ──
@@ -7181,6 +6987,7 @@ async function loadAdminSnapshot(){
     });
   });
   STORE.payments=payments;
+  STORE.refundsNeeded=data.refundsNeeded||[];
   STORE.staff=data.staff||[];
   STORE.wallets.staff={};
   STORE.staff.forEach(function(member){STORE.wallets.staff[member.id]=Number(member.earnings||0);});
@@ -7523,9 +7330,17 @@ if(new URLSearchParams(location.search).get('google')==='1' && !isBlockedGoogleW
 if(safeSessionGet('VYBERA_GOOGLE_PENDING')==='1'){
   showToast('Completing Google sign-in...');
 }
-setTimeout(completePayUReturn, 100);
-setTimeout(completeUpiReturnFromUrl, 120);
-setTimeout(restorePendingUpiPaymentButton, 250);
+// Fee %, GST % and ticket limits come from the server so the order summary
+// matches exactly what POST /orders will charge.
+function loadPublicConfig(){
+  return fetch(apiUrl('/config/public')).then(function(resp){return resp.json();}).then(function(cfg){
+    STORE.platformConfig=Object.assign({},STORE.platformConfig,{baseFee:Number(cfg.platformFeePercent),gst:Number(cfg.gstPercent)});
+    STORE.orderLimits={maxTicketsPerOrder:Number(cfg.maxTicketsPerOrder)||10,freeTicketsPerUserPerEvent:Number(cfg.freeTicketsPerUserPerEvent)||2};
+    if(typeof updateOrderSummary==='function')updateOrderSummary();
+  }).catch(function(err){console.error('Could not load public config:',err);});
+}
+loadPublicConfig();
+setTimeout(function(){completePayUReturn();}, 100);
 setTimeout(loadPublishedEvents, 150);
 setTimeout(function(){
   var params=new URLSearchParams(location.search);
@@ -7556,7 +7371,8 @@ setTimeout(function(){
             staffPk:staff.id,
             staffId:staff.staffId||sharedStaff,
             staffName:staff.name||'Staff',
-            token:sharedStaff
+            token:sharedStaff,
+            shareToken:staff.shareToken||''
           };
         });});
     }
@@ -8456,6 +8272,32 @@ function admPayTab(tab){
   if(tab==='ledger') admRenderLedger();
   if(tab==='payouts') admRenderPayouts();
   if(tab==='disputes') admRenderDisputes();
+  if(tab==='refunds') admRenderRefundsNeeded();
+}
+
+// Orders that PayU charged after the seat hold expired and the event had sold
+// out. No ticket was issued; refund them from the PayU dashboard.
+function admRenderRefundsNeeded(){
+  var tbody=document.getElementById('refundsBody'); if(!tbody) return;
+  var list=STORE.refundsNeeded||[];
+  var pending=document.querySelector('#psec-refunds .adm-stat-card:nth-child(2) .adm-stat-val');
+  if(pending) pending.textContent=String(list.length);
+  if(!list.length){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--adm-text2);padding:24px;">No pending refunds ✓</td></tr>';
+    return;
+  }
+  tbody.innerHTML=list.map(function(r){
+    return '<tr>'
+      +'<td>'+escapeHtml(r.orderId)+'<div style="font-size:10px;color:var(--adm-text2);">PayU '+escapeHtml(r.gatewayPaymentId||r.txnid||'')+'</div></td>'
+      +'<td>'+escapeHtml(r.buyerEmail||'')+'</td>'
+      +'<td>'+escapeHtml(r.eventName||r.eventId||'')+'</td>'
+      +'<td>₹'+Number(r.amount||0).toLocaleString('en-IN')+'</td>'
+      +'<td>Paid after seats sold out ('+escapeHtml(String(r.qty))+' × '+escapeHtml(r.tierName||'')+')</td>'
+      +'<td>'+escapeHtml(r.paidAt?new Date(r.paidAt).toLocaleString('en-IN'):'')+'</td>'
+      +'<td><span class="adm-badge yellow">Needs refund</span></td>'
+      +'<td style="font-size:11px;color:var(--adm-text2);">Refund in PayU dashboard</td>'
+      +'</tr>';
+  }).join('');
 }
 
 function admRenderLedger(){

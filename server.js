@@ -10,6 +10,24 @@ const QRCode = require("qrcode");
 const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const { runMigrations } = require("./src/db/migrate");
+const { isEventBookable, eventSalesClosed } = require("./src/utils/events");
+const { createRateLimiter, pruneRateLimitHits } = require("./src/middleware/rateLimit");
+const {
+  getPayuConfig,
+  cleanPayuText,
+  formatPayuAmount,
+  makeRequestHash,
+  isValidResponseHash,
+} = require("./src/services/payu");
+const {
+  ORDER_SETTINGS,
+  OrderError,
+  createOrder,
+  applyPayuResult,
+  getOrderForBuyer,
+  withAvailability,
+  expireStaleOrders,
+} = require("./src/services/orders");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 process.on("unhandledRejection", (err) => {
@@ -21,6 +39,10 @@ process.on("uncaughtException", (err) => {
 });
 
 const app = express();
+// Number of reverse proxies in front of the app (Render: 1). Needed so req.ip is
+// the real client IP for rate limiting; 0 = trust nobody (local development).
+app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 0));
+const APP_BASE_URL = String(process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3003}`).replace(/\/+$/, "");
 // Only files inside public/ are reachable from the browser. Never point
 // express.static at __dirname: that would publish server.js, CLAUDE.md, etc.
 const publicDir = path.join(__dirname, "public");
@@ -84,6 +106,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: dbSsl,
 });
+const rateLimit = createRateLimiter(pool);
 
 const r2Config = {
   endpoint: process.env.R2_ENDPOINT,
@@ -220,7 +243,6 @@ const publicUser = (user) => ({
 
 const USER_ACTIVE_STATUS = "Active";
 const USER_BLOCKED_STATUSES = new Set(["Suspended", "Blocked", "Inactive"]);
-const EVENT_AVAILABLE_STATUSES = new Set(["live", "upcoming"]);
 const EVENT_NOT_FOUND_ERROR = "Event does not exist";
 const USER_NOT_FOUND_ERROR = "User account not found";
 const STAFF_NOT_FOUND_ERROR = "Staff account not found";
@@ -231,8 +253,6 @@ const normalizeUserStatus = (status) =>
 const isUserActive = (status) =>
   !USER_BLOCKED_STATUSES.has(normalizeUserStatus(status));
 
-const isEventBookable = (status) =>
-  EVENT_AVAILABLE_STATUSES.has(String(status || "").trim().toLowerCase());
 
 const publicCreator = (creator) => ({
   id: creator.id,
@@ -1240,7 +1260,8 @@ app.get("/events", async (req, res) => {
        GROUP BY e.id
        ORDER BY e.created_at DESC`,
     );
-    res.json({ events: result.rows.map(publicCreatorEvent) });
+    const events = await withAvailability(pool, result.rows);
+    res.json({ events: events.map(publicCreatorEvent) });
   } catch (err) {
     console.error("Public events list failed:", err);
     res.status(500).json({ error: "Could not load events" });
@@ -1383,7 +1404,7 @@ app.get("/creator/staff", requireCreator, async (req, res) => {
            COALESCE(SUM(ss.qty),0)::INTEGER AS db_sold_tickets,
            COALESCE(SUM(CASE WHEN ss.revenue_owner='staff' THEN ss.total ELSE ss.commission END),0)::NUMERIC AS db_earnings
          FROM staff_accounts s
-         LEFT JOIN staff_sales ss ON ss.staff_id=s.id
+         LEFT JOIN staff_sales ss ON ss.staff_id=s.id AND ss.status='active'
          WHERE s.creator_id=$1
          GROUP BY s.id
          ORDER BY s.created_at DESC`,
@@ -1673,12 +1694,6 @@ const createStaffAssignment = async (
   return result.rows[0];
 };
 
-const eventSalesClosed = (event) => {
-  const value = String((event && event.event_date) || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const eventDate = new Date(`${value}T23:59:59.999Z`);
-  return Number.isFinite(eventDate.getTime()) && eventDate < new Date();
-};
 
 const staffWalletFor = async (staffId) => {
   const result = await pool.query(
@@ -1692,7 +1707,7 @@ const staffWalletFor = async (staffId) => {
        COALESCE(SUM(CASE WHEN revenue_owner='staff' THEN total ELSE commission END),0)::NUMERIC AS total_earned,
        COALESCE(SUM(qty),0)::INTEGER AS tickets_sold
      FROM staff_sales
-     WHERE staff_id=$1`,
+     WHERE staff_id=$1 AND status='active'`,
     [staffId],
   );
   const withdrawals = await pool.query(
@@ -2572,7 +2587,7 @@ app.delete("/admin/staff/:staffId", requireAdmin, async (req, res) => {
 
 app.get("/admin/snapshot", requireAdmin, async (req, res) => {
   try {
-    const [buyers, creators, events, bookings, payments, staff, admins] =
+    const [buyers, creators, events, bookings, payments, staff, admins, refundsNeeded] =
       await Promise.all([
         pool.query(`
         SELECT u.id, u.username, u.first_name, u.last_name, u.email, u.city, u.status, u.created_at,
@@ -2618,8 +2633,31 @@ app.get("/admin/snapshot", requireAdmin, async (req, res) => {
         ),
         pool.query("SELECT * FROM staff_accounts ORDER BY created_at DESC"),
         pool.query("SELECT * FROM admin_accounts ORDER BY created_at DESC"),
+        // Payments PayU confirmed after the seat hold expired and the event
+        // had sold out: money was taken but no ticket issued (C4).
+        pool.query(
+          `SELECT o.id, o.txnid, o.gateway_payment_id, o.amount, o.qty, o.tier_name, o.paid_at,
+             o.event_id, e.name AS event_name, u.email AS buyer_email
+           FROM orders o
+           JOIN users u ON u.id = o.user_id
+           LEFT JOIN creator_events e ON e.id = o.event_id
+           WHERE o.status = 'paid_needs_refund'
+           ORDER BY o.paid_at DESC`,
+        ),
       ]);
     res.json({
+      refundsNeeded: refundsNeeded.rows.map((order) => ({
+        orderId: order.id,
+        txnid: order.txnid,
+        gatewayPaymentId: order.gateway_payment_id,
+        amount: Number(order.amount || 0),
+        qty: Number(order.qty || 0),
+        tierName: order.tier_name,
+        eventId: order.event_id,
+        eventName: order.event_name,
+        buyerEmail: order.buyer_email,
+        paidAt: order.paid_at,
+      })),
       admins: admins.rows.map(publicAdmin),
       buyers: buyers.rows.map((buyer) => ({
         id: `USR-${buyer.id}`,
@@ -2948,113 +2986,6 @@ app.get("/r2/media/*key", (req, res) => {
   }
 });
 
-const payuConfig = {
-  key: process.env.PAYU_KEY,
-  salt: process.env.PAYU_SALT,
-  action:
-    (process.env.PAYU_ENV || "test").toLowerCase() === "production"
-      ? "https://secure.payu.in/_payment"
-      : "https://test.payu.in/_payment",
-};
-
-const formatPayuAmount = (amount) => Number(amount || 0).toFixed(2);
-const cleanPayuText = (value, maxLength) =>
-  String(value || "")
-    .replace(/[^a-zA-Z0-9 .,_-]/g, "")
-    .trim()
-    .slice(0, maxLength);
-const makePayuHash = (fields) => {
-  const hashString = [
-    fields.key,
-    fields.txnid,
-    fields.amount,
-    fields.productinfo,
-    fields.firstname,
-    fields.email,
-    fields.udf1 || "",
-    fields.udf2 || "",
-    fields.udf3 || "",
-    fields.udf4 || "",
-    fields.udf5 || "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    payuConfig.salt,
-  ].join("|");
-  return crypto.createHash("sha512").update(hashString).digest("hex");
-};
-const makePayuResponseHash = (fields) => {
-  const hashString = [
-    payuConfig.salt,
-    fields.status || "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    fields.udf5 || "",
-    fields.udf4 || "",
-    fields.udf3 || "",
-    fields.udf2 || "",
-    fields.udf1 || "",
-    fields.email || "",
-    fields.firstname || "",
-    fields.productinfo || "",
-    fields.amount || "",
-    fields.txnid || "",
-    fields.key || "",
-  ].join("|");
-  return crypto.createHash("sha512").update(hashString).digest("hex");
-};
-
-const savePaymentTransaction = async (fields, status, verified, error = "") => {
-  const txnid = String(fields.txnid || "").trim();
-  if (!txnid) return;
-  await pool.query(
-    `INSERT INTO payment_transactions (
-      txnid, booking_id, event_id, ticket_type, qty, buyer_email, amount,
-      gateway_payment_id, status, verified, error, updated_at
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
-    ON CONFLICT (txnid) DO UPDATE SET
-      booking_id=COALESCE(EXCLUDED.booking_id, payment_transactions.booking_id),
-      event_id=COALESCE(EXCLUDED.event_id, payment_transactions.event_id),
-      ticket_type=COALESCE(EXCLUDED.ticket_type, payment_transactions.ticket_type),
-      qty=COALESCE(EXCLUDED.qty, payment_transactions.qty),
-      buyer_email=COALESCE(EXCLUDED.buyer_email, payment_transactions.buyer_email),
-      amount=EXCLUDED.amount,
-      gateway_payment_id=COALESCE(EXCLUDED.gateway_payment_id, payment_transactions.gateway_payment_id),
-      status=EXCLUDED.status,
-      verified=EXCLUDED.verified,
-      error=EXCLUDED.error,
-      updated_at=NOW()`,
-    [
-      txnid,
-      fields.udf1 || null,
-      fields.udf2 || null,
-      fields.udf3 || null,
-      Number(fields.udf4 || 0) || null,
-      fields.email || null,
-      Number(fields.amount || 0),
-      fields.mihpayid || null,
-      status,
-      Boolean(verified),
-      error || null,
-    ],
-  );
-};
-
-const payuReturnHtml = (result) => `<!doctype html>
-<html><head><meta charset="utf-8"><title>BLAK Tickets Payment</title></head>
-<body style="background:#000;color:#fff;font-family:Arial,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;">
-<div>Completing payment...</div>
-<script>
-localStorage.setItem('VYBERA_PAYU_RESULT', ${JSON.stringify(JSON.stringify(result))});
-window.location.replace('/?payment=payu&booking=' + encodeURIComponent(${JSON.stringify(result.bookingId || "")}));
-</script>
-</body></html>`;
-
 const makeTicketQrPayload = (bookingId, token, eventId = "") =>
   `VYBERA-TICKET|${bookingId}|${eventId || "NOEVENT"}|${token}`;
 
@@ -3084,361 +3015,156 @@ const ticketResponse = async (booking) => {
   };
 };
 
-app.post("/payments/payu/initiate", async (req, res) => {
+// ── Orders & payments (C4) ────────────────────────────────────────────────
+// The browser never sends a price, booking ID or "paid" flag. It asks for
+// (event, tier, qty); the server prices it from the DB, reserves seats and
+// either confirms a free order or returns a PayU checkout form. Tickets are
+// issued only by the verified PayU callback (see src/services/orders.js).
+
+const publicOrder = (order) => ({
+  id: order.id,
+  status: order.status,
+  eventId: order.event_id,
+  tierName: order.tier_name,
+  qty: Number(order.qty),
+  unitPrice: Number(order.unit_price),
+  subtotal: Number(order.subtotal),
+  platformFee: Number(order.platform_fee),
+  gst: Number(order.gst),
+  amount: Number(order.amount),
+  paymentMethod: order.payment_method,
+  expiresAt: order.expires_at,
+  paidAt: order.paid_at,
+  createdAt: order.created_at,
+});
+
+// Audit trail for the admin "payments" view. Only verified callbacks are
+// written, so nobody can overwrite a payment record by posting fake data (H9).
+const PAYMENT_STATUS_LABELS = {
+  paid: "Success",
+  already_paid: "Success",
+  paid_needs_refund: "Paid - needs refund",
+  failed: "Failed",
+  amount_mismatch: "Amount mismatch",
+};
+const recordPaymentCallback = async (body, orderId, outcome) => {
+  await pool.query(
+    `INSERT INTO payment_transactions (
+       txnid, booking_id, event_id, ticket_type, qty, buyer_email, amount,
+       gateway_payment_id, status, verified, error, updated_at
+     )
+     SELECT $1, o.id, o.event_id, o.tier_name, o.qty, $2, o.amount, $3, $4, TRUE, $5, NOW()
+     FROM orders o WHERE o.id = $6
+     ON CONFLICT (txnid) DO UPDATE SET
+       gateway_payment_id = COALESCE(EXCLUDED.gateway_payment_id, payment_transactions.gateway_payment_id),
+       status = EXCLUDED.status,
+       verified = TRUE,
+       error = EXCLUDED.error,
+       updated_at = NOW()`,
+    [
+      String(body.txnid || ""),
+      String(body.email || "") || null,
+      String(body.mihpayid || "") || null,
+      PAYMENT_STATUS_LABELS[outcome] || outcome,
+      outcome === "paid" || outcome === "already_paid" ? null : String(body.error_Message || outcome).slice(0, 200),
+      orderId,
+    ],
+  );
+};
+
+app.get("/config/public", (req, res) => {
+  res.json({
+    platformFeePercent: ORDER_SETTINGS.platformFeePercent,
+    gstPercent: ORDER_SETTINGS.gstPercent,
+    maxTicketsPerOrder: ORDER_SETTINGS.maxTicketsPerOrder,
+    freeTicketsPerUserPerEvent: ORDER_SETTINGS.freeTicketsPerUserPerEvent,
+  });
+});
+
+const orderRateLimits = [
+  rateLimit({ name: "orders-user", windowSeconds: 600, max: 10, key: (req) => req.buyer && String(req.buyer.sub) }),
+  rateLimit({ name: "orders-ip", windowSeconds: 600, max: 30, key: (req) => req.ip }),
+];
+
+app.post("/orders", requireBuyer, ...orderRateLimits, async (req, res) => {
   try {
-    if (!payuConfig.key || !payuConfig.salt) {
-      return res.status(500).json({ error: "PAYU_KEY and PAYU_SALT must be configured" });
+    const { eventId, tierName, qty, shareToken } = req.body || {};
+    const result = await createOrder(pool, { userId: req.buyer.sub, eventId, tierName, qty, shareToken });
+    if (result.booking) {
+      return res.status(201).json({ order: publicOrder(result.order), booking: await ticketResponse(result.booking) });
     }
-    const amount = Number(req.body && req.body.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ error: "Valid amount in rupees is required" });
+    const { order, buyer, event } = result;
+    const payu = getPayuConfig();
+    if (!payu.key || !payu.salt) {
+      await pool.query("UPDATE orders SET status = 'expired' WHERE id = $1", [order.id]);
+      return res.status(503).json({ error: "Online payments are not configured" });
     }
-    const { eventId } = req.body;
-    if (eventId) {
-      const eventResult = await pool.query(
-        "SELECT id, status FROM creator_events WHERE id=$1",
-        [eventId],
-      );
-      if (!eventResult.rows.length || !isEventBookable(eventResult.rows[0].status)) {
-        return res.status(404).json({ error: EVENT_NOT_FOUND_ERROR });
-      }
-    }
-    const origin = `https://${req.get("host")}`;
-    const txnid = String(
-      req.body.txnid || `VYB${Date.now()}${crypto.randomBytes(3).toString("hex")}`,
-    ).slice(0, 40);
     const fields = {
-      key: payuConfig.key,
-      txnid,
-      amount: formatPayuAmount(amount),
-      productinfo: cleanPayuText(req.body.productinfo || "BLAK Tickets Event Booking", 100) || "BLAK Tickets Event Booking",
-      firstname: cleanPayuText(req.body.firstname || "BLAK Tickets Guest", 60) || "BLAK Tickets Guest",
-      email: String(req.body.email || "guest@blaktickets.in").slice(0, 100),
-      phone: String(req.body.phone || "9999999999").replace(/\D/g, "").slice(-10) || "9999999999",
-      surl: `${origin}/payments/payu/success?booking=${encodeURIComponent(txnid)}`,
-      furl: `${origin}/payments/payu/failure?booking=${encodeURIComponent(txnid)}`,
-      udf1: cleanPayuText(req.body.bookingId || "", 64),
-      udf2: cleanPayuText(req.body.eventId || "", 64),
-      udf3: cleanPayuText(req.body.ticketType || "", 64),
-      udf4: cleanPayuText(req.body.qty || "", 20),
-      udf5: "vybera",
-      service_provider: "payu_paisa",
+      key: payu.key,
+      txnid: order.txnid,
+      amount: formatPayuAmount(order.amount),
+      productinfo: cleanPayuText(`Tickets ${event.name}`, 100) || "Event tickets",
+      firstname: cleanPayuText(buyer.first_name || buyer.username || "Buyer", 60) || "Buyer",
+      email: buyer.email,
+      // PayU requires a phone; Google-only accounts may not have one yet.
+      phone: String(buyer.phone || "").replace(/\D/g, "").slice(-10) || "9999999999",
+      surl: `${APP_BASE_URL}/payments/payu/success`,
+      furl: `${APP_BASE_URL}/payments/payu/failure`,
+      udf1: order.id,
     };
-    fields.hash = makePayuHash(fields);
-    await savePaymentTransaction(fields, "Pending", false);
-    res.json({ action: payuConfig.action, fields });
+    fields.hash = makeRequestHash(fields, payu.salt);
+    res.status(201).json({ order: publicOrder(order), payment: { action: payu.action, fields } });
   } catch (err) {
-    console.error("PayU initiation failed:", err);
-    res.status(500).json({ error: err.message || "PayU initiation failed" });
+    if (err instanceof OrderError) return res.status(err.status).json({ error: err.message });
+    console.error("Order creation failed:", err);
+    res.status(500).json({ error: "Could not create order" });
   }
 });
 
-app.post("/payments/payu/success", async (req, res) => {
+// PayU posts the result here from the buyer's browser. We verify the hash,
+// update the order, then redirect (303) to the app with only our order ID in
+// the URL. No posted value is ever written into a page (fixes H8).
+const handlePayuCallback = (isSuccessUrl) => async (req, res) => {
+  const body = req.body || {};
+  const payu = getPayuConfig();
+  let target = `${APP_BASE_URL}/?payment=payu&status=failed`;
   try {
-    const body = req.body || {};
-    const expected = makePayuResponseHash(body);
-    const verified = Boolean(body.hash) && expected === body.hash;
-    await savePaymentTransaction(
-      body,
-      verified ? "Success" : "Failed",
-      verified,
-      verified ? "" : "Payment signature could not be verified",
-    );
-    res.send(
-      payuReturnHtml({
-        verified,
-        status: body.status || "success",
-        txnid: body.txnid || "",
-        mihpayid: body.mihpayid || "",
-        bookingId: body.udf1 || "",
-        eventId: body.udf2 || "",
-        ticketType: body.udf3 || "",
-        qty: body.udf4 || "",
-        amount: body.amount || "",
-        error: verified ? "" : "Payment signature could not be verified",
-      }),
-    );
-  } catch (err) {
-    console.error("PayU success handling failed:", err);
-    res.send(payuReturnHtml({ verified: false, status: "error", error: err.message || "PayU success handling failed" }));
-  }
-});
-
-app.post("/payments/payu/failure", async (req, res) => {
-  try {
-    const body = req.body || {};
-    let verified = false;
-    if (body.hash && payuConfig.salt) {
-      verified = makePayuResponseHash(body) === body.hash;
-    }
-    await savePaymentTransaction(
-      body,
-      "Failed",
-      verified,
-      body.error_Message || body.error || "Payment failed",
-    );
-    res.send(
-      payuReturnHtml({
-        verified,
-        status: body.status || "failed",
-        txnid: body.txnid || "",
-        mihpayid: body.mihpayid || "",
-        bookingId: body.udf1 || "",
-        eventId: body.udf2 || "",
-        ticketType: body.udf3 || "",
-        qty: body.udf4 || "",
-        amount: body.amount || "",
-        error: body.error_Message || body.error || "Payment failed",
-      }),
-    );
-  } catch (err) {
-    console.error("PayU failure handling failed:", err);
-    res.send(payuReturnHtml({ verified: false, status: "error", error: err.message || "PayU failure handling failed" }));
-  }
-});
-
-app.post("/bookings", async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const booking = req.body || {};
-    if (!booking.id) {
-      return res.status(400).json({ error: "booking.id is required" });
-    }
-    if (booking.eventId) {
-      const eventResult = await client.query(
-        "SELECT id, status, name FROM creator_events WHERE id=$1",
-        [booking.eventId],
-      );
-      if (!eventResult.rows.length || !isEventBookable(eventResult.rows[0].status)) {
-        return res.status(404).json({ error: EVENT_NOT_FOUND_ERROR });
+    if (!payu.key || body.key !== payu.key || !isValidResponseHash(body, payu.salt)) {
+      console.error("PayU callback rejected: bad key or hash", { txnid: String(body.txnid || "").slice(0, 40) });
+    } else {
+      const paid = isSuccessUrl && String(body.status || "").toLowerCase() === "success";
+      const { orderId, outcome } = await applyPayuResult(pool, body, { success: paid });
+      if (outcome === "unknown_order" || outcome === "amount_mismatch") {
+        console.error("PayU callback not applied:", outcome, String(body.txnid || "").slice(0, 40));
       }
-    }
-    const ticketJson = `data:application/json;base64,${Buffer.from(
-      JSON.stringify({ booking, storedAt: new Date().toISOString() }),
-    ).toString("base64")}`;
-    const ticketRecord = await saveAsset({
-      fileName: `${booking.id}.json`,
-      folder: "tickets",
-      dataUrl: ticketJson,
-      allowedTypes: ["application/json"],
-    });
-    let userId = booking.userId || null;
-    const buyerEmail = String(booking.buyerEmail || "").trim();
-    let buyerUser = null;
-    if (!userId && booking.buyerEmail) {
-      const user = await client.query(
-        "SELECT id, status FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1",
-        [booking.buyerEmail],
-      );
-      buyerUser = user.rows[0] || null;
-      userId = buyerUser ? buyerUser.id : null;
-    } else if (userId) {
-      const user = await client.query(
-        "SELECT id, status FROM users WHERE id=$1 LIMIT 1",
-        [userId],
-      );
-      buyerUser = user.rows[0] || null;
-    }
-    if (!buyerUser && buyerEmail) {
-      const user = await client.query(
-        "SELECT id, status FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1",
-        [buyerEmail],
-      );
-      buyerUser = user.rows[0] || null;
-      if (!userId && buyerUser) userId = buyerUser.id;
-    }
-    if (buyerUser && !isUserActive(buyerUser.status)) {
-      return res.status(404).json({ error: USER_NOT_FOUND_ERROR });
-    }
-    await client.query("BEGIN");
-    const qrToken = crypto.randomBytes(18).toString("hex");
-    let staffMember = null;
-    const staffRef = String(
-      booking.staffId ||
-        booking.staffPk ||
-        booking.staffRef ||
-        (booking.staffReferral &&
-          (booking.staffReferral.staffDbId ||
-            booking.staffReferral.staffId ||
-            booking.staffReferral.token)) ||
-        "",
-    ).trim();
-    if (staffRef) {
-      const digits = staffRef.replace(/\D/g, "");
-      const staffResult = await client.query(
-        `SELECT * FROM staff_accounts
-         WHERE status='active'
-           AND (
-             id=$1 OR share_token=$1 OR LOWER(staff_id)=LOWER($1)
-             OR LOWER(COALESCE(email,''))=LOWER($1)
-             OR regexp_replace(COALESCE(phone,''), '\\D', '', 'g')=$2
-           )
-         LIMIT 1`,
-        [staffRef, digits],
-      );
-      staffMember = staffResult.rows[0] || null;
-    }
-    const savedBooking = await client.query(
-      `INSERT INTO bookings (
-        id, user_id, buyer_name, buyer_email, event_id, event_name, event_date, event_venue,
-        event_banner, ticket_type, price, qty, total, status,
-        ticket_record_url, ticket_record_key, ticket_record_storage, qr_token, staff_id, staff_ref, booked_at
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-      ON CONFLICT (id) DO UPDATE SET
-        ticket_record_url=EXCLUDED.ticket_record_url,
-        ticket_record_key=EXCLUDED.ticket_record_key,
-        ticket_record_storage=EXCLUDED.ticket_record_storage,
-        buyer_name=COALESCE(bookings.buyer_name, EXCLUDED.buyer_name),
-        staff_id=COALESCE(bookings.staff_id, EXCLUDED.staff_id),
-        staff_ref=COALESCE(bookings.staff_ref, EXCLUDED.staff_ref),
-        qr_token=COALESCE(bookings.qr_token, EXCLUDED.qr_token)
-      RETURNING *`,
-      [
-        booking.id,
-        userId,
-        booking.buyer || booking.buyerName || null,
-        booking.buyerEmail || null,
-        booking.eventId || null,
-        booking.eventName || null,
-        booking.eventDate || null,
-        booking.eventVenue || null,
-        booking.eventBanner || null,
-        booking.ticketType || null,
-        booking.price || 0,
-        booking.qty || 1,
-        booking.total || 0,
-        booking.status || "upcoming",
-        ticketRecord.mediaUrl,
-        ticketRecord.key,
-        ticketRecord.storage,
-        qrToken,
-        staffMember ? staffMember.id : null,
-        staffRef || null,
-        booking.bookedAt ? new Date(booking.bookedAt) : new Date(),
-      ],
-    );
-    if (staffMember && booking.eventId && booking.ticketType) {
-      const assignmentResult = await client.query(
-        `SELECT * FROM staff_assignments
-         WHERE staff_id=$1 AND event_id=$2 AND tier_name=$3
-         ORDER BY created_at DESC
-         LIMIT 1
-         FOR UPDATE`,
-        [staffMember.id, booking.eventId, booking.ticketType],
-      );
-      const assignment = assignmentResult.rows[0] || null;
-      const cleanQty = Number(booking.qty || 1);
-      if (cleanQty > 0) {
-        const existingStaffSale = await client.query(
-          "SELECT id FROM staff_sales WHERE booking_id=$1 AND staff_id=$2 LIMIT 1",
-          [booking.id, staffMember.id],
+      if (orderId) {
+        await recordPaymentCallback(body, orderId, outcome).catch((err) =>
+          console.error("Payment audit write failed:", err.message),
         );
-        if (!existingStaffSale.rows.length) {
-          let assignmentMode = "creator_quota";
-          let salePrice = Number(booking.price || 0);
-          let staffSaleTotal = salePrice * cleanQty;
-          let commission = 0;
-          let revenueOwner = "creator";
-          let assignmentId = null;
-          let saleEventName = booking.eventName || null;
-          let canRecordSale = true;
-          if (assignment) {
-            assignmentMode =
-              String(assignment.allocation_mode || "creator_quota") === "staff_owned"
-                ? "staff_owned"
-                : "creator_quota";
-            salePrice =
-              assignmentMode === "staff_owned"
-                ? Number(assignment.resale_price || assignment.price || booking.price || 0)
-                : Number(assignment.price || booking.price || 0);
-            staffSaleTotal = salePrice * cleanQty;
-            commission =
-              assignmentMode === "creator_quota"
-                ? Math.round((staffSaleTotal * Number(assignment.commission_rate || 0)) / 100)
-                : 0;
-            revenueOwner = assignmentMode === "staff_owned" ? "staff" : "creator";
-            assignmentId = assignment.id;
-            saleEventName = booking.eventName || assignment.event_name;
-            const remaining = Number(assignment.qty || 0) - Number(assignment.sold_count || 0);
-            canRecordSale = remaining >= cleanQty;
-          } else if (!salePrice && booking.total) {
-            salePrice = Number(booking.total || 0) / cleanQty;
-            staffSaleTotal = Number(booking.total || 0);
-          }
-          if (canRecordSale) {
-            const saleId = `SLS-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
-            await client.query(
-              `INSERT INTO staff_sales (
-              id, creator_id, staff_id, assignment_id, event_id, event_name, tier_name,
-              buyer_name, buyer_phone, buyer_email, qty, price, total, payment_mode, booking_id,
-              commission, revenue_owner, allocation_mode
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-            ON CONFLICT (id) DO NOTHING`,
-              [
-                saleId,
-                staffMember.creator_id,
-                staffMember.id,
-                assignmentId,
-                booking.eventId,
-                saleEventName,
-                booking.ticketType,
-                booking.buyer || booking.buyerName || "Buyer",
-                booking.buyerPhone || null,
-                booking.buyerEmail || null,
-                cleanQty,
-                salePrice,
-                staffSaleTotal,
-                booking.payment && booking.payment.gateway ? "online" : "cash",
-                booking.id,
-                commission,
-                revenueOwner,
-                assignmentMode,
-              ],
-            );
-            if (assignmentId) {
-              await client.query(
-                "UPDATE staff_assignments SET sold_count=sold_count+$1 WHERE id=$2",
-                [cleanQty, assignmentId],
-              );
-            }
-            await client.query(
-              "UPDATE staff_accounts SET sold_tickets=sold_tickets+$1, earnings=earnings+$2 WHERE id=$3",
-              [
-                cleanQty,
-                revenueOwner === "staff" ? staffSaleTotal : commission,
-                staffMember.id,
-              ],
-            );
-          }
-        }
+        target = `${APP_BASE_URL}/?payment=payu&order=${encodeURIComponent(orderId)}`;
       }
     }
-    if (booking.eventId) {
-      await client.query(
-        `UPDATE creator_events e SET
-           booking_count=COALESCE(s.tickets,0),
-           revenue=COALESCE(s.revenue,0)
-         FROM (
-           SELECT event_id,
-             COALESCE(SUM(CASE WHEN status <> 'refunded' THEN qty ELSE 0 END),0)::INTEGER AS tickets,
-             COALESCE(SUM(CASE WHEN status <> 'refunded' THEN total ELSE 0 END),0)::NUMERIC AS revenue
-           FROM bookings
-           WHERE event_id=$1
-           GROUP BY event_id
-         ) s
-         WHERE e.id=s.event_id`,
-        [booking.eventId],
-      );
-    }
-    await client.query("COMMIT");
-    res.json({ booking: await ticketResponse(savedBooking.rows[0]) });
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("Booking save failed:", err);
-    res.status(500).json({ error: err.message || "Booking save failed" });
-  } finally {
-    client.release();
+    console.error("PayU callback failed:", err);
+  }
+  res.redirect(303, target);
+};
+app.post("/payments/payu/success", handlePayuCallback(true));
+app.post("/payments/payu/failure", handlePayuCallback(false));
+
+// The buyer's own order and ticket. Someone else's order → 404, so order IDs
+// cannot be probed.
+app.get("/orders/:orderId", requireBuyer, async (req, res) => {
+  try {
+    const result = await getOrderForBuyer(pool, String(req.params.orderId || ""), req.buyer.sub);
+    if (!result) return res.status(404).json({ error: "Order not found" });
+    res.json({
+      order: publicOrder(result.order),
+      booking: result.booking ? await ticketResponse(result.booking) : null,
+    });
+  } catch (err) {
+    console.error("Order load failed:", err);
+    res.status(500).json({ error: "Could not load order" });
   }
 });
 
@@ -4136,6 +3862,11 @@ const PORT = process.env.PORT || 3003;
 async function start() {
   await runMigrations({ connectionString: process.env.DATABASE_URL, ssl: dbSsl });
   await initDb();
+  // Housekeeping every 5 minutes (correctness never depends on it).
+  setInterval(() => {
+    expireStaleOrders(pool).catch((err) => console.error("Order expiry failed:", err.message));
+    pruneRateLimitHits(pool).catch((err) => console.error("Rate-limit prune failed:", err.message));
+  }, 5 * 60 * 1000).unref();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
