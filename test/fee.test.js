@@ -1,5 +1,6 @@
-// M8 / D5: one platform fee setting (PLATFORM_FEE_PERCENT). Started at 10% so
-// any leftover hardcoded 8% or 94% shows up as a mismatch.
+// M8 / D5: one platform fee setting (PLATFORM_FEE_PERCENT), started at 10% so
+// any leftover hardcoded 8% or 94% shows up. Q16: the buyer pays the fee + GST
+// on top; the organizer keeps the full ticket subtotal (net = gross).
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { startTestServer, api } = require("./helpers/testServer");
@@ -15,7 +16,7 @@ after(async () => {
   if (server) await server.stop();
 });
 
-test("M8: checkout, organizer analytics, finance and admin all use the same fee", async () => {
+test("M8 + Q16: buyer pays fee + GST on top; organizer analytics, finance and admin show net = gross", async () => {
   assert.equal((await api(server.baseUrl, "GET", "/config/public")).body.platformFeePercent, 10);
 
   const creator = await fx.createCreator();
@@ -34,16 +35,17 @@ test("M8: checkout, organizer analytics, finance and admin all use the same fee"
   const analytics = await api(server.baseUrl, "GET", "/creator/analytics", { token: creator.token });
   assert.equal(analytics.status, 200);
   assert.deepEqual(
-    { gross: analytics.body.summary.gross, fee: analytics.body.summary.fee, net: analytics.body.summary.net, feePercent: analytics.body.summary.feePercent },
-    { gross: 1000, fee: 100, net: 900, feePercent: 10 },
+    { gross: analytics.body.summary.gross, fee: analytics.body.summary.fee, net: analytics.body.summary.net, buyerFeePercent: analytics.body.summary.buyerFeePercent },
+    { gross: 1000, fee: 0, net: 1000, buyerFeePercent: 10 },
   );
 
   const finance = await api(server.baseUrl, "POST", "/creator/finance/unlock", { token: creator.token, json: { pin: "4321" } });
   assert.equal(finance.status, 200, JSON.stringify(finance.body));
+  assert.equal(finance.body.net, 1000);
   assert.equal(finance.body.net, analytics.body.summary.net, "finance used to say 94% while analytics said 92%");
 
   const admin = await fx.createAdmin();
   const snapshot = await api(server.baseUrl, "GET", "/admin/snapshot", { token: admin.token });
   const row = snapshot.body.creators.find((c) => c.creatorId === creator.id);
-  assert.equal(row.fee, 10);
+  assert.equal(row.fee, 0, "organizers are not charged a fee (Q16)");
 });

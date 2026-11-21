@@ -520,13 +520,13 @@ router.get("/creator/analytics", requireCreator, async (req, res) => {
         [req.creator.sub],
       ),
     ]);
-    const { gross, fee, net, feePercent } = organizerEarnings(summary.rows[0].gross);
+    const { gross, fee, net, buyerFeePercent } = organizerEarnings(summary.rows[0].gross);
     const tickets = Number(summary.rows[0].tickets || 0);
     res.json({
       summary: {
         gross,
         fee,
-        feePercent,
+        buyerFeePercent,
         net,
         tickets,
         averageTicketPrice: tickets ? Math.round(gross / tickets) : 0,
@@ -707,7 +707,7 @@ router.post("/creator/finance/unlock", requireCreator, async (req, res) => {
        WHERE e.creator_id=$1`,
       [req.creator.sub],
     );
-    // M8: was 94% here and 92% in analytics; now the same function everywhere.
+    // M8 / Q16: same function as analytics (net = gross; buyers pay the fee).
     const { gross, net } = organizerEarnings(result.rows[0].gross);
     res.json({
       initialized,

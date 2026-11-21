@@ -21,7 +21,7 @@ const { setTemporaryPassword, ResetError } = require("../services/passwordReset"
 const { listAdminActions } = require("../services/adminAudit");
 const { normalizeUserStatus, USER_ACTIVE_STATUS } = require("../utils/accounts");
 const { sendError } = require("../utils/httpError");
-const { ORDER_SETTINGS } = require("../services/orders");
+const { organizerEarnings } = require("../services/orders");
 
 const router = express.Router();
 
@@ -460,8 +460,9 @@ router.patch("/admin/events/:eventId/status", requireAdmin, confirmed, audit("ev
   }
 });
 
-// Admin creator rows show the platform fee from the one setting (M8).
-const adminCreatorView = (creator) => ({ ...publicAdminCreator(creator), fee: ORDER_SETTINGS.platformFeePercent });
+// Q16: organizers are not charged a fee (buyers pay it on top), so the
+// organizer fee shown in the admin panel is always 0.
+const adminCreatorView = (creator) => ({ ...publicAdminCreator(creator), fee: organizerEarnings(0).fee });
 
 // Q6 / D20: approve or reject an event waiting for review. Only a pending
 // event can be reviewed, so two admins clicking at once can't both act on it.

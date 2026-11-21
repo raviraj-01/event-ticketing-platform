@@ -5611,8 +5611,8 @@ function refreshCreatorDashboard() {
 
   var revCards = document.querySelectorAll('.rev-value');
   if(revCards[0]) revCards[0].textContent = '₹'+totalRev.toLocaleString('en-IN');
-  // M8: same fee setting as the server (loaded from /config/public).
-  var net = Math.round(totalRev * (1 - (Number(STORE.platformConfig.baseFee) || 0) / 100));
+  // Q16: organizers keep the full ticket revenue; buyers pay the fee on top.
+  var net = totalRev;
   if(revCards[3]) revCards[3].textContent = '₹'+net.toLocaleString('en-IN');
 
   // Update staff badge
@@ -9148,7 +9148,7 @@ function admRefreshPayFilter(){
   se('payoutFeeRate',cfg.baseFee);
   var avgO=stats.bookings>0?Math.round(stats.gmv/stats.bookings):0;
   se('payStatAOV','\u20b9'+avgO.toLocaleString('en-IN'));
-  var pend=admCreatorsList.reduce(function(s,c){ return s+(c.status==='Pending'?Math.round(c.revenue*(1-cfg.baseFee/100)):0); },0);
+  var pend=admCreatorsList.reduce(function(s,c){ return s+(c.status==='Pending'?Math.round(c.revenue):0); },0);
   se('payStatPending','\u20b9'+pend.toLocaleString('en-IN'));
   admDrawPayRevenueChart();
   admRenderLedgerFiltered('all',status);
@@ -10343,9 +10343,11 @@ function admRenderPayouts(){
   var cfg = STORE.platformConfig;
   var creators = admCreatorsList || [];
   tbody.innerHTML = creators.map(function(c){
+    // Q16: fee + GST were paid by buyers on top of the tickets; the organizer
+    // is paid the full ticket revenue.
     var platFee = Math.round(c.revenue*(cfg.baseFee/100));
     var gstAmt  = Math.round(platFee*(cfg.gst/100));
-    var payout  = c.revenue - platFee - gstAmt;
+    var payout  = c.revenue;
     var bc = c.status==='Pending'?'yellow':'green';
     return '<tr>'
       +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(c.name)+'</td><td>'+escapeHtml(c.events)+'</td>'
@@ -11412,12 +11414,12 @@ function refreshRevenuePage(){
   var cfg=STORE.platformConfig;
   var summary=creatorAnalytics&&creatorAnalytics.summary;
   var gross=summary?Number(summary.gross||0):myEvents.reduce(function(s,e){return s+(e.revenue||0);},0);
-  var fee=summary?Number(summary.fee||0):Math.round(gross*(cfg.baseFee/100));
+  var fee=summary?Number(summary.fee||0):0;
   var net=summary?Number(summary.net||0):gross-fee;
   var tickets=summary?Number(summary.tickets||0):myEvents.reduce(function(s,e){return s+(e.bookingCount||0);},0);
   var avg=summary?Number(summary.averageTicketPrice||0):(tickets>0?Math.round(gross/tickets):0);
   function setEl(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
-  setEl('revFeeLabel','Platform fee ('+(summary&&summary.feePercent!=null?summary.feePercent:cfg.baseFee)+'%)');
+  setEl('revFeeLabel','Fee charged to you (buyers pay '+(summary&&summary.buyerFeePercent!=null?summary.buyerFeePercent:cfg.baseFee)+'% on top)');
   setEl('revGross','\u20b9'+gross.toLocaleString('en-IN'));
   setEl('revNet','\u20b9'+net.toLocaleString('en-IN'));
   setEl('revTickets',formatTicketCount(tickets));
@@ -11719,7 +11721,7 @@ async function admVerifyCreatorApp(idx){
         status:'Approved',
         events:0,
         revenue:0,
-        fee:STORE.platformConfig.baseFee
+        fee:0
       });
       if(typeof admRenderCreators==='function') admRenderCreators();
     }
@@ -12724,7 +12726,7 @@ function showStaffOTPAfterLogin(){
       </div>
       <div class="adm-card" style="overflow-x:auto;">
         <table class="adm-table">
-          <thead><tr><th>Creator</th><th>Events</th><th>Gross Revenue</th><th>Platform Fee</th><th>GST on Fee</th><th>Net Payout</th><th>Status</th><th>Action</th></tr></thead>
+          <thead><tr><th>Creator</th><th>Events</th><th>Gross Revenue</th><th>Fee (paid by buyers)</th><th>GST on Fee (paid by buyers)</th><th>Net Payout</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="payoutsBody"></tbody>
         </table>
       </div>
