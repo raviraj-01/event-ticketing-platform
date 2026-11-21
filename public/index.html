@@ -6490,35 +6490,7 @@ function openAddClientModal(){
   }
   document.getElementById('addClientModal').style.display='flex';
 }
-function closeAddClientModal(){document.getElementById('addClientModal').style.display='none';}
 
-async function saveClient(){
-  var first=document.getElementById('clientFirst').value.trim();
-  var last=document.getElementById('clientLast').value.trim();
-  var phone=document.getElementById('clientPhone').value.trim();
-  if(!first||!phone){alert('Name and phone required');return;}
-  var st=STORE.currentStaff;if(!st)return;
-  var name=(first+' '+last).trim();
-  var client={id:'CLT-'+Date.now(),staffPk:st.id,name:name,phone:phone,
-    email:document.getElementById('clientEmail').value.trim(),
-    note:document.getElementById('clientNote').value.trim(),
-    sales:[],createdAt:new Date().toISOString()};
-  staffClients.push(client);
-  var asnId=document.getElementById('clientTicketSel').value;
-  if(asnId){
-    var asn=(STORE.staffAssignments||[]).find(function(a){return a.id===asnId;});
-    if(asn&&!canStaffSellAssignment(asn)){showToast(staffReadOnlyReason(asn));return;}
-    if(asn){
-      try{
-        var data=await sellStaffTicketApi(asn.id,{name:name,phone:phone,email:client.email},1,'cash');
-        if(data.sale)client.sales.push(data.sale);
-        if(data.booking){renderTicket(data.booking);showPage('page-ticket');}
-      }catch(err){console.error(err);showToast(err.message||'Could not sell ticket');return;}
-    }
-  }
-  closeAddClientModal();refreshClientsTab();refreshStaffDashboard();refreshWalletTab();
-  showToast('\u2705 Client saved'+(asnId?' & ticket sold!':'!'));
-}
 
 function openSellToClient(clientId){
   var client=staffClients.find(function(c){return c.id===clientId;});if(!client)return;
@@ -10180,21 +10152,74 @@ function refreshWalletTab(){
   }
 }
 
-// ── ENHANCED refreshStaffSellTab — add Cash Sale button ──
-var _origRefreshStaffSellTab = refreshStaffSellTab;
+// M21: the list of assigned tickets with a Sell button each. It used to be a
+// first "function refreshStaffSellTab" that the one below wrapped through
+// "var _orig = refreshStaffSellTab". Function declarations are hoisted, so
+// _orig pointed at the wrapper itself and the Sell tab recursed until the
+// stack overflowed. Separate names make the call order explicit.
+function renderStaffSellList(){
+  var st=STORE.currentStaff;if(!st)return;
+  var el=document.getElementById('staffSellList');if(!el)return;
+  var asns=STORE.getStaffAssignments(st.id).filter(function(a){return (a.qty-a.soldCount)>0&&canStaffSellAssignment(a);});
+  var locked=STORE.getStaffAssignments(st.id).filter(function(a){return (a.qty-a.soldCount)>0&&!canStaffSellAssignment(a);});
+  if(!asns.length){el.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;background:rgba(255,255,255,0.03);border-radius:14px;border:1px dashed rgba(255,255,255,0.08);">No tickets to sell yet.</div>';return;}
+  var byEv={};
+  asns.forEach(function(a){if(!byEv[a.eventId])byEv[a.eventId]={eventName:a.eventName,eventId:a.eventId,tiers:[]};byEv[a.eventId].tiers.push(a);});
+  el.innerHTML='';
+  Object.keys(byEv).forEach(function(eid){
+    var grp=byEv[eid];var ev=STORE.events.find(function(e){return e.id===eid;});
+    var card=document.createElement('div');card.style.cssText='margin-bottom:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;';
+    var banner=ev&&ev.banner?'background:'+cssUrl(mediaUrl(ev.banner))+' center/cover':'background:linear-gradient(135deg,#8B2010,#000)';
+    var html='<div style="height:90px;'+escapeHtml(banner)+'"></div><div style="padding:12px;">'
+      +'<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px;">'+escapeHtml(grp.eventName)+'</div>'
+      +(ev?'<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">'+(escapeHtml(ev.date||''))+' &middot; '+(escapeHtml(ev.city||''))+'</div>':'<div style="margin-bottom:10px;"></div>');
+    grp.tiers.forEach(function(t){
+      var av=t.qty-t.soldCount;
+      var mode=getAssignmentMode(t);
+      var sellPrice=getAssignmentSellPrice(t);
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(255,255,255,0.05);border-radius:10px;margin-bottom:6px;">'
+        +'<div><div style="font-size:13px;font-weight:600;color:#fff;">'+escapeHtml(t.tierName)+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);">\u20b9'+sellPrice.toLocaleString('en-IN')+' &middot; '+formatTicketCount(av)+' left</div>'
+        +'<div style="margin-top:5px;"><span class="staff-flow-badge '+(mode==='staff_owned'?'staff':'creator')+'">'+getAssignmentModeLabel(t)+'</span></div></div>'
+        +'<button onclick="openQuickSell(\''+jsStr(t.id)+'\')" style="background:#8B2010;color:#fff;border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;">Sell</button></div>';
+    });
+    card.innerHTML=html+'</div>';
+    el.appendChild(card);
+  });
+  if(locked.length){
+    var lock=document.createElement('div');
+    lock.style.cssText='padding:12px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:12px;color:#eab308;font-size:12px;margin-top:10px;';
+    lock.textContent='Some assigned tickets are view-only because the event is completed or not live.';
+    el.appendChild(lock);
+  }
+}
+
+// Staff sells one ticket from an assignment (POST /staff/sales).
+async function openQuickSell(asnId){
+  var asn=(STORE.staffAssignments||[]).find(function(a){return a.id===asnId;});if(!asn){showToast('Not found');return;}
+  if(!canStaffSellAssignment(asn)){showToast(staffReadOnlyReason(asn));return;}
+  var name=prompt('Buyer name:');if(!name)return;
+  var phone=prompt('Buyer phone:');if(!phone)return;
+  try{
+    var data=await sellStaffTicketApi(asn.id,{name:name,phone:phone},1,'cash');
+    showToast('\u2705 Sold! QR generated.');
+    refreshStaffDashboard();refreshStaffSellTab();refreshWalletTab();
+    if(data.booking){renderTicket(data.booking);showPage('page-ticket');}
+  }catch(err){console.error(err);showToast(err.message||'Could not sell ticket');}
+}
+
+// Sell tab: the list, then the Cash Sale button and the gate counter.
 function refreshStaffSellTab(){
-  _origRefreshStaffSellTab();
+  renderStaffSellList();
   // Inject cash sale button after QR section if not already there
   var sellPanel = document.getElementById('stpanel-sell');
   if(!sellPanel) return;
   if(document.getElementById('cashSaleBtn')) return; // already added
 
   var cashBtn = document.createElement('div');
-  cashBtn.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;';
+  cashBtn.style.cssText = 'display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:16px;';
   cashBtn.innerHTML = '<button id="cashSaleBtn" onclick="openCashSaleModal()" style="width:100%;padding:14px;background:rgba(139,32,16,.15);border:1.5px solid rgba(139,32,16,.4);border-radius:14px;color:#e87461;font-size:14px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;">'
-    +'<span style="font-size:18px;">💵</span> Cash Sale</button>'
-    +'<button id="buyInventoryBtn" onclick="openBuyInventoryModal()" style="width:100%;padding:14px;background:rgba(0,212,212,.12);border:1.5px solid rgba(0,212,212,.35);border-radius:14px;color:#00D4D4;font-size:14px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;">'
-    +'<span style="font-size:18px;">↗</span> Buy Inventory</button>';
+    +'<span style="font-size:18px;">💵</span> Cash Sale</button>';
   // Insert after first child (QR section)
   if(sellPanel.firstChild) sellPanel.insertBefore(cashBtn, sellPanel.firstChild.nextSibling);
   else sellPanel.appendChild(cashBtn);
@@ -11244,35 +11269,6 @@ if(!STORE.creatorApplications) STORE.creatorApplications = [];
 
 
 // ── STAFF INVENTORY PURCHASE ──
-function openBuyInventoryModal(){
-  var st = STORE.currentStaff; if(!st) return;
-  var evs = (STORE.events||[]).filter(function(e){ return e.status==='live'; });
-  if(!evs.length){ showToast('No live events available'); return; }
-
-  var existing = document.getElementById('buyInventoryModal'); if(existing) existing.remove();
-  var modal = document.createElement('div');
-  modal.id = 'buyInventoryModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
-
-  modal.innerHTML = '<div style="background:#111;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">'
-    +'<div><div style="font-size:16px;font-weight:700;color:#fff;">Buy Ticket Inventory</div><div style="font-size:12px;color:#00D4D4;margin-top:4px;">Own tickets and resell at your price</div></div>'
-    +'<span onclick="document.getElementById(\'buyInventoryModal\').remove()" style="color:rgba(255,255,255,.5);cursor:pointer;font-size:22px;">&#215;</span></div>'
-    +'<div style="margin-bottom:12px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Event</label>'
-    +'<select id="buyInvEvent" onchange="updateBuyInventoryTotal(true)" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:\'DM Sans\',sans-serif;font-size:13px;outline:none;">'
-    +evs.map(function(e){return '<option value="'+escapeHtml(e.id)+'">'+escapeHtml(e.name)+' · '+(escapeHtml(e.date||'Date not set'))+'</option>';}).join('')+'</select></div>'
-    +'<div style="margin-bottom:12px;"><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Ticket Tier</label>'
-    +'<select id="buyInvTier" onchange="updateBuyInventoryTotal(false)" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:\'DM Sans\',sans-serif;font-size:13px;outline:none;"></select></div>'
-    +'<div class="staff-flow-grid" style="margin-bottom:12px;">'
-    +'<div><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Quantity</label><input id="buyInvQty" type="number" min="1" value="20" oninput="updateBuyInventoryTotal(false)" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:\'DM Sans\',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>'
-    +'<div><label style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Resale Price</label><input id="buyInvResalePrice" type="number" min="0" value="0" oninput="updateBuyInventoryTotal(false)" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:\'DM Sans\',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div></div>'
-    +'<div id="buyInvSummary" style="padding:14px;background:rgba(0,212,212,.08);border:1px solid rgba(0,212,212,.2);border-radius:12px;margin-bottom:16px;"></div>'
-    +'<button onclick="confirmBuyInventory()" style="width:100%;padding:14px;background:#00D4D4;border:none;border-radius:14px;color:#000;font-size:15px;font-weight:800;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Purchase Inventory</button>'
-    +'</div>';
-
-  document.body.appendChild(modal);
-  updateBuyInventoryTierOptions();
-}
 
 function updateBuyInventoryTierOptions(){
   var evId = (document.getElementById('buyInvEvent')||{}).value;
@@ -11311,47 +11307,6 @@ function updateBuyInventoryTotal(refreshTiers){
   }
 }
 
-function confirmBuyInventory(){
-  var st   = STORE.currentStaff; if(!st) return;
-  var evId  = (document.getElementById('buyInvEvent')||{}).value;
-  var tier  = (document.getElementById('buyInvTier')||{}).value;
-  var qty   = parseInt((document.getElementById('buyInvQty')||{}).value||50);
-  var ev    = (STORE.events||[]).find(function(e){ return e.id===evId; });
-  if(!ev){ showToast('Event not found'); return; }
-  var t     = (ev.tickets||[]).find(function(x){ return x.name===tier; })||{price:0};
-  if(qty>Number(t.qty||0)){ showToast('Only '+formatTicketCount(t.qty||0)+' tickets available'); return; }
-  var total = t.price * qty;
-  var resalePrice=parseFloat((document.getElementById('buyInvResalePrice')||{}).value||t.price||0);
-
-  // Assign inventory to staff
-  STORE.assignTickets(evId, tier, qty, st.id, {mode:'staff_owned',purchasePrice:Number(t.price||0),resalePrice:resalePrice,commissionRate:0});
-
-  // Log
-  STORE.addAdminLog('Inventory Purchase', st.name+' bought '+qty+' × '+tier+' for ₹'+total.toLocaleString('en-IN'));
-  VyberaEventBus.emit('sale_completed', {type:'inventory_purchase', staffId:st.id, staffName:st.name, eventId:evId, eventName:ev.name, qty:qty, total:total});
-
-  // Low inventory alert for other staff if ticket stock low
-  var remaining = (ev.capacity||500) - (ev.bookingCount||0) - qty;
-  if(remaining < 50){
-    showToast('⚠️ Low inventory alert: only '+remaining+' tickets remaining for '+ev.name);
-    VyberaEventBus.emit('fraud_alert', {
-      id:'INV-'+Date.now(), type:'low_inventory', severity:'MEDIUM',
-      eventId:evId, detail:'Low inventory: '+remaining+' tickets left for '+ev.name,
-      ts:new Date().toISOString(), resolved:false
-    });
-  }
-
-  var m = document.getElementById('buyInventoryModal'); if(m) m.remove();
-  showToast('✅ Purchased '+qty+' tickets! Inventory active. Creator wallet +₹'+total.toLocaleString('en-IN'));
-
-  // Refresh
-  refreshStaffSellTab();
-  refreshWalletTab();
-  refreshStaffDashboard();
-
-  // Realtime creator update
-  VyberaEventBus.emit('creator_update', {type:'inventory_sold', staffName:st.name, qty:qty, total:total, eventName:ev.name});
-}
 
 // ── LOW INVENTORY ALERT LISTENER ──
 VyberaEventBus.on('creator_update', function(data){
