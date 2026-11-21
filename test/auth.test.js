@@ -108,3 +108,36 @@ test("H2: two simultaneous uses of one link: exactly one succeeds", async () => 
   const results = await Promise.all(Array.from({ length: 5 }, (_, i) => resetWith(token, `Parallel-pass-${i}`)));
   assert.equal(results.filter((r) => r.status === 200).length, 1);
 });
+
+// ── H3: rate limits on endpoints that send SMS / email ──
+const sendOtp = (identifier) => api(server.baseUrl, "POST", "/otp/twilio/send", { json: { identifier } });
+
+test("H3: OTP send is limited to 3 per phone per 10 minutes", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  const phone = "919800000001";
+  const statuses = [];
+  for (let i = 0; i < 4; i += 1) statuses.push((await sendOtp(phone)).status);
+  assert.deepEqual(statuses, [200, 200, 200, 429]);
+  assert.equal((await sendOtp("919800000002")).status, 200, "another number is not blocked");
+});
+
+test("H3: OTP send is limited to 10 per IP per hour across numbers", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  const statuses = [];
+  for (let i = 0; i < 11; i += 1) statuses.push((await sendOtp(`9198100000${String(i).padStart(2, "0")}`)).status);
+  assert.deepEqual(statuses.slice(0, 10), Array(10).fill(200));
+  assert.equal(statuses[10], 429);
+});
+
+test("H3: forgot-password is limited per email address", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  const statuses = [];
+  for (let i = 0; i < 4; i += 1) {
+    statuses.push((await api(server.baseUrl, "POST", "/auth/forgot-password", { json: { email: "victim@test.local" } })).status);
+  }
+  assert.equal(statuses[3], 429);
+});
+
+test("H3: the unused /otp/msg91 aliases are gone", async () => {
+  assert.equal((await api(server.baseUrl, "POST", "/otp/msg91/send", { json: { identifier: "919800000009" } })).status, 404);
+});

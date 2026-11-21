@@ -3517,11 +3517,23 @@ const verifySignupOtpAccessToken = async (req, res) => {
   }
 };
 
-app.post("/otp/msg91/send", sendSignupOtp);
-app.post("/otp/msg91/verify", verifySignupOtp);
-app.post("/otp/msg91/verify-token", verifySignupOtpAccessToken);
-app.post("/otp/twilio/send", sendSignupOtp);
-app.post("/otp/twilio/verify", verifySignupOtp);
+// Every OTP costs an SMS, so sending is limited per phone and per IP (H3).
+// (The unused /otp/msg91/* aliases were removed.)
+const otpPhoneKey = (req) => String((req.body && req.body.identifier) || "").replace(/\D/g, "") || null;
+app.post(
+  "/otp/twilio/send",
+  rateLimit({ name: "otp-send-phone", windowSeconds: 600, max: 3, key: otpPhoneKey,
+    message: "Too many OTP requests for this number. Please wait a few minutes." }),
+  rateLimit({ name: "otp-send-ip", windowSeconds: 3600, max: 10, key: (req) => req.ip,
+    message: "Too many OTP requests. Please try again later." }),
+  sendSignupOtp,
+);
+app.post(
+  "/otp/twilio/verify",
+  rateLimit({ name: "otp-verify-phone", windowSeconds: 600, max: 10, key: otpPhoneKey,
+    message: "Too many attempts. Request a new OTP in a few minutes." }),
+  verifySignupOtp,
+);
 app.post("/otp/twilio/verify-token", verifySignupOtpAccessToken);
 
 // SIGNUP API
@@ -3698,7 +3710,13 @@ app.post("/login", async (req, res) => {
 });
 
 // ── Forgot Password: Send reset email ──────────────────────────────────────
-app.post("/auth/forgot-password", async (req, res) => {
+// Each request can send an email, so limit it per address and per IP (H3).
+const forgotPasswordLimits = [
+  rateLimit({ name: "forgot-email", windowSeconds: 3600, max: 3,
+    key: (req) => String((req.body && req.body.email) || "").trim().toLowerCase() || null }),
+  rateLimit({ name: "forgot-ip", windowSeconds: 3600, max: 10, key: (req) => req.ip }),
+];
+app.post("/auth/forgot-password", ...forgotPasswordLimits, async (req, res) => {
   try {
     if (!hasSmtpConfig()) {
       return res.status(500).json({ error: "Email service is not configured on this server" });
