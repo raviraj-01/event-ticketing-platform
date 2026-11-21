@@ -4,7 +4,6 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const fs = require("fs");
-const { Pool } = require("pg");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
@@ -46,6 +45,8 @@ const {
   withAvailability,
   expireStaleOrders,
 } = require("./src/services/orders");
+const { pool, dbSsl } = require("./src/db/pool");
+const { initDb } = require("./src/db/initDb");
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled async error:", err);
@@ -120,20 +121,6 @@ app.use("/uploads", express.static(uploadsDir, {
   setHeaders: (res) => res.setHeader("X-Content-Type-Options", "nosniff"),
 }));
 
-if (!process.env.DATABASE_URL) {
-  console.error(
-    "DATABASE_URL is missing. Add it to VYBERA/.env before starting the server.",
-  );
-  process.exit(1);
-}
-
-const dbSsl = process.env.DATABASE_URL.includes("localhost")
-  ? false
-  : { rejectUnauthorized: false };
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: dbSsl,
-});
 const rateLimit = createRateLimiter(pool);
 // H6: log successful admin changes (see src/services/adminAudit.js).
 const audit = (action, describe) => audited(pool, action, describe);
@@ -697,49 +684,6 @@ const cleanPathSegment = (value, fallback) =>
   fallback ||
   "user";
 
-const initDb = async () => {
-  // Schema lives in migrations/ (run before this). This only fixes up data.
-  await pool.query(`
-    UPDATE creator_events e SET
-      booking_count=COALESCE(s.tickets,0),
-      revenue=COALESCE(s.revenue,0)
-    FROM (
-      SELECT event_id,
-        COALESCE(SUM(CASE WHEN status <> 'refunded' THEN qty ELSE 0 END),0)::INTEGER AS tickets,
-        COALESCE(SUM(CASE WHEN status <> 'refunded' THEN total ELSE 0 END),0)::NUMERIC AS revenue
-      FROM bookings
-      WHERE event_id IS NOT NULL
-      GROUP BY event_id
-    ) s
-    WHERE e.id=s.event_id
-  `);
-
-  // Legacy rows: copy old "Super Admin" admin_accounts into super_admin_accounts
-  // without ever overwriting an existing super admin (M1).
-  await pool.query(`
-    INSERT INTO super_admin_accounts (name, email, password, status, last_login, created_at)
-    SELECT name, email, password, status, last_login, created_at
-    FROM admin_accounts
-    WHERE role='Super Admin'
-    ON CONFLICT (email) DO NOTHING
-  `);
-  await pool.query("DELETE FROM admin_accounts WHERE role='Super Admin'");
-
-  // First super admin from SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD. Insert-only:
-  // an existing super admin is never touched, so a password changed in the app
-  // or reset with scripts/reset-super-admin.js survives restarts (M1, Q4).
-  const superAdminEmail = String(process.env.SUPERADMIN_EMAIL || "").trim().toLowerCase();
-  const superAdminPassword = process.env.SUPERADMIN_PASSWORD;
-  if (!superAdminEmail || !superAdminPassword) return;
-  const created = await pool.query(
-    `INSERT INTO super_admin_accounts (name, email, password, status)
-     VALUES ('Super Admin', $1, $2, 'Active')
-     ON CONFLICT (email) DO NOTHING
-     RETURNING id`,
-    [superAdminEmail, await bcrypt.hash(superAdminPassword, 10)],
-  );
-  if (created.rows.length) console.log(`Created the first super admin (${superAdminEmail}).`);
-};
 
 
 // ─── GOOGLE TOKEN RELAY ────────────────────────────────────────────────────────
