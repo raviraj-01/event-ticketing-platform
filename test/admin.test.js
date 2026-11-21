@@ -35,9 +35,10 @@ const auditRows = async (where, params) =>
 test("H6 audit: admin logins are logged, success and failure", async () => {
   const admin = await makeAdmin();
   await api(server.baseUrl, "POST", "/admin/login", { json: { email: admin.email, password: "wrong" } });
-  await api(server.baseUrl, "POST", "/admin/login", { json: { email: admin.email, password: PASSWORD } });
+  const step1 = await api(server.baseUrl, "POST", "/admin/login", { json: { email: admin.email, password: PASSWORD } });
+  await api(server.baseUrl, "POST", "/admin/login/verify", { json: { challengeId: step1.body.challengeId, code: step1.body.devCode } });
   const rows = await auditRows("admin_email = $1", [admin.email]);
-  assert.deepEqual(rows.map((r) => r.action), ["login.failed", "login.success"]);
+  assert.deepEqual(rows.map((r) => r.action), ["login.failed", "login.otp_sent", "login.success"]);
   assert.ok(rows[0].ip, "IP recorded");
 });
 
@@ -101,4 +102,48 @@ test("H6 rate limit: unknown emails are limited too, with the same message", asy
   for (let i = 0; i < 11; i += 1) statuses.push((await adminLogin(email, "x")).status);
   assert.deepEqual(statuses.slice(0, 10), Array(10).fill(401));
   assert.equal(statuses[10], 429);
+});
+
+// ── H6 part 3: second factor (emailed code) ──
+const verifyCode = (challengeId, code) => api(server.baseUrl, "POST", "/admin/login/verify", { json: { challengeId, code } });
+
+test("H6 OTP: a correct password alone gives no session; the emailed code does", async () => {
+  const admin = await makeAdmin();
+  const step1 = await adminLogin(admin.email, PASSWORD);
+  assert.equal(step1.status, 200);
+  assert.equal(step1.body.otpRequired, true);
+  assert.equal(step1.headers.get("set-cookie"), null, "no session cookie after the password step");
+  assert.equal((await verifyCode(step1.body.challengeId, step1.body.devCode === "000000" ? "111111" : "000000")).status, 401);
+  const step2 = await verifyCode(step1.body.challengeId, step1.body.devCode);
+  assert.equal(step2.status, 200);
+  assert.match(step2.headers.get("set-cookie") || "", /at_admin=/);
+  assert.equal((await verifyCode(step1.body.challengeId, step1.body.devCode)).status, 401, "a code works only once");
+});
+
+test("H6 OTP: five wrong codes kill the challenge", async () => {
+  const admin = await makeAdmin();
+  const step1 = await adminLogin(admin.email, PASSWORD);
+  const wrong = step1.body.devCode === "999999" ? "888888" : "999999";
+  for (let i = 0; i < 5; i += 1) assert.equal((await verifyCode(step1.body.challengeId, wrong)).status, 401);
+  assert.equal((await verifyCode(step1.body.challengeId, step1.body.devCode)).status, 401);
+});
+
+test("H6 OTP: an expired code is refused", async () => {
+  const admin = await makeAdmin();
+  const step1 = await adminLogin(admin.email, PASSWORD);
+  await server.db.query("UPDATE admin_login_challenges SET expires_at = NOW() - INTERVAL '1 second' WHERE id=$1", [step1.body.challengeId]);
+  assert.equal((await verifyCode(step1.body.challengeId, step1.body.devCode)).status, 401);
+});
+
+test("H6 OTP: in production without SMTP, admin login is refused (dev-mode code never exposed)", async () => {
+  const prod = await startTestServer({ NODE_ENV: "production", ADMIN_OTP_DEV_MODE: "true" });
+  try {
+    const email = `prod${fx.uid()}@test.local`;
+    await prod.db.query("INSERT INTO admin_accounts (name, email, password, status) VALUES ('A', $1, $2, 'Active')", [email, await bcrypt.hash(PASSWORD, 4)]);
+    const res = await api(prod.baseUrl, "POST", "/admin/login", { json: { email, password: PASSWORD } });
+    assert.equal(res.status, 503);
+    assert.equal(res.body.devCode, undefined);
+  } finally {
+    await prod.stop();
+  }
 });

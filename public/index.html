@@ -6911,9 +6911,39 @@ async function postLogin(path,body){
   return {resp:resp,data:data};
 }
 
+// Admin login has two steps (H6): password, then the code sent by email.
+function askAdminLoginCode(challenge){
+  return new Promise(function(resolve){
+    var intro='Enter the 6-digit code sent to '+(challenge.sentTo||'your email')+'.'
+      +(challenge.devCode?' (Development mode code: '+challenge.devCode+')':'');
+    var settled=false;
+    var modal=showPasswordModal('adminOtpModal','Admin login code',intro,
+      '<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Code</label>'
+        +'<input id="adminOtpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>',
+      'Verify',
+      async function(m){
+        var code=((document.getElementById('adminOtpCode')||{}).value||'').trim();
+        if(!/^\d{6}$/.test(code)){showToast('Enter the 6-digit code');return;}
+        settled=true; m.remove(); resolve(code);
+      });
+    modal.addEventListener('click',function(e){
+      if((e.target===modal||e.target.closest('[data-cancel]'))&&!settled){settled=true;resolve('');}
+    });
+    setTimeout(function(){var e=document.getElementById('adminOtpCode');if(e)e.focus();},50);
+  });
+}
+
 async function loginAsAdmin(id,pwd){
   var r=await postLogin('/admin/login',{email:id,password:pwd});
   if(!r.resp.ok)throw new Error(r.data.error||'Invalid admin email or password');
+  while(r.data&&r.data.otpRequired){
+    var code=await askAdminLoginCode(r.data);
+    if(!code)throw new Error('Admin login cancelled');
+    var v=await postLogin('/admin/login/verify',{challengeId:r.data.challengeId,code:code});
+    if(v.resp.ok){r=v;break;}
+    if(v.resp.status===401&&/Wrong code/.test(v.data.error||'')){showToast('Wrong code, try again');continue;}
+    throw new Error(v.data.error||'Could not verify the code');
+  }
   STORE.currentAdmin=r.data.admin;
   STORE.adminUsers=[r.data.admin];
   await saveSession('admin',r.data);

@@ -2018,10 +2018,45 @@ async function registerFailedAdminLogin(account) {
   return Boolean(lockedUntil && new Date(lockedUntil) > new Date());
 }
 
-// Password (and, from H6 part 3, the second factor) verified: start the session.
+// ── Second factor: emailed one-time code (H6 part 3) ──
+const ADMIN_OTP = { ttlMinutes: 5, maxAttempts: 5 };
+const otpHash = (challengeId, code) => crypto.createHash("sha256").update(`${challengeId}:${code}`).digest("hex");
+// Local development without SMTP may show the code in the response. Never in production.
+const adminOtpDevMode = () => process.env.ADMIN_OTP_DEV_MODE === "true" && process.env.NODE_ENV !== "production";
+const maskEmail = (email) => String(email).replace(/^(.)[^@]*(@.*)$/, "$1***$2");
+
+async function startAdminOtpChallenge(req, res, account) {
+  if (!hasSmtpConfig() && !adminOtpDevMode()) {
+    return res.status(503).json({ error: "Admin login needs the email service (SMTP) to send the login code." });
+  }
+  const challengeId = crypto.randomBytes(16).toString("hex");
+  const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+  await pool.query(
+    `INSERT INTO admin_login_challenges (id, admin_type, admin_id, code_hash, expires_at)
+     VALUES ($1, $2, $3, $4, NOW() + make_interval(mins => $5))`,
+    [challengeId, account.admin_type, String(account.id), otpHash(challengeId, code), ADMIN_OTP.ttlMinutes],
+  );
+  if (hasSmtpConfig()) {
+    await createMailTransporter().sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: account.email,
+      subject: "Your admin login code",
+      text: `Your admin login code is ${code}. It expires in ${ADMIN_OTP.ttlMinutes} minutes. If you did not try to log in, change your password.`,
+    });
+  }
+  await recordAdminAction(pool, req, { action: "login.otp_sent", admin: { sub: account.id, adminType: account.admin_type, email: account.email } });
+  res.json({
+    otpRequired: true,
+    challengeId,
+    sentTo: maskEmail(account.email),
+    ...(adminOtpDevMode() && !hasSmtpConfig() ? { devCode: code } : {}),
+  });
+}
+
+// Password and second factor verified: start the session.
 async function completeAdminLogin(req, res, account) {
   const adminType = account.admin_type;
-  const fresh = await pool.query(`SELECT * FROM ${adminTable(adminType)} WHERE id=$1`, [account.id]);
+  const fresh = await pool.query(`UPDATE ${adminTable(adminType)} SET last_login=NOW() WHERE id=$1 RETURNING *`, [account.id]);
   await recordAdminAction(pool, req, { action: "login.success", admin: { sub: account.id, adminType, email: account.email } });
   res.json({
     message: adminType === "super" ? "Super admin login successful" : "Admin login successful",
@@ -2059,12 +2094,66 @@ app.post(
         return res.status(401).json({ error: "Invalid admin email or password" });
       }
       await pool.query(
-        `UPDATE ${adminTable(account.admin_type)} SET failed_login_count=0, locked_until=NULL, last_login=NOW() WHERE id=$1`,
+        `UPDATE ${adminTable(account.admin_type)} SET failed_login_count=0, locked_until=NULL WHERE id=$1`,
         [account.id],
       );
-      await completeAdminLogin(req, res, account);
+      // The password alone is not enough: send the second-factor code.
+      await startAdminOtpChallenge(req, res, account);
     } catch (err) {
       console.error("Admin login failed:", err);
+      res.status(500).json({ error: "Admin login failed" });
+    }
+  },
+);
+
+// Step 2 of admin login: the emailed code. The challenge row is locked so two
+// parallel guesses cannot both be counted as the "first" attempt.
+app.post(
+  "/admin/login/verify",
+  rateLimit({ name: "admin-otp-ip", windowSeconds: 600, max: 30, key: (req) => req.ip, message: TOO_MANY_ATTEMPTS }),
+  async (req, res) => {
+    const challengeId = String((req.body && req.body.challengeId) || "");
+    const code = String((req.body && req.body.code) || "").replace(/\D/g, "");
+    if (!challengeId || code.length !== 6) return res.status(400).json({ error: "Enter the 6-digit code" });
+    const client = await pool.connect();
+    let account = null;
+    try {
+      await client.query("BEGIN");
+      const found = await client.query("SELECT * FROM admin_login_challenges WHERE id=$1 FOR UPDATE", [challengeId]);
+      const challenge = found.rows[0];
+      const usable = challenge && !challenge.used_at && new Date(challenge.expires_at) > new Date()
+        && challenge.attempts < ADMIN_OTP.maxAttempts;
+      if (!usable) {
+        await client.query("ROLLBACK");
+        return res.status(401).json({ error: "The code has expired. Please log in again." });
+      }
+      const expected = Buffer.from(challenge.code_hash, "hex");
+      const actual = Buffer.from(otpHash(challengeId, code), "hex");
+      if (!crypto.timingSafeEqual(expected, actual)) {
+        await client.query("UPDATE admin_login_challenges SET attempts = attempts + 1 WHERE id=$1", [challengeId]);
+        await client.query("COMMIT");
+        await recordAdminAction(pool, req, { action: "login.otp_failed", admin: { sub: challenge.admin_id, adminType: challenge.admin_type } }).catch(() => {});
+        return res.status(401).json({ error: "Wrong code" });
+      }
+      await client.query("UPDATE admin_login_challenges SET used_at = NOW() WHERE id=$1", [challengeId]);
+      const row = await client.query(
+        `SELECT *, $2::text AS admin_type FROM ${adminTable(challenge.admin_type)} WHERE id=$1 AND status='Active'`,
+        [challenge.admin_id, challenge.admin_type],
+      );
+      await client.query("COMMIT");
+      account = row.rows[0];
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      console.error("Admin OTP verification failed:", err);
+      return res.status(500).json({ error: "Could not verify the code" });
+    } finally {
+      client.release();
+    }
+    if (!account) return res.status(401).json({ error: "Admin account not active" });
+    try {
+      await completeAdminLogin(req, res, account);
+    } catch (err) {
+      console.error("Admin login completion failed:", err);
       res.status(500).json({ error: "Admin login failed" });
     }
   },
