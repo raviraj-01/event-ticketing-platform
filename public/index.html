@@ -3037,71 +3037,6 @@ function setCreatorVerificationMessage(message){
     el.style.display='none';
   }
 }
-async function loginAsCreator(){
-  var emailEl = document.getElementById('creatorLoginEmail');
-  var pwdEl   = document.getElementById('creatorLoginPwd');
-  var email   = emailEl ? emailEl.value.trim() : '';
-  var pwd     = pwdEl   ? pwdEl.value          : '';
-
-  if(!email && !pwd){
-    showToast('Enter your creator email and password');
-    return;
-  }
-  try {
-    setCreatorVerificationMessage('');
-    var resp = await fetch(apiUrl('/creator/login'), {
-      method:'POST',
-      headers:clientHeaders({'Content-Type':'application/json'}),
-      body:JSON.stringify({email:email, user:email, password:pwd})
-    });
-    var data = await readAuthResponse(resp);
-    if(!resp.ok){
-      if(data.reason==='creator_not_verified'){
-        setCreatorVerificationMessage(data.error||'Your creator account is under verification. You can login after super admin approval.');
-      }
-      throw new Error(data.error || 'Creator login failed');
-    }
-    var account = data.creator || {};
-    STORE.creatorProfile = account;
-    STORE.currentUser = account.email;
-    await saveSession('creator',data);
-    cacheIdentity('VYBERA_CREATOR_PROFILE',account);
-    sessionStorage.removeItem('VYBERA_GUEST_MODE');
-    document.body.classList.remove('guest-mode');
-    try{await loadCreatorEvents();}catch(loadErr){console.error('Creator events refresh failed:',loadErr);}
-    try{await loadCreatorStaff();}catch(loadErr){console.error('Creator staff refresh failed:',loadErr);}
-    try{await loadCreatorAnalytics();}catch(loadErr){console.error('Creator analytics refresh failed:',loadErr);}
-  } catch(err) {
-    console.error(err);
-    if(emailEl) emailEl.style.border = '1px solid rgba(239,68,68,0.6)';
-    showToast(err.message || 'Creator login failed');
-    return;
-  }
-
-  if(emailEl){ emailEl.style.border = ''; emailEl.value = ''; }
-  if(pwdEl)  { pwdEl.value = ''; }
-
-  (STORE.events||[]).forEach(function(ev){
-    if(ev.creatorName === account.name) ev._myEvent = true;
-  });
-
-  document.body.classList.add('creator-mode');
-
-  var nav = document.getElementById('creatorNavBar');
-  if(nav) nav.style.display = 'flex';
-
-  setTimeout(function(){
-    var firstBtn = document.querySelector('.creator-nav .nav-btn');
-    if(firstBtn){ 
-      document.querySelectorAll('.creator-nav .nav-btn').forEach(function(b){ b.classList.remove('active'); });
-      firstBtn.classList.add('active');
-    }
-  }, 50);
-
-  showPage('page-creator');
-  setTimeout(refreshCreatorDashboard, 50);
-  showToast('Welcome back, ' + account.name + '!');
-}
 
 async function loadCreatorEvents(){
   var token=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
@@ -3192,10 +3127,6 @@ function getAssignmentSellPrice(assignment){
   if(!assignment) return 0;
   if(getAssignmentMode(assignment)==='staff_owned') return Number(assignment.resalePrice||assignment.sellPrice||assignment.price||0);
   return Number(assignment.price||0);
-}
-function getAssignmentPurchasePrice(assignment){
-  if(!assignment) return 0;
-  return Number(assignment.purchasePrice||assignment.buyPrice||assignment.price||0);
 }
 function getAssignmentCommissionRate(assignment){
   return Math.max(0,Number((assignment&&assignment.commissionRate)!=null?assignment.commissionRate:(assignment&&assignment.commission)||0));
@@ -3381,16 +3312,6 @@ async function loadCreatorAnalytics(){
   });
   return data;
 }
-function refreshCreatorAnalytics(){
-  if(creatorAnalyticsRequest) return creatorAnalyticsRequest;
-  creatorAnalyticsRequest=loadCreatorAnalytics().then(function(){
-    refreshCreatorDashboard();
-    refreshRevenuePage();
-  }).catch(function(err){
-    console.error('Creator analytics refresh failed:',err);
-  }).finally(function(){creatorAnalyticsRequest=null;});
-  return creatorAnalyticsRequest;
-}
 async function refreshCreatorData(button){
   var buttons=[document.getElementById('creatorRefreshBtn'),document.getElementById('revenueRefreshBtn')];
   buttons.forEach(function(item){if(item){item.disabled=true;item.textContent='Refreshing...';item.style.opacity='.65';}});
@@ -3555,7 +3476,6 @@ function nextBStep(step){
 function selTicket(el){document.querySelectorAll('.ticket-option').forEach(t=>t.classList.remove('selected'));el.classList.add('selected');}
 function changeQty(d){qty=Math.max(1,Math.min(4,qty+d));document.getElementById('qtyNum').textContent=qty;document.getElementById('qtySummary').textContent=qty;document.getElementById('subtotal').textContent='₹'+(3999*qty).toLocaleString('en-IN');document.getElementById('totalAmt').textContent='₹'+(4836*qty).toLocaleString('en-IN');}
 function selPay(el){document.querySelectorAll('.pay-option').forEach(p=>p.classList.remove('selected'));el.classList.add('selected');}
-function showSuccess(){showPage('page-success');confetti();}
 function confetti(){const w=document.getElementById('confettiWrap');w.innerHTML='';const cols=['#E50914','#7B2FBE','#00F5FF','#4ade80','#fbbf24','#fff'];for(let i=0;i<60;i++){const p=document.createElement('div');p.className='confetti-piece';const sz=6+Math.random()*8;p.style.cssText=`left:${Math.random()*100}%;width:${sz}px;height:${sz}px;background:${cols[Math.floor(Math.random()*cols.length)]};border-radius:${Math.random()>.5?'50%':'2px'};animation-duration:${1+Math.random()*2}s;animation-delay:${Math.random()*.5}s;`;w.appendChild(p);}setTimeout(()=>w.innerHTML='',4000);}
 
 // TABS
@@ -5500,39 +5420,6 @@ function updateCreatePreview() {
   setBannerBackground(pb,draftEvent.banner,'Banner');
 }
 
-function publishEvent() {
-  // Set creator name from profile
-  draftEvent.creatorName = STORE.creatorProfile.name || 'Creator';
-  var vis=document.querySelector('.vis-opt.selected .vis-info p');
-  draftEvent.visibility = vis ? vis.textContent : 'Public';
-  if(!draftEvent.name) { alert('Please fill in the event name'); return; }
-  if(!draftEvent.tickets||!draftEvent.tickets.length) { draftEvent.tickets=[{name:'General Admission',price:0,qty:100,perks:''}]; }
-  // Set to pending for admin approval
-  draftEvent.status = 'pending';
-  draftEvent.riskScore = Math.floor(Math.random()*40)+10;
-  draftEvent.submittedAt = new Date().toISOString();
-  STORE.publishEvent(draftEvent);
-  var lastEv = STORE.events[STORE.events.length-1];
-  // Emit to admin — needs approval
-  if(typeof VyberaEventBus !== 'undefined'){
-    VyberaEventBus.emit('event_submitted', {
-      name: lastEv ? lastEv.name : draftEvent.name,
-      creatorName: draftEvent.creatorName,
-      id: lastEv ? lastEv.id : ''
-    });
-  }
-  STORE.addAdminLog('Event Submitted', (lastEv?lastEv.name:'Event')+' by '+draftEvent.creatorName+' — awaiting approval');
-  draftEvent = {};
-  // Refresh creator dashboard
-  refreshCreatorDashboard();
-  if(typeof showToast === 'function') showToast('Event submitted for approval! Admin will review shortly.');
-  showPage('page-creator');
-  // Reset create form
-  document.querySelectorAll('.create-step').forEach(function(s){s.classList.remove('active');});
-  var cs1=document.getElementById('cstep1');if(cs1)cs1.classList.add('active');
-  document.getElementById('cProgress').style.width='16.6%';
-  document.getElementById('cStepLabel').textContent='Step 1 of 6';
-}
 
 // ── CREATOR DASHBOARD REFRESH ──
 function refreshCreatorDashboard() {
@@ -6163,62 +6050,12 @@ function toggleFreePrice(toggleEl){
 }
 
 // Override addTierRow to use buildTierRow
-var _origAddTierRow = addTierRow;
 addTierRow = function(){ buildTierRow('',0,100,''); };
 
 // ═══════════════════════════════════════════
 // FIX: publishEvent also triggers refreshBuyerHome + refreshExplore
 // Already done in STORE.publishEvent, but add extra safety
 // ═══════════════════════════════════════════
-var legacyLocalPublishEvent = function(){
-  // Final data collection before publish
-  var tiers=document.querySelectorAll('.tier-input-row');
-  if(tiers.length > 0){
-    draftEvent.tickets=[];
-    tiers.forEach(function(row){
-      var nm=row.querySelector('.tier-name-inp');
-      var pr=row.querySelector('.tier-price-inp');
-      var qt=row.querySelector('.tier-qty-inp');
-      var pk=row.querySelector('.tier-perks-inp');
-      if(nm&&nm.value) draftEvent.tickets.push({
-        name:nm.value,
-        price:pr&&!pr.disabled?parseFloat(pr.value||0):0,
-        qty:parseInt((qt&&qt.value)||100),
-        perks:(pk&&pk.value)||''
-      });
-    });
-  }
-  if(!draftEvent.tickets || !draftEvent.tickets.length){
-    draftEvent.tickets=[{name:'General Admission',price:0,qty:100,perks:''}];
-  }
-  if(calSelectedDate) draftEvent.date = calSelectedDate;
-  var h=document.getElementById('evtHour');
-  var mi=document.getElementById('evtMinute');
-  if(h && mi) draftEvent.time = h.value+':'+mi.value+' '+evtAmPm;
-  draftEvent.creatorName = STORE.creatorProfile.name || 'Creator';
-  var vis=document.querySelector('.vis-opt.selected .vis-info p');
-  draftEvent.visibility = vis ? vis.textContent : 'Public';
-  // Also try to read name directly from input if not in draftEvent
-  if(!draftEvent.name){
-    var nameEl = document.getElementById('evtName');
-    if(nameEl && nameEl.value) draftEvent.name = nameEl.value;
-  }
-  if(!draftEvent.name){ alert('Please enter an event name on Step 2'); return; }
-  STORE.publishEvent(draftEvent);
-  draftEvent = {};
-  refreshCreatorDashboard();
-  refreshBuyerHome();
-  refreshExplore();
-  showPage('page-creator');
-  // Reset create flow
-  resetCreateFlow();
-  // Toast notification
-  var toast=document.createElement('div');
-  toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#4ade80;color:#000;font-weight:700;padding:12px 24px;border-radius:12px;z-index:9999;font-family:"DM Sans",sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(74,222,128,.4);white-space:nowrap;';
-  toast.textContent='✅ Event published! Buyers can now see it.';
-  document.body.appendChild(toast);
-  setTimeout(function(){ toast.remove(); }, 3500);
-};
 
 // Init default preset for new event creation
 document.addEventListener('DOMContentLoaded', function(){
@@ -6475,7 +6312,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
 
 // Enhance existing showScan to accept sale data
-var _origShowScan = typeof showScan === 'function' ? showScan : null;
 
 
 
@@ -6573,42 +6409,6 @@ function refreshInventoryList(assignments){
   });
 }
 
-function refreshStaffSellTab(){
-  var st=STORE.currentStaff;if(!st)return;
-  var el=document.getElementById('staffSellList');if(!el)return;
-  var asns=STORE.getStaffAssignments(st.id).filter(function(a){return (a.qty-a.soldCount)>0&&canStaffSellAssignment(a);});
-  var locked=STORE.getStaffAssignments(st.id).filter(function(a){return (a.qty-a.soldCount)>0&&!canStaffSellAssignment(a);});
-  if(!asns.length){el.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;background:rgba(255,255,255,0.03);border-radius:14px;border:1px dashed rgba(255,255,255,0.08);">No tickets to sell yet.</div>';return;}
-  var byEv={};
-  asns.forEach(function(a){if(!byEv[a.eventId])byEv[a.eventId]={eventName:a.eventName,eventId:a.eventId,tiers:[]};byEv[a.eventId].tiers.push(a);});
-  el.innerHTML='';
-  Object.keys(byEv).forEach(function(eid){
-    var grp=byEv[eid];var ev=STORE.events.find(function(e){return e.id===eid;});
-    var card=document.createElement('div');card.style.cssText='margin-bottom:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;';
-    var banner=ev&&ev.banner?'background:'+cssUrl(mediaUrl(ev.banner))+' center/cover':'background:linear-gradient(135deg,#8B2010,#000)';
-    var html='<div style="height:90px;'+escapeHtml(banner)+'"></div><div style="padding:12px;">'
-      +'<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px;">'+escapeHtml(grp.eventName)+'</div>'
-      +(ev?'<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">'+(escapeHtml(ev.date||''))+' &middot; '+(escapeHtml(ev.city||''))+'</div>':'<div style="margin-bottom:10px;"></div>');
-    grp.tiers.forEach(function(t){
-      var av=t.qty-t.soldCount;
-      var mode=getAssignmentMode(t);
-      var sellPrice=getAssignmentSellPrice(t);
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(255,255,255,0.05);border-radius:10px;margin-bottom:6px;">'
-        +'<div><div style="font-size:13px;font-weight:600;color:#fff;">'+escapeHtml(t.tierName)+'</div>'
-        +'<div style="font-size:11px;color:var(--muted);">\u20b9'+sellPrice.toLocaleString('en-IN')+' &middot; '+formatTicketCount(av)+' left</div>'
-        +'<div style="margin-top:5px;"><span class="staff-flow-badge '+(mode==='staff_owned'?'staff':'creator')+'">'+getAssignmentModeLabel(t)+'</span></div></div>'
-        +'<button onclick="openQuickSell(\''+jsStr(t.id)+'\')" style="background:#8B2010;color:#fff;border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;">Sell</button></div>';
-    });
-    card.innerHTML=html+'</div>';
-    el.appendChild(card);
-  });
-  if(locked.length){
-    var lock=document.createElement('div');
-    lock.style.cssText='padding:12px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:12px;color:#eab308;font-size:12px;margin-top:10px;';
-    lock.textContent='Some assigned tickets are view-only because the event is completed or not live.';
-    el.appendChild(lock);
-  }
-}
 
 async function sellStaffTicketApi(assignmentId,buyerInfo,qty,paymentMode){
   var token=localStorage.getItem('VYBERA_STAFF_TOKEN')||'';
@@ -6655,18 +6455,6 @@ async function sellStaffTicketApi(assignmentId,buyerInfo,qty,paymentMode){
   return data;
 }
 
-async function openQuickSell(asnId){
-  var asn=(STORE.staffAssignments||[]).find(function(a){return a.id===asnId;});if(!asn){showToast('Not found');return;}
-  if(!canStaffSellAssignment(asn)){showToast(staffReadOnlyReason(asn));return;}
-  var name=prompt('Buyer name:');if(!name)return;
-  var phone=prompt('Buyer phone:');if(!phone)return;
-  try{
-    var data=await sellStaffTicketApi(asn.id,{name:name,phone:phone},1,'cash');
-    showToast('\u2705 Sold! QR generated.');
-    refreshStaffDashboard();refreshStaffSellTab();refreshWalletTab();
-    if(data.booking){renderTicket(data.booking);showPage('page-ticket');}
-  }catch(err){console.error(err);showToast(err.message||'Could not sell ticket');}
-}
 
 function refreshClientsTab(){
   var st=STORE.currentStaff;if(!st)return;
@@ -6746,7 +6534,6 @@ function openSellToClient(clientId){
   });
   updateSellPrice();document.getElementById('sellToClientModal').style.display='flex';
 }
-function closeSellToClientModal(){document.getElementById('sellToClientModal').style.display='none';}
 
 function updateSellPrice(){
   var sel=document.getElementById('sellTierSel');var d=document.getElementById('sellPriceDisplay');if(!sel||!d)return;
@@ -6754,49 +6541,8 @@ function updateSellPrice(){
   d.textContent='\u20b9'+(p||0).toLocaleString('en-IN');
 }
 
-function setSellPayMode(btn,mode){
-  _sellPayMode=mode;
-  document.querySelectorAll('.pay-mode-btn').forEach(function(b){b.style.background='transparent';b.style.border='1px solid rgba(255,255,255,0.08)';b.style.color='rgba(255,255,255,0.5)';});
-  btn.style.background='rgba(255,255,255,0.1)';btn.style.border='1px solid rgba(255,255,255,0.2)';btn.style.color='#fff';
-}
 
-async function confirmSellToClient(){
-  var sel=document.getElementById('sellTierSel');if(!sel||!sel.value){alert('Select a tier');return;}
-  var asn=(STORE.staffAssignments||[]).find(function(a){return a.id===sel.value;});if(!asn){alert('Not found');return;}
-  var client=staffClients.find(function(c){return c.id===_sellClientPk;});if(!client){alert('Client not found');return;}
-  if(!canStaffSellAssignment(asn)){showToast(staffReadOnlyReason(asn));return;}
-  try{
-    var data=await sellStaffTicketApi(asn.id,{name:client.name,phone:client.phone,email:client.email},1,'cash');
-    if(data.sale)client.sales.push(data.sale);
-    if(data.booking){renderTicket(data.booking);showPage('page-ticket');}
-  }catch(err){console.error(err);showToast(err.message||'Could not sell ticket');return;}
-  closeSellToClientModal();
-  refreshClientsTab();refreshStaffDashboard();refreshWalletTab();
-  showToast('\u2705 Sold to '+client.name+'!');
-}
 
-function refreshWalletTab(){
-  var st=STORE.currentStaff;if(!st)return;
-  var stats=STORE.getStaffStats(st.id);var sales=STORE.getStaffSales(st.id);
-  function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
-  set('staffWalletBalance','\u20b9'+stats.earnings.toLocaleString('en-IN'));
-  set('walletTotalEarned','\u20b9'+stats.earnings.toLocaleString('en-IN'));
-  set('walletTicketsSold',stats.sold);
-  var txEl=document.getElementById('walletTxList');if(!txEl)return;
-  if(!sales.length){txEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--muted);font-size:12px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px dashed rgba(255,255,255,0.08);">No transactions yet.</div>';return;}
-  txEl.innerHTML='';
-  sales.slice().reverse().forEach(function(sl){
-    var date=new Date(sl.soldAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-    var sc=sl.status==='used'?'#00D4D4':'#4ade80';
-    var row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;';
-    row.innerHTML='<div style="width:38px;height:38px;border-radius:50%;background:rgba(74,222,128,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">\uD83C\uDFAB</div>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(sl.buyerName)+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);">'+escapeHtml(sl.tierName)+' &middot; '+escapeHtml(date)+'</div></div>'
-      +'<div style="text-align:right;"><div style="font-size:14px;font-weight:700;color:#4ade80;">+\u20b9'+escapeHtml(sl.total)+'</div>'
-      +'<div style="font-size:9px;font-weight:700;color:'+escapeHtml(sc)+';letter-spacing:1px;margin-top:2px;">'+escapeHtml(sl.status.toUpperCase())+'</div></div>';
-    txEl.appendChild(row);
-  });
-}
 
 function copyStaffLink(){
   var st=STORE.currentStaff;if(!st)return;var url=getStaffShareUrl();
@@ -6806,22 +6552,8 @@ function shareStaffLink(){
   var st=STORE.currentStaff;if(!st)return;var url=getStaffShareUrl();
   if(navigator.share)navigator.share({title:'Book via '+st.name,text:'Get your tickets',url:url});else copyStaffLink();
 }
-function showStaffQR(){updateStaffShareQr();showPage('page-staff-qr');}
 
-function promptScanQR(){
-  var qr=prompt('Enter QR code from buyer ticket:');if(!qr)return;
-  var res=STORE.validateQR(qr.trim());
-  if(res.result==='valid')showScan('valid',res.sale);
-  else if(res.result==='duplicate')showScan('used',res.sale);
-  else showScan('invalid');
-  refreshScannerStats();
-}
 
-function refreshScannerStats(){
-  var s=STORE.getOrganizerStats();
-  function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
-  set('scanStatTotal',s.totalSold);set('scanStatScanned',s.totalScanned);set('scanStatPending',s.totalSold-s.totalScanned);
-}
 
 function showScan(type,sale){
   var r=document.getElementById('scanResult'),icon=document.getElementById('scanIcon'),title=document.getElementById('scanTitle'),sub=document.getElementById('scanSub');
@@ -6832,100 +6564,18 @@ function showScan(type,sale){
   setTimeout(function(){r.style.display='none';},3000);
 }
 
+// Updates the staff count badge. (L9: the list it used to render had no
+// element in the page, so that part was removed.)
 function refreshStaffManage(){
-  var stats=STORE.getOrganizerStats();
-  function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
-  set('orgStaffCount',(STORE.staff||[]).length);set('orgStaffSold',stats.totalSold);set('orgStaffScanned',stats.totalScanned);
   var badge=document.getElementById('creatorStaffBadge');if(badge)badge.textContent=(STORE.staff||[]).length;
-  var list=document.getElementById('orgStaffList');if(!list)return;
-  if(!(STORE.staff||[]).length){list.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;background:rgba(255,255,255,0.03);border-radius:14px;border:1px dashed rgba(255,255,255,0.08);">No staff yet.</div>';return;}
-  list.innerHTML='';
-  STORE.staff.forEach(function(st){
-    var ss=STORE.getStaffStats(st.id);var init=st.name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
-    var card=document.createElement('div');card.style.cssText='margin-bottom:10px;padding:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;';
-    card.innerHTML='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
-      +'<div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#00D4D4,#0a8a8a);display:flex;align-items:center;justify-content:center;color:#000;font-weight:700;font-size:14px;flex-shrink:0;">'+escapeHtml(init)+'</div>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(st.name)+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);">@'+escapeHtml(st.staffId)+'</div></div>'
-      +'<span onclick="confirmDeleteStaff(\''+jsStr(st.id)+'\')" style="cursor:pointer;font-size:20px;color:var(--muted);padding:4px 8px;">&times;</span></div>'
-      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">'
-      +'<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;"><div style="font-size:15px;font-weight:700;color:#fff;">'+escapeHtml(ss.assigned)+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Assigned</div></div>'
-      +'<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;"><div style="font-size:15px;font-weight:700;color:#4ade80;">'+escapeHtml(ss.sold)+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Sold</div></div>'
-      +'<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;"><div style="font-size:15px;font-weight:700;color:#fff;">\u20b9'+ss.earnings.toLocaleString('en-IN')+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Sales</div></div></div>'
-      +'<button onclick="openAssignModal(\''+jsStr(st.id)+'\')" style="width:100%;padding:10px;background:rgba(0,212,212,0.08);border:1px solid rgba(0,212,212,0.25);color:#00D4D4;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;">+ Assign Tickets</button>';
-    list.appendChild(card);
-  });
 }
 
-function openAddStaffModal(){
-  ['addStaffName','addStaffPhone','addStaffEmail','addStaffId','addStaffPwd'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
-  setAddStaffError('');
-  var role=document.getElementById('addStaffRole');if(role)role.value='Scanner';
-  var gate=document.getElementById('addStaffGate');if(gate)gate.value='';
-  var tickets=document.getElementById('addStaffTickets');if(tickets)tickets.value='50';
-  var mode=document.getElementById('addStaffAllocationMode');if(mode)mode.value='creator_quota';
-  var comm=document.getElementById('addStaffCommission');if(comm)comm.value='0';
-  var buy=document.getElementById('addStaffPurchasePrice');if(buy)buy.value='0';
-  var resale=document.getElementById('addStaffResalePrice');if(resale)resale.value='0';
-  updateStaffAllocationMode('addStaff');
-  var sel=document.getElementById('addStaffEvent');
-  if(sel){
-    sel.innerHTML='<option value="">-- Assign later --</option>';
-    var creatorId=STORE.creatorProfile&&STORE.creatorProfile.id;
-    (STORE.events||[]).filter(function(e){return e.status==='live'&&e.creatorId===creatorId;}).forEach(function(ev){
-      var opt=document.createElement('option');
-      opt.value=ev.id;
-      opt.textContent=ev.name;
-      sel.appendChild(opt);
-    });
-  }
-  document.getElementById('addStaffModal').style.display='flex';
-}
-function closeAddStaffModal(){document.getElementById('addStaffModal').style.display='none';}
-function genStaffPwd(){var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',p='';for(var i=0;i<10;i++)p+=c[Math.floor(Math.random()*c.length)];var el=document.getElementById('addStaffPwd');if(el)el.value=p;}
 
-function createNewStaff(){
-  return confirmAddStaff();
-}
 
-function confirmDeleteStaff(pk){var st=STORE.getStaffByPk(pk);if(!st)return;if(confirm('Remove '+st.name+'?')){STORE.deleteStaff(pk);refreshStaffManage();}}
 
-function openAssignModal(staffPk){
-  _assignToStaffPk=staffPk;var st=STORE.getStaffByPk(staffPk);if(!st)return;
-  document.getElementById('assignToStaff').textContent='Assigning to @'+st.staffId+' ('+st.name+')';
-  var evSel=document.getElementById('assignEvent');evSel.innerHTML='';
-  STORE.events.filter(function(e){return e.status==='live';}).forEach(function(e){var o=document.createElement('option');o.value=e.id;o.textContent=e.name;evSel.appendChild(o);});
-  if(!(STORE.events||[]).length){var o=document.createElement('option');o.value='';o.textContent='No live events';evSel.appendChild(o);}
-  updateAssignTiers();document.getElementById('assignTixModal').style.display='flex';
-}
-function closeAssignModal(){document.getElementById('assignTixModal').style.display='none';}
 
-function updateAssignTiers(){
-  var evId=document.getElementById('assignEvent').value;
-  var ev=STORE.events.find(function(e){return e.id===evId;});
-  var sel=document.getElementById('assignTier');sel.innerHTML='';
-  if(!ev){document.getElementById('assignAvailable').textContent='';return;}
-  ev.tickets.forEach(function(t){var o=document.createElement('option');o.value=t.name;o.textContent=t.name+' (\u20b9'+t.price+', '+formatTicketCount(t.qty)+' avail)';sel.appendChild(o);});
-  updateAssignAvailable();sel.onchange=updateAssignAvailable;
-}
 
-function updateAssignAvailable(){
-  var evId=document.getElementById('assignEvent').value;var tier=document.getElementById('assignTier').value;
-  var ev=STORE.events.find(function(e){return e.id===evId;});if(!ev){document.getElementById('assignAvailable').textContent='';return;}
-  var t=ev.tickets.find(function(x){return x.name===tier;});
-  if(t)document.getElementById('assignAvailable').textContent=formatTicketCount(t.qty)+' available';
-}
 
-function doAssignTickets(){
-  var evId=document.getElementById('assignEvent').value;var tier=document.getElementById('assignTier').value;
-  var qty=parseInt(document.getElementById('assignQty').value)||0;
-  if(!evId||!tier||qty<1){alert('Fill all fields');return;}
-  var ev=STORE.events.find(function(e){return e.id===evId;});
-  var t=ev&&ev.tickets.find(function(x){return x.name===tier;});
-  if(!t||t.qty<qty){alert('Not enough tickets');return;}
-  var asn=STORE.assignTickets(evId,tier,qty,_assignToStaffPk);
-  if(asn){closeAssignModal();refreshStaffManage();var st=STORE.getStaffByPk(_assignToStaffPk);showToast('\u2705 '+qty+' \u00d7 '+tier+' assigned to '+(st?st.name:'staff')+'!');}
-}
 
 // ── SIGN IN (M20) ──────────────────────────────────────────────────────────
 // The user picks who they are signing in as, and the password is sent to
@@ -7788,29 +7438,6 @@ function admToggleTheme(){
 }
 
 // ── ENTRY / EXIT ──
-function enterAdminPanel(){
-  var admin = STORE.currentAdmin;
-  if(!admin) return;
-  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
-  var ap = document.getElementById('page-admin');
-  if(ap) ap.classList.add('active');
-  document.body.classList.add('on-splash');
-
-  // Set names
-  var n = admin.name;
-  var initials = n.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
-  ['admSidebarName','admTopName'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent=n; });
-  var r = document.getElementById('admSidebarRole'); if(r) r.textContent = admin.role;
-  var av = document.getElementById('admAvatar'); if(av) av.textContent = initials;
-
-  // Reset shell to dark
-  var shell = document.getElementById('admShell');
-  if(shell){ shell.classList.add('adm-dark'); shell.classList.remove('adm-light'); }
-  admTheme = 'dark';
-  var btn = document.getElementById('admThemeBtn'); if(btn) btn.textContent = '🌙';
-
-  admNav('dashboard', document.getElementById('admnav-dashboard'));
-}
 
 function admSignOut(){
   logoutSession('admin');
@@ -7846,37 +7473,6 @@ var admPanelTitles = {
   roles:'Roles & Access', audit:'Audit Log'
 };
 
-function admNav(panel, navEl){
-  if(!isSuperAdmin() && ['dashboard','staff','roles'].indexOf(panel)===-1){
-    admShowToast('Admin access is limited to staff management');
-    panel='staff';
-    navEl=document.getElementById('admnav-staff');
-  }
-  // Hide all panels
-  document.querySelectorAll('.adm-panel').forEach(function(p){ p.classList.remove('active'); });
-  // Remove active from all nav items
-  document.querySelectorAll('.adm-nav-item').forEach(function(n){ n.classList.remove('active'); });
-  // Show panel
-  var el = document.getElementById('admpanel-' + panel);
-  if(el) el.classList.add('active');
-  // Activate nav
-  if(navEl) navEl.classList.add('active');
-  // Breadcrumb
-  var bc = document.getElementById('admPanelBreadcrumb');
-  if(bc) bc.textContent = admPanelTitles[panel] || panel;
-  // Close mobile sidebar
-  admCloseSidebar();
-  // Refresh data
-  var refreshMap = {
-    dashboard: admRefreshDashboard, users: admRefreshUsers,
-    events: admRefreshEvents, payments: admRefreshPayments,
-    staff: admRefreshStaff, analytics: admRefreshAnalytics,
-    coupons: admRefreshCoupons, config: admRefreshConfig,
-    roles: admRefreshRoles, audit: admRefreshAudit,
-    notifications: admRefreshNotifs
-  };
-  if(refreshMap[panel]) refreshMap[panel]();
-}
 
 // ── TOAST ──
 function admShowToast(msg){
@@ -7889,8 +7485,6 @@ function admShowToast(msg){
 }
 
 // ── MODAL ──
-function admOpenModal(id){ var m=document.getElementById(id); if(m) m.classList.add('open'); }
-function admCloseModal(id){ var m=document.getElementById(id); if(m) m.classList.remove('open'); }
 
 // ── TABLE FILTER ──
 function admFilterTable(tbodyId, query){
@@ -8180,17 +7774,6 @@ function admDrawCreatorLeaderboard(){
 // ── USERS ──
 function admRefreshUsers(){ admUserTab('buyers'); }
 
-function admUserTab(tab){
-  ['buyers','creators','users'].forEach(function(t){
-    var sec = document.getElementById('usec-'+t);
-    var btn = document.getElementById('utab-'+t);
-    if(sec) sec.style.display = t===tab?'block':'none';
-    if(btn) btn.classList.toggle('active', t===tab);
-  });
-  if(tab==='buyers') admRenderBuyers();
-  if(tab==='creators') admRenderCreators();
-  if(tab==='users') admRenderAllUsers();
-}
 
 var admBuyersList = [];
 
@@ -8279,12 +7862,10 @@ function admRenderCreators(){
       +'<td><span class="adm-badge blue">'+escapeHtml(c.category||'—')+'</span></td>'
       +'<td>'+escapeHtml(c.events)+'</td>'
       +'<td style="font-size:11px;">₹'+c.revenue.toLocaleString('en-IN')+'</td>'
-      +'<td><span style="font-size:12px;font-weight:600;color:var(--adm-text);">'+escapeHtml(c.fee)+'%</span></td>'
       +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(statusLabel)+'</span><div style="font-size:10px;color:var(--adm-text2);margin-top:4px;">'+escapeHtml(docs)+' document'+(docs===1?'':'s')+'</div>'
       +(pending&&documentsVerified?'<button onclick="event.stopPropagation();admVerifyCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green" style="margin-top:6px;">Verify</button>':'')+'</td>'
       +'<td><div style="display:flex;gap:4px;" onclick="event.stopPropagation();">'
       +'<button onclick="admOpenCreatorReview(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-teal">View Documents</button>'
-      +(!pending?'<button onclick="admAdjustFee(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Fee</button>':'')
       +(c.status==='Suspended'
         ? '<button onclick="admReinstateCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
         : '<button onclick="admSuspendCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
@@ -8512,12 +8093,6 @@ async function admVerifyAllCreators(){
   admShowToast('✅ All pending creators verified');
   STORE.addAdminLog('Bulk Verify','All pending creators verified');
 }
-function admAdjustFee(id){
-  var c = admCreatorsList.find(function(x){return x.id===id;});
-  if(!c) return;
-  var f = prompt('Set platform fee % for '+c.name+' (current: '+c.fee+'%):', c.fee);
-  if(f!==null){ c.fee=parseInt(f)||c.fee; admRenderCreators(); admShowToast('Fee updated: '+c.fee+'%'); STORE.addAdminLog('Adjust Fee',c.name+' → '+c.fee+'%'); }
-}
 /* replaced by sync layer */
 
 // ── EVENTS ──
@@ -8538,17 +8113,6 @@ function admEventTab(tab){
 
 /* replaced by sync layer */
 /* replaced by sync layer */
-function admFeatureEvent(id){
-  var ev=STORE.events.find(function(e){return e.id===id;}); if(!ev) return;
-  ev.featured=true; admShowToast('⭐ Event featured: '+ev.name); STORE.addAdminLog('Feature Event',ev.name);
-}
-function admRemoveEvent(id){
-  var ev=STORE.events.find(function(e){return e.id===id;}); if(!ev) return;
-  if(!confirm('Remove event: '+ev.name+'?')) return;
-  STORE.events=STORE.events.filter(function(e){return e.id!==id;});
-  admRenderEvents(admCurrentEventTab);
-  admShowToast('Event removed'); STORE.addAdminLog('Remove Event',ev.name);
-}
 
 // ── PAYMENTS ──
 var admCurrentPayTab = 'ledger';
@@ -8626,27 +8190,6 @@ function admResolveDispute(id){
 }
 
 // ── STAFF ──
-function admRefreshStaff(){
-  var tbody=document.getElementById('admStaffBody'); if(!tbody) return;
-  var stats=STORE.getOrganizerStats();
-  var totalRev=0;
-  STORE.staff.forEach(function(s){ totalRev+=STORE.getStaffEarnings(s.id); });
-
-  var t=document.getElementById('admStaffTotal'); if(t) t.textContent=(STORE.staff||[]).length;
-  var sold=document.getElementById('admStaffSold'); if(sold) sold.textContent=formatTicketCount(stats.totalSold);
-  var rev=document.getElementById('admStaffRev'); if(rev) rev.textContent='₹'+totalRev.toLocaleString('en-IN');
-
-  tbody.innerHTML=STORE.staff.map(function(s){
-    var ss=STORE.getStaffStats(s.id);
-    return '<tr>'
-      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(s.name)+'</td>'
-      +'<td style="font-size:10px;color:var(--adm-text2);">@'+escapeHtml(s.staffId)+'</td>'
-      +'<td>'+escapeHtml(ss.assigned)+'</td><td>'+escapeHtml(ss.sold)+'</td>'
-      +'<td style="font-size:11px;">₹'+ss.earnings.toLocaleString('en-IN')+'</td>'
-      +'<td><span class="adm-badge '+(s.status==='active'?'green':s.status==='pending'?'yellow':'red')+'">'+(s.status==='active'?'Active':s.status==='pending'?'Pending Verification':'Suspended')+'</span></td>'
-      +'<td><button onclick="admDisableStaff(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':s.status==='pending'?'Verify':'Enable')+'</button></td></tr>';
-  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff members yet</td></tr>';
-}
 
 async function admDisableStaff(id){
   var s=STORE.staff.find(function(x){return x.id===id;}); if(!s) return;
@@ -8670,7 +8213,6 @@ async function admDisableStaff(id){
 }
 
 // ── ANALYTICS ──
-function admRefreshAnalytics(){ setTimeout(admDrawCharts, 80); }
 
 // ── COUPONS ──
 function admRefreshCoupons(){ admRenderCoupons(); }
@@ -8734,37 +8276,14 @@ function admCreateCoupon(){
 
 // ── NOTIFICATIONS ──
 var admNotifHistory = [];
-function admRefreshNotifs(){
-  var hist=document.getElementById('notifHistory'); if(!hist) return;
-  if(!admNotifHistory.length){
-    hist.innerHTML='<div style="color:var(--adm-text2);font-size:12px;text-align:center;padding:30px;">No broadcasts yet</div>';
-    return;
-  }
-  hist.innerHTML=admNotifHistory.map(function(n){
-    return '<div style="padding:10px 0;border-bottom:1px solid var(--adm-border);">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--adm-text);">'+escapeHtml(n.title)+'</div>'
-      +'<div style="font-size:11px;color:var(--adm-text2);">→ '+escapeHtml(n.target)+' · '+escapeHtml(n.time)+'</div></div>';
-  }).join('');
-}
-function admSendNotif(){
-  var target=document.getElementById('notifTarget').value;
-  var title=document.getElementById('notifTitle').value.trim();
-  var body=document.getElementById('notifBody').value.trim();
-  if(!title||!body){ admShowToast('Fill title and message'); return; }
-  var entry={target:target,title:title,body:body,time:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})};
-  admNotifHistory.unshift(entry);
-  STORE.addAdminLog('Broadcast','To: '+target+' | "'+title+'"');
-  admShowToast('✅ Notification sent to: '+target);
-  document.getElementById('notifTitle').value='';
-  document.getElementById('notifBody').value='';
-  admRefreshNotifs();
-}
 
 // ── CONFIG ──
 function admRefreshConfig(){
   var cfg=STORE.platformConfig;
-  var f=document.getElementById('cfgFee'); if(f) f.value=cfg.baseFee;
-  var g=document.getElementById('cfgGST'); if(g) g.value=cfg.gst;
+  var limits=STORE.orderLimits||{};
+  var fv=document.getElementById('cfgFeeView'); if(fv) fv.textContent=cfg.baseFee+'%';
+  var gv=document.getElementById('cfgGstView'); if(gv) gv.textContent=cfg.gst+'%';
+  var mv=document.getElementById('cfgMaxTicketsView'); if(mv) mv.textContent=limits.maxTicketsPerOrder||'–';
   var v=document.getElementById('cfgVer'); if(v) v.value=cfg.minAppVersion;
   var m=document.getElementById('cfgMaintenance'); if(m) m.checked=cfg.maintenanceMode;
 
@@ -8785,13 +8304,6 @@ function admRefreshConfig(){
   }).join('');
 }
 
-function admSaveConfig(){
-  var f=document.getElementById('cfgFee'); if(f) STORE.platformConfig.baseFee=parseInt(f.value)||8;
-  var g=document.getElementById('cfgGST'); if(g) STORE.platformConfig.gst=parseInt(g.value)||18;
-  var v=document.getElementById('cfgVer'); if(v) STORE.platformConfig.minAppVersion=v.value;
-  STORE.addAdminLog('Config','Fee: '+STORE.platformConfig.baseFee+'%, GST: '+STORE.platformConfig.gst+'%');
-  admShowToast('✅ Config saved');
-}
 
 // ── ROLES ──
 function admRefreshRoles(){ admRenderAdmins(); }
@@ -8856,24 +8368,6 @@ function admRenderAdmins(){
   }).join('');
 }
 
-async function admCreateAdmin(){
-  var name=document.getElementById('newAdmName').value.trim();
-  var email=document.getElementById('newAdmEmail').value.trim();
-  var role=(document.getElementById('newAdmRole')||{}).value||'Admin';
-  var pwd=document.getElementById('newAdmPwd').value||'vybera@2026';
-  if(!name||!email){ admShowToast('Name and email required'); return; }
-  if((STORE.adminUsers||[]).find(function(a){return a.email===email;})){ admShowToast('Email already exists'); return; }
-  try{
-    var admin=await createAdminFromApi({name:name,email:email,role:role,password:pwd});
-    if(admin) STORE.adminUsers.push(admin);
-    admCloseModal('adminModal');
-    admShowToast('Admin created: '+name);
-    ['newAdmName','newAdmEmail','newAdmPwd'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
-    admRenderAdmins();
-  }catch(err){
-    admShowToast(err.message||'Could not create admin');
-  }
-}
 
 async function admRevokeAdmin(id){
   if(!isSuperAdmin()){admShowToast('Only Super Admin can revoke admins');return;}
@@ -9133,10 +8627,6 @@ function admShowRolePerms(role){
   }).join('');
 }
 
-function admOpenAdminModal(){
-  admOpenModal('adminModal');
-  setTimeout(function(){ admShowRolePerms('Admin'); },50);
-}
 
 function admRefreshPayFilter(){
   var status=(document.getElementById('payFilterStatus')||{}).value||'all';
@@ -9265,19 +8755,6 @@ function admRefreshAnalytics(){
 
 // Ensure admRefreshNotifs renders history
 var admNotifHistory = admNotifHistory || [];
-function admRefreshNotifs(){
-  var hist = document.getElementById('notifHistory');
-  if(!hist) return;
-  if(!admNotifHistory.length){
-    hist.innerHTML='<div style="color:var(--adm-text2);font-size:12px;text-align:center;padding:30px;">No broadcasts yet</div>';
-    return;
-  }
-  hist.innerHTML = admNotifHistory.map(function(n){
-    return '<div style="padding:10px 0;border-bottom:1px solid var(--adm-border);">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--adm-text);">'+escapeHtml(n.title)+'</div>'
-      +'<div style="font-size:11px;color:var(--adm-text2);">' + escapeHtml(n.target) + ' &middot; ' + escapeHtml(n.time)+'</div></div>';
-  }).join('');
-}
 
 
 // ═══════════════════════════════════════════════════════
@@ -10000,7 +9477,6 @@ VyberaEventBus.on('fraud_alert', function(alert){
 
 // ── WIRE EVENT BUS INTO publishEvent ──
 // Called when creator publishes an event → goes to PENDING, admin sees it
-var _origPublishEvent = typeof publishEvent !== 'undefined' ? publishEvent : null;
 async function publishEvent(){
   draftEvent.creatorName = STORE.creatorProfile.name || 'Creator';
   var vis = document.querySelector('.vis-opt.selected .vis-info p');
@@ -10244,19 +9720,6 @@ function admFreezePayout(creatorName){
 }
 
 // Freeze creator account
-function admFreezeCreator(creatorName){
-  if(!confirm('Freeze ALL operations for creator: ' + creatorName + '?')) return;
-  admShowToast('🔒 Creator frozen: ' + creatorName);
-  STORE.addAdminLog('Freeze Creator', creatorName);
-  // Pause all their events
-  STORE.events.forEach(function(ev){
-    if(ev.creatorName === creatorName){ ev._salesPaused = true; }
-  });
-  VyberaEventBus.emit('creator_suspended', {name:creatorName});
-  vyberaActivity.log('Creator frozen: ' + creatorName);
-  if(typeof admRenderCreators === 'function') admRenderCreators();
-  if(typeof admRenderEvents === 'function') admRenderEvents('all');
-}
 
 // ── FRAUD ALERT PANEL (in admin dashboard) ──
 function admRefreshFraudPanel(){
@@ -10282,7 +9745,6 @@ function admRefreshFraudPanel(){
 }
 
 // ── ADMIN EVENTS TABLE — add Pause/Block/Resume buttons ──
-var _origAdmRenderEvents = admRenderEvents;
 function admRenderEvents(tab){
   var tbody = document.getElementById('eventsBody'); if(!tbody) return;
   admCurrentEventTab = tab;
@@ -10337,7 +9799,6 @@ function admRenderEvents(tab){
 }
 
 // ── PAYOUTS TABLE — add Freeze + Approve buttons ──
-var _origAdmRenderPayouts = typeof admRenderPayouts !== 'undefined' ? admRenderPayouts : null;
 function admRenderPayouts(){
   var tbody = document.getElementById('payoutsBody'); if(!tbody) return;
   var cfg = STORE.platformConfig;
@@ -10381,11 +9842,6 @@ admRefreshDashboard = function(){
 };
 
 // ── RISK SCORE ON EVENT SUBMISSION ──
-function admGetRiskBadge(score){
-  if(!score) return '';
-  var col = score>70?'red':score>40?'yellow':'green';
-  return '<span class="adm-badge '+escapeHtml(col)+'" style="font-size:9px;">Risk: '+escapeHtml(score)+'</span>';
-}
 
 // ── WIRE admSuspendCreator → full freeze ──
 function admSuspendCreator(id){
@@ -10781,7 +10237,6 @@ function updateGateCounter(type){
 }
 
 // ── WIRE into existing QR scan validation ──
-var _origValidateQR = typeof validateQR !== 'undefined' ? validateQR : null;
 function validateQR(code){
   var result = 'invalid';
   if(!code){ updateGateCounter('invalid'); return 'invalid'; }
@@ -10853,16 +10308,7 @@ function refreshStaffDashboardExtras(){
 
 // ── CREATOR STAFF MANAGE — gate assignment ──
 // When creator adds staff, also assign gates
-var _origSaveClient = typeof saveClient !== 'undefined' ? saveClient : null;
 
-function creatorAssignGate(staffId, gate){
-  var st = STORE.staff.find(function(s){ return s.id===staffId; });
-  if(!st) return;
-  if(!st.gates) st.gates = [];
-  if(!st.gates.includes(gate)) st.gates.push(gate);
-  STORE.addAdminLog('Gate Assigned', st.name + ' → Gate ' + gate);
-  VyberaEventBus.emit('creator_update', {type:'gate_assigned', staffId:staffId, gate:gate});
-}
 
 // ── ADMIN: freeze inventory / lock wallet ──
 function admFreezeInventory(staffId){
@@ -10886,7 +10332,6 @@ function admLockWallet(staffId){
 }
 
 // ── Update admRefreshStaff to show freeze/lock controls ──
-var _origAdmRefreshStaff = admRefreshStaff;
 function admRefreshStaff(){
   var tbody = document.getElementById('admStaffBody'); if(!tbody) return;
 
@@ -10924,13 +10369,6 @@ function admRefreshStaff(){
 }
 
 // ── CREATOR PERFORMANCE VIEW ──
-function getCreatorTopStaff(){
-  return (STORE.staff||[]).map(function(s){
-    var ss = STORE.getStaffStats(s.id);
-    var cash = (STORE.cashLedger||[]).filter(function(x){ return x.staffId===s.id; }).reduce(function(sum,x){ return sum+x.total; },0);
-    return {name:s.name, id:s.id, sold:ss.sold, revenue:ss.earnings+cash};
-  }).sort(function(a,b){ return b.revenue-a.revenue; });
-}
 
 // Initialise STORE extensions
 if(!STORE.cashLedger)   STORE.cashLedger   = [];
@@ -11069,13 +10507,6 @@ document.addEventListener('deviceready',function(){
 // ── Show creator nav when logged in ──
 // loginAsCreator wrapper removed (handled in main function)
 
-function enterCreatorFromAdmin(){
-  document.body.classList.add('creator-mode');
-  var nav = document.getElementById('creatorNavBar');
-  if(nav) nav.style.display = 'flex';
-  showPage('page-creator');
-  refreshCreatorDashboard();
-}
 
 // ── Creator apply modal ──
 function showCreatorApplyModal(){
@@ -11683,59 +11114,6 @@ VyberaEventBus.on('creator_application', function(data){
 });
 
 // ── Admin: Verify creator application ──
-async function admVerifyCreatorApp(idx){
-  var apps = STORE.creatorApplications||[];
-  var app = apps[idx];
-  if(!app) return;
-  try{
-    var creator=(admCreatorsList||[]).find(function(c){
-      return String(c.email||'').toLowerCase()===String(app.email||'').toLowerCase();
-    });
-    if(creator){
-      var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
-      var resp=await fetch(apiUrl('/admin/creators/'+encodeURIComponent(creator.id)+'/status'),{
-        method:'PATCH',
-        headers:authHeaders('admin',{'Content-Type':'application/json'}),
-        body:JSON.stringify({status:'Approved'})
-      });
-      var data=await readAuthResponse(resp);
-      if(!resp.ok) throw new Error(data.error||'Could not approve creator');
-      creator.status='Approved';
-      if(typeof admRenderCreators==='function') admRenderCreators();
-    }else{
-      var adminToken=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
-      var approveResp=await fetch(apiUrl('/admin/creators/status-by-email'),{
-        method:'PATCH',
-        headers:authHeaders('admin',{'Content-Type':'application/json'}),
-        body:JSON.stringify({email:app.email,status:'Approved'})
-      });
-      var approveData=await readAuthResponse(approveResp);
-      if(!approveResp.ok) throw new Error(approveData.error||'Could not approve creator');
-      var approved=approveData.creator||{};
-      admCreatorsList.push({
-        id:'CRT-'+approved.id,
-        creatorId:approved.id,
-        name:approved.name,
-        email:approved.email,
-        category:approved.category,
-        status:'Approved',
-        events:0,
-        revenue:0,
-        fee:0
-      });
-      if(typeof admRenderCreators==='function') admRenderCreators();
-    }
-    app.status = 'Approved';
-    app.verifiedAt = new Date().toISOString();
-    admShowToast('Creator approved: '+app.name);
-    STORE.addAdminLog('Approve Creator KYC', app.name+' — '+app.category);
-    vyberaActivity.log('Creator approved: '+app.name);
-    VyberaEventBus.emit('creator_update', {type:'kyc_approved', name:app.name, email:app.email});
-    admRefreshVerificationQueue();
-  }catch(err){
-    admShowToast(err.message||'Could not approve creator');
-  }
-}
 
 function admOpenCreatorAppReview(idx){
   var app=(STORE.creatorApplications||[])[idx];
@@ -11782,7 +11160,6 @@ async function admRejectCreatorApp(idx){
 }
 
 // ── Enhance admin Users panel to show creator applications ──
-var _origAdmUserTab = typeof admUserTab !== 'undefined' ? admUserTab : null;
 function admUserTab(tab){
   ['buyers','creators','users','applications'].forEach(function(t){
     var sec=document.getElementById('usec-'+t);
@@ -12007,76 +11384,13 @@ function checkTopSellerAlert(staffId, totalSold){
 // ── STAFF OTP (simulated) ──
 var _staffOTPCode = null;
 
-function generateStaffOTP(){
-  _staffOTPCode = Math.floor(100000 + Math.random() * 900000).toString();
-  return _staffOTPCode;
-}
 
-function showStaffOTPModal(staffName){
-  var existing=document.getElementById('staffOTPModal'); if(existing) existing.remove();
-  var code=generateStaffOTP();
-  var modal=document.createElement('div');
-  modal.id='staffOTPModal';
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9000;display:flex;align-items:center;justify-content:center;padding:24px;';
-  var box=document.createElement('div');
-  box.style.cssText='background:#111;border-radius:20px;padding:28px;width:100%;max-width:340px;text-align:center;';
-  var ic=document.createElement('div');ic.style.cssText='font-size:36px;margin-bottom:12px;';ic.textContent='OTP';box.appendChild(ic);
-  var t1=document.createElement('div');t1.style.cssText='font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;';t1.textContent='OTP Verification';box.appendChild(t1);
-  var t2=document.createElement('div');t2.style.cssText='font-size:12px;color:rgba(255,255,255,.5);margin-bottom:20px;';t2.innerHTML='Sent to: <b style="color:#fff;">'+escapeHtml(staffName)+'</b>';box.appendChild(t2);
-  var cb=document.createElement('div');cb.style.cssText='padding:14px;background:rgba(0,212,212,0.1);border-radius:12px;margin-bottom:16px;';
-  var cl=document.createElement('div');cl.style.cssText='font-size:11px;color:rgba(0,212,212,.7);margin-bottom:6px;';cl.textContent='Demo OTP';cb.appendChild(cl);
-  var cd=document.createElement('div');cd.style.cssText='font-size:28px;font-weight:700;color:#00D4D4;letter-spacing:8px;';cd.textContent=code;cb.appendChild(cd);box.appendChild(cb);
-  var inp=document.createElement('input');inp.id='staffOTPInput';inp.type='text';inp.maxLength=6;inp.placeholder='Enter OTP';
-  inp.style.cssText='width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-size:18px;text-align:center;letter-spacing:6px;box-sizing:border-box;outline:none;margin-bottom:12px;display:block;';
-  box.appendChild(inp);
-  var btn=document.createElement('button');btn.textContent='Verify OTP';
-  btn.style.cssText='width:100%;padding:13px;background:#8B2010;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;';
-  btn.onclick=function(){verifyStaffOTP(code);};box.appendChild(btn);
-  modal.appendChild(box);document.body.appendChild(modal);
-  setTimeout(function(){var i=document.getElementById('staffOTPInput');if(i)i.value=code;},800);
-}
 
-function verifyStaffOTP(expectedCode){
-  var input = document.getElementById('staffOTPInput');
-  var entered = input ? input.value.trim() : '';
-  if(entered !== expectedCode){
-    showToast('Invalid OTP. Try again.'); return;
-  }
-  var modal = document.getElementById('staffOTPModal'); if(modal) modal.remove();
-  // Continue with login
-  completeStaffLogin();
-}
 
 var _pendingStaffLogin = null;
 
-function completeStaffLogin(){
-  var st = _pendingStaffLogin; if(!st) return;
-  STORE.currentStaff = st;
-  st.status = 'active';
-  st.lastSeen = new Date().toISOString();
-
-  // Show staff dashboard
-  document.body.classList.remove('on-splash','on-login');
-  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
-  var dp = document.getElementById('page-staff-dashboard');
-  if(dp) dp.classList.add('active');
-
-  // Notify admin/creator staff is online
-  VyberaEventBus.emit('creator_update', {type:'staff_online', staffId:st.id, staffName:st.name});
-  STORE.addAdminLog('Staff Login', st.name+' (@'+st.staffId+') signed in');
-
-  setTimeout(refreshStaffDashboard, 50);
-  showToast('Welcome, '+st.name+'!');
-  _pendingStaffLogin = null;
-}
 
 // ── Show OTP after staff login (call from doLogin) ──
-function showStaffOTPAfterLogin(){
-  var st = STORE.currentStaff; if(!st) return;
-  _pendingStaffLogin = st;
-  STORE.currentStaff = null;
-  showStaffOTPModal(st.name);
-}
 
 // ── Admin: creator application listener ──
 
@@ -12623,7 +11937,7 @@ function showStaffOTPAfterLogin(){
         </div>
       </div>
       <div class="adm-card" style="overflow-x:auto;">
-        <table class="adm-table"><thead><tr><th>#</th><th>Name</th><th>Created</th><th>Category</th><th>Events</th><th>Revenue</th><th>Fee %</th><th>Status</th><th>Actions</th></tr></thead>
+        <table class="adm-table"><thead><tr><th>#</th><th>Name</th><th>Created</th><th>Category</th><th>Events</th><th>Revenue</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody id="creatorsBody"></tbody></table>
       </div>
     </div>
@@ -12960,15 +12274,14 @@ function showStaffOTPAfterLogin(){
     <div style="display:grid;gap:10px;">
       <div class="adm-card" style="padding:16px;">
         <div style="font-size:12px;font-weight:700;color:var(--adm-text);margin-bottom:12px;">💰 Platform Fees</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="adm-form-group" style="margin-bottom:0;"><label class="adm-label">Base Platform Fee (%)</label><input class="adm-input" id="cfgFee" type="number" min="0" max="30" step="0.5"/></div>
-          <div class="adm-form-group" style="margin-bottom:0;"><label class="adm-label">GST on Service Fee (%)</label><input class="adm-input" id="cfgGST" type="number" min="0" max="30"/></div>
+        <!-- L9: read-only. These come from the server (GET /config/public); change them with
+             PLATFORM_FEE_PERCENT, GST_PERCENT and MAX_TICKETS_PER_ORDER in the server environment. -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px;font-size:13px;color:var(--adm-text);">
+          <div><div class="adm-label">Platform fee (paid by buyers)</div><span id="cfgFeeView">–</span></div>
+          <div><div class="adm-label">GST on the fee</div><span id="cfgGstView">–</span></div>
+          <div><div class="adm-label">Max tickets per order</div><span id="cfgMaxTicketsView">–</span></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-          <div class="adm-form-group" style="margin-bottom:0;"><label class="adm-label">Min Creator Payout (₹)</label><input class="adm-input" id="cfgMinPayout" type="number" value="500"/></div>
-          <div class="adm-form-group" style="margin-bottom:0;"><label class="adm-label">Max Tickets per Booking</label><input class="adm-input" id="cfgMaxTickets" type="number" value="10"/></div>
-        </div>
-        <button onclick="admSaveConfig()" class="adm-btn adm-btn-red">Save Fee Config</button>
+        <div style="font-size:11px;color:var(--adm-text2);">Set on the server: PLATFORM_FEE_PERCENT, GST_PERCENT, MAX_TICKETS_PER_ORDER.</div>
       </div>
       <div class="adm-card" style="padding:16px;">
         <div style="font-size:12px;font-weight:700;color:var(--adm-text);margin-bottom:12px;">📱 App Configuration</div>
