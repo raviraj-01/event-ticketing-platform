@@ -26,6 +26,7 @@ const crypto = require("crypto");
 const { staffWallet, recordCashSettlement, WalletError } = require("../services/staffWallet");
 const { setTemporaryPassword } = require("../services/passwordReset");
 const { createStaffAssignment } = require("../services/staffAssignments");
+const { readPage, pageOf } = require("../utils/paging");
 
 const router = express.Router();
 
@@ -254,14 +255,18 @@ router.get("/creator/events", requireCreator, async (req, res) => {
 
 router.get("/events", async (req, res) => {
   try {
+    const page = readPage(req.query, { defaultLimit: 100, maxLimit: 100 });
     const result = await pool.query(
       `${creatorEventSalesQuery}
        WHERE e.status IN ('live', 'upcoming') AND e.visibility='Public'
        GROUP BY e.id
-       ORDER BY e.created_at DESC`,
+       ORDER BY e.created_at DESC, e.id
+       LIMIT $1 OFFSET $2`,
+      [page.limit + 1, page.offset],
     );
-    const events = await withAvailability(pool, result.rows);
-    res.json({ events: events.map(publicCreatorEvent) });
+    const { rows, paging } = pageOf(result.rows, page);
+    const events = await withAvailability(pool, rows);
+    res.json({ events: events.map(publicCreatorEvent), paging });
   } catch (err) {
     console.error("Public events list failed:", err);
     res.status(500).json({ error: "Could not load events" });

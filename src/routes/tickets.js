@@ -5,23 +5,27 @@ const { pool } = require("../db/pool");
 const { ticketResponse } = require("../services/tickets");
 const { requireBuyer, requireTicketViewer, requireScanIdentity } = require("../middleware/auth");
 const crypto = require("crypto");
+const { readPage, pageOf } = require("../utils/paging");
 
 const router = express.Router();
 
 // A buyer's tickets = bookings whose user_id is the buyer's own id.
 // No matching by email: guest bookings (user_id NULL) and staff walk-in sales
 // stay unreachable here, so registering with someone's email reveals nothing (C6).
-const listBuyerTickets = async (userId) => {
+// Paged (M4): every ticket renders a QR image, so a long history is costly.
+const listBuyerTickets = async (userId, query) => {
+  const page = readPage(query, { defaultLimit: 100, maxLimit: 100 });
   const result = await pool.query(
-    "SELECT * FROM bookings WHERE user_id=$1 ORDER BY booked_at DESC",
-    [userId],
+    "SELECT * FROM bookings WHERE user_id=$1 ORDER BY booked_at DESC, id LIMIT $2 OFFSET $3",
+    [userId, page.limit + 1, page.offset],
   );
-  return Promise.all(result.rows.map(ticketResponse));
+  const { rows, paging } = pageOf(result.rows, page);
+  return { bookings: await Promise.all(rows.map(ticketResponse)), paging };
 };
 
 router.get("/bookings/mine", requireBuyer, async (req, res) => {
   try {
-    res.json({ bookings: await listBuyerTickets(req.buyer.sub) });
+    res.json(await listBuyerTickets(req.buyer.sub, req.query));
   } catch (err) {
     console.error("Buyer booking history failed:", err);
     res.status(500).json({ error: "Could not load booking history" });
@@ -31,7 +35,7 @@ router.get("/bookings/mine", requireBuyer, async (req, res) => {
 // Same list; kept because the profile page calls this path.
 router.get("/profile/tickets", requireBuyer, async (req, res) => {
   try {
-    res.json({ bookings: await listBuyerTickets(req.buyer.sub) });
+    res.json(await listBuyerTickets(req.buyer.sub, req.query));
   } catch (err) {
     console.error("Profile tickets failed:", err);
     res.status(500).json({ error: "Could not load profile tickets" });
