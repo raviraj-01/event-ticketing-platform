@@ -4424,11 +4424,6 @@ async function loadBuyerBookingHistory(){
   }
 }
 
-// Which signed-in role the profile page acts as (buyer first, else creator).
-function profileIdentityRole(){
-  if(sessionStorage.getItem('VYBERA_GUEST_MODE')==='1')return 'creator';
-  return hasSession('buyer')?'buyer':'creator';
-}
 function getProfileIdentityToken(){
   if(sessionStorage.getItem('VYBERA_GUEST_MODE')==='1')return localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
   return localStorage.getItem('VYBERA_BUYER_TOKEN')||localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
@@ -4614,13 +4609,14 @@ async function restoreSavedSession(){
   }
 }
 var PROFILE_CREATOR_EVENTS=[];
+// Only a creator session has created events (H12); a buyer account never
+// sees a creator's events, even with the same email.
 async function loadProfileCreatorEvents(){
-  var token=getProfileIdentityToken();
-  if(!token){PROFILE_CREATOR_EVENTS=[];return PROFILE_CREATOR_EVENTS;}
+  if(!hasSession('creator')){PROFILE_CREATOR_EVENTS=[];return PROFILE_CREATOR_EVENTS;}
   try{
-    var resp=await fetch(apiUrl('/profile/creator-events'),{headers:authHeaders(profileIdentityRole())});
+    var resp=await fetch(apiUrl('/profile/creator-events'),{headers:authHeaders('creator')});
     var data=await readAuthResponse(resp);
-    if(resp.status===401){clearRejectedProfileToken(token);PROFILE_CREATOR_EVENTS=[];return PROFILE_CREATOR_EVENTS;}
+    if(resp.status===401){clearLocalSession('creator');PROFILE_CREATOR_EVENTS=[];return PROFILE_CREATOR_EVENTS;}
     if(!resp.ok)throw new Error(data.error||'Could not load your created events');
     PROFILE_CREATOR_EVENTS=data.events||[];
     return PROFILE_CREATOR_EVENTS;

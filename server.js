@@ -502,10 +502,6 @@ const requireBuyer = requireRole(["buyer"], (req, s) => { req.buyer = s.payload;
 const requireScanIdentity = requireRole(["creator", "staff"], (req, s) => {
   req.scanIdentity = { type: s.role, payload: s.payload };
 });
-// Buyer or creator, identified by email (used by /profile/creator-events; see H12).
-const requireProfileIdentity = requireRole(["buyer", "creator"], (req, s) => {
-  req.profileIdentity = { ...s.payload, email: String(s.payload.email || "").trim().toLowerCase() };
-});
 
 const getSigningKey = (secret, dateStamp) => {
   const kDate = hmac(`AWS4${secret}`, dateStamp);
@@ -3089,15 +3085,16 @@ app.get("/profile/tickets", requireBuyer, async (req, res) => {
   }
 });
 
-app.get("/profile/creator-events", requireProfileIdentity, async (req, res) => {
+// The signed-in creator's own events (H12: by creator id, never by matching
+// a buyer's unverified email to a creator account).
+app.get("/profile/creator-events", requireCreator, async (req, res) => {
   try {
     const result = await pool.query(
       `${creatorEventSalesQuery}
-       JOIN creator_accounts c ON c.id=e.creator_id
-       WHERE LOWER(c.email)=LOWER($1)
+       WHERE e.creator_id=$1
        GROUP BY e.id
        ORDER BY e.created_at DESC`,
-      [req.profileIdentity.email],
+      [req.creator.sub],
     );
     res.json({ events: result.rows.map(publicCreatorEvent) });
   } catch (err) {

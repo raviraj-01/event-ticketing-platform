@@ -213,3 +213,14 @@ test("L4: tokens from the old hand-written format are rejected", async () => {
   const legacy = `${unsigned}.${crypto.createHmac("sha256", "test-only-jwt-secret-for-integration-tests-0123456789").update(unsigned).digest("base64url")}`;
   assert.equal((await api(server.baseUrl, "GET", "/bookings/mine", { token: legacy })).status, 401);
 });
+
+// ── H12: no cross-account access by matching emails ──
+test("H12: a buyer with a creator's email cannot see that creator's events or revenue", async () => {
+  const creator = await fx.createCreator();
+  await fx.createEvent({ creatorId: creator.id });
+  const lookalike = await fx.createBuyer({ email: creator.email.toUpperCase() === creator.email ? `x${creator.email}` : creator.email });
+  assert.equal((await api(server.baseUrl, "GET", "/profile/creator-events", { token: lookalike.token })).status, 401);
+  const own = await api(server.baseUrl, "GET", "/profile/creator-events", { token: creator.token });
+  assert.equal(own.status, 200);
+  assert.equal(own.body.events.length, 1);
+});
