@@ -429,12 +429,20 @@ const publicAdmin = (admin) => ({
   createdAt: admin.created_at,
 });
 
-const requireCreator = (req, res, next) => {
+// A valid token is not enough: the creator must still exist and be approved
+// right now, so suspending a creator takes effect on their next request (H4).
+const isCreatorApproved = async (creatorId) => {
+  const result = await pool.query("SELECT kyc_status FROM creator_accounts WHERE id=$1", [creatorId]);
+  return result.rows.length > 0 && result.rows[0].kyc_status === "Approved";
+};
+
+const requireCreator = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const payload = verifyJwt(token);
     if (payload.scope !== "creator") throw new Error("Creator login required");
+    if (!(await isCreatorApproved(payload.sub))) throw new Error("Creator account is not active");
     req.creator = payload;
     next();
   } catch (err) {
@@ -563,12 +571,13 @@ const requireStaff = async (req, res, next) => {
   }
 };
 
-const requireScanIdentity = (req, res, next) => {
+const requireScanIdentity = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const payload = verifyJwt(token);
     if (payload.scope === "creator") {
+      if (!(await isCreatorApproved(payload.sub))) throw new Error("Creator account is not active");
       req.scanIdentity = { type: "creator", payload };
       return next();
     }
