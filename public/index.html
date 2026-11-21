@@ -4214,9 +4214,17 @@ function renderTicket(booking){
   set('successQrId',booking.qrImage ? booking.id : 'QR code will appear after confirmation');
 }
 
+// A ticket is visible to its buyer, the event's creator or assigned staff,
+// so send whichever of those logins this device has.
+function ticketViewerToken(){
+  return localStorage.getItem('VYBERA_BUYER_TOKEN')||localStorage.getItem('VYBERA_CREATOR_TOKEN')||localStorage.getItem('VYBERA_STAFF_TOKEN')||'';
+}
+
 async function loadTicket(bookingId){
   if(!bookingId)return null;
-  var resp=await fetch(apiUrl('/bookings/'+encodeURIComponent(bookingId)+'/ticket'));
+  var token=ticketViewerToken();
+  if(!token)throw new Error('Log in to view this ticket');
+  var resp=await fetch(apiUrl('/bookings/'+encodeURIComponent(bookingId)+'/ticket'),{headers:{Authorization:'Bearer '+token}});
   var data=await readAuthResponse(resp);
   if(!resp.ok)throw new Error(data.error||'Could not load ticket');
   CURRENT_BOOKING=data.booking;
@@ -4238,7 +4246,8 @@ function renderSuccessBooking(booking){
 }
 
 async function loadBuyerBookingHistory(){
-  var token=getProfileIdentityToken();
+  // Tickets belong to buyer accounts only (C6); never send a creator token here.
+  var token=isBuyerSignedIn()?(localStorage.getItem('VYBERA_BUYER_TOKEN')||''):'';
   if(!token)return STORE.bookings;
   try{
     var resp=await fetch(apiUrl('/profile/tickets'),{headers:{Authorization:'Bearer '+token}});

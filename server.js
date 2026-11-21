@@ -3168,57 +3168,30 @@ app.get("/orders/:orderId", requireBuyer, async (req, res) => {
   }
 });
 
+// A buyer's tickets = bookings whose user_id is the buyer's own id.
+// No matching by email: guest bookings (user_id NULL) and staff walk-in sales
+// stay unreachable here, so registering with someone's email reveals nothing (C6).
+const listBuyerTickets = async (userId) => {
+  const result = await pool.query(
+    "SELECT * FROM bookings WHERE user_id=$1 ORDER BY booked_at DESC",
+    [userId],
+  );
+  return Promise.all(result.rows.map(ticketResponse));
+};
+
 app.get("/bookings/mine", requireBuyer, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT *
-       FROM bookings
-       WHERE user_id=$1 OR (user_id IS NULL AND LOWER(buyer_email)=LOWER($2))
-       ORDER BY booked_at DESC`,
-      [req.buyer.sub, req.buyer.email],
-    );
-    const bookings = await Promise.all(
-      result.rows.map(async (booking) => {
-        if (!booking.qr_token) {
-          const updated = await pool.query(
-            "UPDATE bookings SET qr_token=$1 WHERE id=$2 RETURNING *",
-            [crypto.randomBytes(24).toString("hex"), booking.id],
-          );
-          booking = updated.rows[0];
-        }
-        return ticketResponse(booking);
-      }),
-    );
-    res.json({ bookings });
+    res.json({ bookings: await listBuyerTickets(req.buyer.sub) });
   } catch (err) {
     console.error("Buyer booking history failed:", err);
     res.status(500).json({ error: "Could not load booking history" });
   }
 });
 
-app.get("/profile/tickets", requireProfileIdentity, async (req, res) => {
+// Same list; kept because the profile page calls this path.
+app.get("/profile/tickets", requireBuyer, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT b.*
-       FROM bookings b
-       LEFT JOIN users u ON u.id=b.user_id
-       WHERE LOWER(COALESCE(b.buyer_email, u.email, ''))=LOWER($1)
-       ORDER BY b.booked_at DESC`,
-      [req.profileIdentity.email],
-    );
-    const bookings = await Promise.all(
-      result.rows.map(async (booking) => {
-        if (!booking.qr_token) {
-          const updated = await pool.query(
-            "UPDATE bookings SET qr_token=$1 WHERE id=$2 RETURNING *",
-            [crypto.randomBytes(24).toString("hex"), booking.id],
-          );
-          booking = updated.rows[0];
-        }
-        return ticketResponse(booking);
-      }),
-    );
-    res.json({ bookings });
+    res.json({ bookings: await listBuyerTickets(req.buyer.sub) });
   } catch (err) {
     console.error("Profile tickets failed:", err);
     res.status(500).json({ error: "Could not load profile tickets" });
@@ -3242,12 +3215,54 @@ app.get("/profile/creator-events", requireProfileIdentity, async (req, res) => {
   }
 });
 
-app.get("/bookings/:bookingId/ticket", async (req, res) => {
+// Who may see a ticket (and its QR payload): the buyer who owns it, the
+// creator of its event, or staff assigned to its event. Anyone else gets 404
+// (never 403), so booking IDs cannot be probed.
+const requireTicketViewer = async (req, res, next) => {
+  try {
+    const auth = req.headers.authorization || "";
+    const payload = verifyJwt(auth.startsWith("Bearer ") ? auth.slice(7) : "");
+    if (!payload.scope && payload.sub) {
+      const user = await pool.query("SELECT status FROM users WHERE id=$1", [payload.sub]);
+      if (!user.rows.length || !isUserActive(user.rows[0].status)) throw new Error("inactive");
+      req.ticketViewer = { type: "buyer", id: payload.sub };
+    } else if (payload.scope === "creator") {
+      const creator = await pool.query("SELECT kyc_status FROM creator_accounts WHERE id=$1", [payload.sub]);
+      if (!creator.rows.length || creator.rows[0].kyc_status !== "Approved") throw new Error("inactive");
+      req.ticketViewer = { type: "creator", id: payload.sub };
+    } else if (payload.scope === "staff") {
+      const staff = await pool.query("SELECT status FROM staff_accounts WHERE id=$1", [payload.sub]);
+      if (!staff.rows.length || staff.rows[0].status !== "active") throw new Error("inactive");
+      req.ticketViewer = { type: "staff", id: payload.sub };
+    } else {
+      throw new Error("wrong token type");
+    }
+    next();
+  } catch (err) {
+    res.status(401).json({ error: "Login required" });
+  }
+};
+
+app.get("/bookings/:bookingId/ticket", requireTicketViewer, async (req, res) => {
   try {
     const bookingId = String(req.params.bookingId || "").trim();
-    let result = await pool.query("SELECT * FROM bookings WHERE id=$1", [bookingId]);
-    if (!result.rows.length)
-      return res.status(404).json({ error: "Ticket not found" });
+    const viewer = req.ticketViewer;
+    // One query decides access: the row comes back only if this viewer may see it.
+    let result = await pool.query(
+      `SELECT b.* FROM bookings b
+       LEFT JOIN creator_events e ON e.id = b.event_id
+       WHERE b.id = $1
+         AND (
+           ($2 = 'buyer' AND b.user_id::text = $3)
+           OR ($2 = 'creator' AND e.creator_id::text = $3)
+           OR ($2 = 'staff' AND EXISTS (
+                 SELECT 1 FROM staff_assignments sa
+                 WHERE sa.staff_id = $3 AND sa.event_id = b.event_id
+               ))
+         )`,
+      [bookingId, viewer.type, String(viewer.id)],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "Ticket not found" });
     if (!result.rows[0].qr_token) {
       result = await pool.query(
         "UPDATE bookings SET qr_token=$1 WHERE id=$2 RETURNING *",
