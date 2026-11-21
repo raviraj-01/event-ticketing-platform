@@ -2,7 +2,7 @@
 const express = require("express");
 const { OAuth2Client } = require("google-auth-library");
 const {
-  isLocalOtpFallbackAllowed,
+  otpDevMode,
   hasTwilioVerifyConfig,
   assertTwilioConfig,
   createLocalOtpEntry,
@@ -36,9 +36,9 @@ const sendSignupOtp = async (req, res) => {
     if (!/^91\d{10}$/.test(identifier)) {
       return res.status(400).json({ error: "A valid India mobile number with country code is required" });
     }
-    const allowLocalFallback = isLocalOtpFallbackAllowed(req);
+    // Development without Twilio: only with OTP_DEV_MODE=true (M7).
     if (!hasTwilioVerifyConfig()) {
-      if (!allowLocalFallback) {
+      if (!otpDevMode()) {
         assertTwilioConfig();
       }
       const devOtp = createLocalOtpEntry(identifier);
@@ -66,22 +66,7 @@ const sendSignupOtp = async (req, res) => {
     assertProviderSuccess(response, data, "Twilio OTP send failed");
     res.json({ sent: true, identifier, data });
   } catch (err) {
-    console.error("Twilio OTP send failed:", err);
-    const identifier = String((req.body && req.body.identifier) || "").replace(/\D/g, "");
-    if (
-      /^91\d{10}$/.test(identifier) &&
-      isLocalOtpFallbackAllowed(req) &&
-      (err.status === 401 || err.status === 403)
-    ) {
-      const devOtp = createLocalOtpEntry(identifier);
-      return res.json({
-        sent: true,
-        identifier,
-        provider: "local-dev",
-        devOtp,
-        data: { status: "pending", channel: "local-dev", fallback: true },
-      });
-    }
+    // M7: a Twilio error never switches to the development code.
     sendError(res, err, { status: 503, message: "OTP service is unavailable. Please try again later.", log: "Twilio OTP send failed", body: { sent: false } });
   }
 };

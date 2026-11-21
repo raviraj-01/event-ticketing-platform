@@ -15,7 +15,7 @@ signed callbacks the automated tests generate.
    APP_BASE_URL=http://localhost:3003
    ```
    `localhost` is fine: PayU sends the buyer's **browser** back to `APP_BASE_URL/payments/payu/success`, it does not call the server directly.
-3. For the buyer signup OTP without Twilio, local development returns the code on screen.
+3. For the buyer signup OTP without Twilio, set `OTP_DEV_MODE=true` (local only): the code is then shown on screen.
 4. `npm start`, open http://localhost:3003.
 
 ## 2. Data

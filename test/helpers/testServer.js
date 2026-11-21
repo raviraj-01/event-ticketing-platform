@@ -53,8 +53,10 @@ async function startApp(databaseUrl, extraEnv = {}) {
       TWILIO_ACCOUNT_SID: "",
       SMTP_HOST: "",
       SMTP_SERVICE: "",
-      // Admin login code is returned in the response (dev mode, never in production).
+      // Admin login code and signup OTP are returned in the response (dev
+      // mode, never in production).
       ADMIN_OTP_DEV_MODE: "true",
+      OTP_DEV_MODE: "true",
       ...extraEnv,
     }),
     stdio: ["ignore", "pipe", "pipe"],

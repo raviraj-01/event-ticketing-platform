@@ -59,14 +59,10 @@ const assertProviderSuccess = (response, data, fallback) => {
   }
 };
 
-const isLocalOtpFallbackAllowed = (req) => {
-  const host = String(req.hostname || req.headers.host || "").toLowerCase();
-  return (
-    host.includes("localhost") ||
-    host.includes("127.0.0.1") ||
-    host.includes("::1")
-  );
-};
+// M7: development mode puts the OTP in the API response, so it must be an
+// explicit choice, never in production, and never guessed from the request
+// (the old check trusted the Host header, which a proxy can set to localhost).
+const otpDevMode = () => process.env.OTP_DEV_MODE === "true" && process.env.NODE_ENV !== "production";
 
 const pruneLocalOtpStore = () => {
   const now = Date.now();
@@ -135,7 +131,7 @@ const verifySignupOtpToken = async (token, countryCode, phone) => {
 };
 
 module.exports = {
-  isLocalOtpFallbackAllowed,
+  otpDevMode,
   hasTwilioVerifyConfig,
   assertTwilioConfig,
   createLocalOtpEntry,
