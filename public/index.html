@@ -8783,21 +8783,31 @@ async function performRoleStaffRevoke(s){
 }
 
 // ── AUDIT ──
-function admRefreshAudit(){
+// H6: the audit log is stored on the server (GET /admin/audit-log, super admin).
+async function admRefreshAudit(){
   var tbody=document.getElementById('auditBody'); if(!tbody) return;
-  if(!(STORE.adminAuditLog||[]).length){
-    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--adm-text2);padding:24px;">No logs yet</td></tr>';
-    return;
+  tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--adm-text2);padding:24px;">Loading…</td></tr>';
+  try{
+    var resp=await fetch(apiUrl('/admin/audit-log?limit=100'),{headers:adminAuthHeaders()});
+    var data=await readAuthResponse(resp);
+    if(!resp.ok)throw new Error(data.error||'Could not load audit log');
+    var entries=data.entries||[];
+    if(!entries.length){
+      tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--adm-text2);padding:24px;">No logs yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML=entries.map(function(l){
+      var ts=new Date(l.createdAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      var detail=[l.targetType,l.targetId].filter(Boolean).join(' ')+(l.details&&l.details.status?' → '+l.details.status:'');
+      return '<tr>'
+        +'<td><span class="adm-badge blue" style="font-size:9px;">'+escapeHtml(l.action)+'</span></td>'
+        +'<td style="font-size:12px;color:var(--adm-text);">'+escapeHtml(detail||'—')+'</td>'
+        +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(l.adminEmail||'—')+'<div style="font-size:10px;">'+escapeHtml(l.ip||'')+'</div></td>'
+        +'<td style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+escapeHtml(ts)+'</td></tr>';
+    }).join('');
+  }catch(err){
+    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--adm-text2);padding:24px;">'+escapeHtml(err.message||'Could not load audit log')+'</td></tr>';
   }
-  tbody.innerHTML=STORE.adminAuditLog.slice(0,100).map(function(l){
-    var adminName=((STORE.adminUsers||[]).find(function(a){return a.id===l.adminId;})||{}).name||'System';
-    var ts=new Date(l.timestamp).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-    return '<tr>'
-      +'<td><span class="adm-badge blue" style="font-size:9px;">'+escapeHtml(l.action)+'</span></td>'
-      +'<td style="font-size:12px;color:var(--adm-text);">'+escapeHtml(l.detail)+'</td>'
-      +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(adminName)+'</td>'
-      +'<td style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+escapeHtml(ts)+'</td></tr>';
-  }).join('');
 }
 
 

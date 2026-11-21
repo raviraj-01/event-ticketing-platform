@@ -12,6 +12,7 @@ const { OAuth2Client } = require("google-auth-library");
 const { runMigrations } = require("./src/db/migrate");
 const { AUDIENCE, configureTokens, signToken, verifyToken } = require("./src/utils/tokens");
 const { WalletError, staffWallet, requestWithdrawal, recordCashSettlement } = require("./src/services/staffWallet");
+const { recordAdminAction, audited, listAdminActions } = require("./src/services/adminAudit");
 const { parseCookies } = require("./src/utils/cookies");
 const { USER_ACTIVE_STATUS, normalizeUserStatus, isUserActive } = require("./src/utils/accounts");
 const {
@@ -131,6 +132,8 @@ const pool = new Pool({
   ssl: dbSsl,
 });
 const rateLimit = createRateLimiter(pool);
+// H6: log successful admin changes (see src/services/adminAudit.js).
+const audit = (action, describe) => audited(pool, action, describe);
 
 const r2Config = {
   endpoint: process.env.R2_ENDPOINT,
@@ -2001,6 +2004,7 @@ app.post("/admin/login", async (req, res) => {
         "UPDATE super_admin_accounts SET last_login=NOW() WHERE id=$1 RETURNING *",
         [superAdmin.id],
       );
+      await recordAdminAction(pool, req, { action: "login.success", admin: { sub: superAdmin.id, adminType: "super", email } });
       res.json({
         message: "Super admin login successful",
         admin: publicAdmin({
@@ -2022,6 +2026,7 @@ app.post("/admin/login", async (req, res) => {
       admin.status !== "Active" ||
       !(await bcrypt.compare(password, admin.password))
     ) {
+      await recordAdminAction(pool, req, { action: "login.failed", email }).catch(() => {});
       return res.status(401).json({ error: "Invalid admin email or password" });
     }
     if (admin.role === "Super Admin") {
@@ -2043,6 +2048,7 @@ app.post("/admin/login", async (req, res) => {
         ],
       );
       await pool.query("DELETE FROM admin_accounts WHERE id=$1", [admin.id]);
+      await recordAdminAction(pool, req, { action: "login.success", admin: { sub: migrated.rows[0].id, adminType: "super", email } });
       res.json({
         message: "Super admin login successful",
         admin: publicAdmin({
@@ -2058,6 +2064,7 @@ app.post("/admin/login", async (req, res) => {
       "UPDATE admin_accounts SET last_login=NOW() WHERE id=$1 RETURNING *",
       [admin.id],
     );
+    await recordAdminAction(pool, req, { action: "login.success", admin: { sub: admin.id, adminType: "admin", email } });
     res.json({
       message: "Admin login successful",
       admin: publicAdmin(updated.rows[0]),
@@ -2104,7 +2111,7 @@ app.get("/admin/session", requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/admin/accounts", requireAdmin, requireSuperAdmin, async (req, res) => {
+app.post("/admin/accounts", requireAdmin, requireSuperAdmin, audit("admin.create", (req) => ({ targetType: "admin", targetId: req.body && req.body.email })), async (req, res) => {
   try {
     const { name, email, password, role, phone, permissions, notes } =
       req.body || {};
@@ -2160,6 +2167,7 @@ app.patch(
   "/admin/accounts/:adminId/status",
   requireAdmin,
   requireSuperAdmin,
+  audit("admin.status", (req) => ({ targetType: "admin", targetId: req.params.adminId, details: { status: req.body && req.body.status } })),
   async (req, res) => {
     try {
       const adminId = Number(req.params.adminId);
@@ -2191,6 +2199,7 @@ app.delete(
   "/admin/accounts/:adminId",
   requireAdmin,
   requireSuperAdmin,
+  audit("admin.delete", (req) => ({ targetType: "admin", targetId: req.params.adminId })),
   async (req, res) => {
     try {
       const adminId = Number(req.params.adminId);
@@ -2214,7 +2223,7 @@ app.delete(
   },
 );
 
-app.post("/admin/staff", requireAdmin, async (req, res) => {
+app.post("/admin/staff", requireAdmin, audit("staff.create", (req) => ({ targetType: "staff", targetId: req.body && req.body.staffId })), async (req, res) => {
   try {
     const {
       name,
@@ -2282,7 +2291,7 @@ app.post("/admin/staff", requireAdmin, async (req, res) => {
   }
 });
 
-app.delete("/admin/staff/:staffId", requireAdmin, async (req, res) => {
+app.delete("/admin/staff/:staffId", requireAdmin, audit("staff.delete", (req) => ({ targetType: "staff", targetId: req.params.staffId })), async (req, res) => {
   try {
     const staffId = String(req.params.staffId || "").trim();
     if (!staffId) {
@@ -2305,6 +2314,30 @@ app.delete("/admin/staff/:staffId", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Admin staff delete failed:", err);
     res.status(500).json({ error: "Could not delete staff account" });
+  }
+});
+
+// The admin audit log, newest first. ?limit=50&before=<id> for older pages.
+app.get("/admin/audit-log", requireAdmin, requireSuperAdmin, async (req, res) => {
+  try {
+    const rows = await listAdminActions(pool, { limit: req.query.limit, beforeId: req.query.before });
+    res.json({
+      entries: rows.map((row) => ({
+        id: Number(row.id),
+        adminType: row.admin_type,
+        adminId: row.admin_id,
+        adminEmail: row.admin_email,
+        action: row.action,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        details: row.details,
+        ip: row.ip,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error("Audit log load failed:", err);
+    res.status(500).json({ error: "Could not load audit log" });
   }
 });
 
@@ -2447,7 +2480,7 @@ app.get("/admin/snapshot", requireAdmin, async (req, res) => {
   }
 });
 
-app.patch("/admin/events/:eventId/status", requireAdmin, async (req, res) => {
+app.patch("/admin/events/:eventId/status", requireAdmin, audit("event.status", (req) => ({ targetType: "event", targetId: req.params.eventId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const { eventId } = req.params;
     const { status } = req.body || {};
@@ -2474,7 +2507,7 @@ app.patch("/admin/events/:eventId/status", requireAdmin, async (req, res) => {
   }
 });
 
-app.patch("/admin/users/:userId/status", requireAdmin, async (req, res) => {
+app.patch("/admin/users/:userId/status", requireAdmin, audit("user.status", (req) => ({ targetType: "user", targetId: req.params.userId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const rawUserId = String(req.params.userId || "").replace(/^USR-/i, "");
     const userId = Number(rawUserId);
@@ -2544,7 +2577,7 @@ app.get("/admin/creators/:creatorId", requireAdmin, requireSuperAdmin, async (re
   }
 });
 
-app.patch("/admin/creators/:creatorId/documents/:documentId/status", requireAdmin, requireSuperAdmin, async (req, res) => {
+app.patch("/admin/creators/:creatorId/documents/:documentId/status", requireAdmin, requireSuperAdmin, audit("creator.document.status", (req) => ({ targetType: "creator_document", targetId: req.params.documentId, details: { creatorId: req.params.creatorId, status: req.body && req.body.status } })), async (req, res) => {
   try {
     const creatorId = Number(String(req.params.creatorId || "").replace(/^CRT-/i, ""));
     const documentId = Number(req.params.documentId);
@@ -2574,7 +2607,7 @@ app.patch("/admin/creators/:creatorId/documents/:documentId/status", requireAdmi
   }
 });
 
-app.patch("/admin/creators/:creatorId/status", requireAdmin, requireSuperAdmin, async (req, res) => {
+app.patch("/admin/creators/:creatorId/status", requireAdmin, requireSuperAdmin, audit("creator.status", (req) => ({ targetType: "creator", targetId: req.params.creatorId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const rawCreatorId = String(req.params.creatorId || "").replace(/^CRT-/i, "");
     const creatorId = Number(rawCreatorId);
@@ -2615,7 +2648,7 @@ app.patch("/admin/creators/:creatorId/status", requireAdmin, requireSuperAdmin, 
   }
 });
 
-app.patch("/admin/creators/status-by-email", requireAdmin, requireSuperAdmin, async (req, res) => {
+app.patch("/admin/creators/status-by-email", requireAdmin, requireSuperAdmin, audit("creator.status", (req) => ({ targetType: "creator", targetId: req.body && req.body.email, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const email = String((req.body || {}).email || "").trim().toLowerCase();
     const status = String((req.body || {}).status || "").trim();
@@ -2660,7 +2693,7 @@ app.patch("/admin/creators/status-by-email", requireAdmin, requireSuperAdmin, as
   }
 });
 
-app.patch("/admin/staff/:staffId/status", requireAdmin, async (req, res) => {
+app.patch("/admin/staff/:staffId/status", requireAdmin, audit("staff.status", (req) => ({ targetType: "staff", targetId: req.params.staffId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const { staffId } = req.params;
     const { status } = req.body || {};
