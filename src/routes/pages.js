@@ -88,7 +88,8 @@ router.get("/health", async (req, res) => {
       r2: hasR2Config() ? "configured" : "missing",
     });
   } catch (err) {
-    res.status(500).json({ ok: false, database: "error", error: err.message });
+    console.error("Health check failed:", err);
+    res.status(500).json({ ok: false, database: "error" });
   }
 });
 

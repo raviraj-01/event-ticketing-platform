@@ -20,6 +20,7 @@ const { cleanPathSegment, presignR2 } = require("../services/storage");
 const { setTemporaryPassword, ResetError } = require("../services/passwordReset");
 const { listAdminActions } = require("../services/adminAudit");
 const { normalizeUserStatus, USER_ACTIVE_STATUS } = require("../utils/accounts");
+const { sendError } = require("../utils/httpError");
 
 const router = express.Router();
 
@@ -68,10 +69,7 @@ router.post("/admin/accounts", requireAdmin, requireSuperAdmin, confirmed, audit
     if (err && err.code === "23505") {
       return res.status(409).json({ error: "Admin email already exists" });
     }
-    console.error("Admin account create failed:", err);
-    res.status(500).json({
-      error: err && err.message ? `Could not create admin account: ${err.message}` : "Could not create admin account",
-    });
+    sendError(res, err, { message: "Could not create admin account", log: "Admin account create failed" });
   }
 });
 
@@ -196,10 +194,7 @@ router.post("/admin/staff", requireAdmin, audit("staff.create", (req) => ({ targ
         .status(409)
         .json({ error: "Staff login ID or share link already exists" });
     }
-    console.error("Admin staff create failed:", err);
-    res.status(500).json({
-      error: err && err.message ? `Could not create staff account: ${err.message}` : "Could not create staff account",
-    });
+    sendError(res, err, { message: "Could not create staff account", log: "Admin staff create failed" });
   }
 });
 

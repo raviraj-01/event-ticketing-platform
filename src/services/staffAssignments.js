@@ -1,6 +1,7 @@
 // Allocate tier inventory to a staff member inside the caller's transaction
 // (locks the event row so two allocations can't oversell a tier).
 const crypto = require("crypto");
+const { HttpError } = require("../utils/httpError");
 
 const createStaffAssignment = async (
   client,
@@ -19,11 +20,11 @@ const createStaffAssignment = async (
 ) => {
   const cleanQty = Number(qty);
   if (!Number.isInteger(cleanQty) || cleanQty < 1)
-    throw new Error("Enter a valid ticket quantity");
+    throw new HttpError(400, "Enter a valid ticket quantity");
   // Q5b: staff resale ("staff_owned") is out of scope for now; only
   // commission-based selling for the creator is allowed.
   if (String(allocationMode || mode || "creator_quota") === "staff_owned") {
-    throw new Error("Staff resale is not available yet");
+    throw new HttpError(400, "Staff resale is not available yet");
   }
   const cleanMode = "creator_quota";
   const cleanCommissionRate = Math.max(0, Number(commissionRate || 0));
@@ -31,19 +32,19 @@ const createStaffAssignment = async (
     "SELECT id FROM staff_accounts WHERE id=$1 AND creator_id=$2",
     [staffId, creatorId],
   );
-  if (!staff.rows.length) throw new Error("Staff member not found");
+  if (!staff.rows.length) throw new HttpError(400, "Staff member not found");
   const event = await client.query(
     "SELECT * FROM creator_events WHERE id=$1 AND creator_id=$2 FOR UPDATE",
     [eventId, creatorId],
   );
-  if (!event.rows.length) throw new Error("Creator event not found");
+  if (!event.rows.length) throw new HttpError(400, "Creator event not found");
   const tickets = Array.isArray(event.rows[0].tickets)
     ? event.rows[0].tickets
     : [];
   const tier = tickets.find((ticket) => ticket.name === tierName);
-  if (!tier) throw new Error("Ticket tier not found");
+  if (!tier) throw new HttpError(400, "Ticket tier not found");
   if (Number(tier.qty || 0) < cleanQty)
-    throw new Error("Not enough tickets available");
+    throw new HttpError(400, "Not enough tickets available");
   const basePrice = Number(tier.price || 0);
   const cleanPurchasePrice =
     Number.isFinite(Number(purchasePrice)) && Number(purchasePrice) >= 0

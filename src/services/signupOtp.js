@@ -1,6 +1,7 @@
 // Signup phone verification: Twilio Verify, a local-development fallback
 // (M7), and the short-lived token that proves a phone was verified.
 const { signToken, AUDIENCE, verifyToken } = require("../utils/tokens");
+const { HttpError } = require("../utils/httpError");
 
 const hasTwilioVerifyConfig = () =>
   process.env.TWILIO_ACCOUNT_SID &&
@@ -30,20 +31,29 @@ const providerErrorMessage = (data, fallback) => {
   return data.message || data.error || data.error_message || data.description || fallback;
 };
 
+// Server-side problems (missing config, our Twilio credentials rejected,
+// Twilio down) are internal errors: logged, never shown to the user (M5).
 const assertTwilioConfig = () => {
   if (!hasTwilioVerifyConfig()) {
     const err = new Error(
       "OTP service is not configured. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_VERIFY_SERVICE_SID to .env, then restart the server.",
     );
-    err.status = 500;
+    err.status = 503;
     throw err;
   }
 };
 
 const assertProviderSuccess = (response, data, fallback) => {
   if (!response.ok || data.error || data.error_message) {
-    const err = new Error(providerErrorMessage(data, fallback));
-    err.status = response.ok ? 400 : response.status;
+    const status = response.ok ? 400 : response.status;
+    const detail = providerErrorMessage(data, fallback);
+    if (status === 429) throw new HttpError(429, "Too many attempts. Please try again later.");
+    if (status === 400 || status === 404) {
+      console.warn(`${fallback} (${status}):`, detail);
+      throw new HttpError(400, "That number or code was not accepted. Please check it and try again.");
+    }
+    const err = new Error(`${fallback} (${status}): ${detail}`);
+    err.status = status; // the local-dev fallback looks at 401/403
     throw err;
   }
 };
@@ -89,17 +99,20 @@ const verifyLocalOtpEntry = (identifier, otp) => {
 const makeSignupOtpToken = (identifier) =>
   signToken({ identifier }, { audience: AUDIENCE.signupOtp, expiresInSeconds: 10 * 60 });
 
+// A bad, expired or mismatched token is the user's problem (400), not a
+// server error (M5; it used to answer 500).
 const verifySignupOtpToken = async (token, countryCode, phone) => {
   const identifier = `${String(countryCode || "+91").replace(/\D/g, "")}${String(phone || "").replace(/\D/g, "")}`;
+  let payload;
   try {
-    const payload = await verifyToken(token, { audience: AUDIENCE.signupOtp });
-    if (payload.identifier !== identifier) {
-      throw new Error("OTP verification does not match this phone number");
-    }
-    return payload;
+    payload = await verifyToken(token, { audience: AUDIENCE.signupOtp });
   } catch (err) {
-    throw err;
+    throw new HttpError(400, "Phone verification expired. Please verify your number again.");
   }
+  if (payload.identifier !== identifier) {
+    throw new HttpError(400, "Phone verification does not match this phone number");
+  }
+  return payload;
 };
 
 module.exports = {

@@ -11,12 +11,17 @@ const { pruneRateLimitHits } = require("./src/middleware/rateLimit");
 const { expireStaleOrders } = require("./src/services/orders");
 const app = require("./src/app");
 
+// A stray rejected promise is logged; request handlers' own errors go to the
+// error handler in src/app.js.
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled async error:", err);
 });
 
+// M5: after an uncaught exception the process may be in a broken state, so
+// log it and exit; the host (Render) starts a fresh one.
 process.on("uncaughtException", (err) => {
-  console.error("Uncaught server error:", err);
+  console.error("Uncaught server error, exiting:", err);
+  process.exit(1);
 });
 
 // Startup order: schema migrations → data fix-ups → accept requests.

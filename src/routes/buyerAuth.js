@@ -22,6 +22,7 @@ const { USER_NOT_FOUND_ERROR, publicUser } = require("../utils/serializers");
 const { startSession } = require("../services/sessions");
 const { requireBuyer } = require("../middleware/auth");
 const { payablePhone } = require("../services/orders");
+const { sendError, HttpError } = require("../utils/httpError");
 
 const router = express.Router();
 
@@ -80,7 +81,7 @@ const sendSignupOtp = async (req, res) => {
         data: { status: "pending", channel: "local-dev", fallback: true },
       });
     }
-    res.status(err.status || 500).json({ sent: false, error: err.message || "Twilio OTP send failed" });
+    sendError(res, err, { status: 503, message: "OTP service is unavailable. Please try again later.", log: "Twilio OTP send failed", body: { sent: false } });
   }
 };
 
@@ -115,8 +116,7 @@ const verifySignupOtp = async (req, res) => {
     }
     res.json({ verified: true, accessToken: await makeSignupOtpToken(identifier), data });
   } catch (err) {
-    console.error("Twilio OTP verification failed:", err);
-    res.status(err.status || 500).json({ verified: false, error: err.message || "Twilio OTP verification failed" });
+    sendError(res, err, { status: 503, message: "OTP service is unavailable. Please try again later.", log: "Twilio OTP verification failed", body: { verified: false } });
   }
 };
 
@@ -136,8 +136,7 @@ const verifySignupOtpAccessToken = async (req, res) => {
     }
     res.json({ verified: true, data: payload });
   } catch (err) {
-    console.error("OTP token verification failed:", err);
-    res.status(err.status || 500).json({ verified: false, error: err.message || "OTP token verification failed" });
+    sendError(res, err, { message: "OTP token verification failed", log: "OTP token verification failed", body: { verified: false } });
   }
 };
 
@@ -200,11 +199,10 @@ router.post("/signup", async (req, res) => {
     );
     res.json({ message: "Signup successful", user: result.rows[0] });
   } catch (err) {
-    console.error(err);
     if (err.code === "23505") {
       return res.status(409).json({ error: "An account with this email already exists" });
     }
-    res.status(500).json({ error: "Signup failed" });
+    sendError(res, err, { message: "Signup failed", log: "Signup failed" });
   }
 });
 
@@ -216,9 +214,7 @@ async function upsertGoogleBuyer({ name, email, photoURL }) {
   const cleanEmail = String(email || "").trim().toLowerCase();
   const cleanName = String(name || "Google User").trim() || "Google User";
   if (!cleanEmail) {
-    const err = new Error("Google account did not return an email address");
-    err.statusCode = 400;
-    throw err;
+    throw new HttpError(400, "Google account did not return an email address");
   }
   const parts = cleanName.split(/\s+/);
   const firstName = parts.shift() || cleanName;
@@ -228,9 +224,7 @@ async function upsertGoogleBuyer({ name, email, photoURL }) {
     [cleanEmail],
   );
   if (existing.rows.length && !isUserActive(existing.rows[0].status)) {
-    const err = new Error(USER_NOT_FOUND_ERROR);
-    err.statusCode = 404;
-    throw err;
+    throw new HttpError(404, USER_NOT_FOUND_ERROR);
   }
   const upsert = await pool.query(
     `INSERT INTO users (username, first_name, last_name, email, password, auth_provider, profile_image_url)
@@ -284,8 +278,7 @@ router.post("/auth/google", async (req, res) => {
       ...(await startSession(pool, req, res, { role: "buyer", accountId: user.id })),
     });
   } catch (err) {
-    console.error("Google login failed:", err);
-    res.status(err.statusCode || 500).json({ error: err.message || "Google login failed" });
+    sendError(res, err, { message: "Google login failed", log: "Google login failed" });
   }
 });
 

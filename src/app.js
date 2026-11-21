@@ -6,6 +6,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const { publicDir, uploadsDir } = require("./config");
 const { corsMiddleware, openerPolicy, blockCrossSiteCookieRequests } = require("./middleware/security");
+const { sendError } = require("./utils/httpError");
 
 const app = express();
 // Number of reverse proxies in front of the app (Render: 1). Needed so req.ip is
@@ -39,5 +40,15 @@ app.use(require("./routes/orders"));
 app.use(require("./routes/tickets"));
 app.use(require("./routes/buyerAuth"));
 app.use(require("./routes/auth"));
+
+// M5: last stop for errors no route handled (Express 5 also sends rejected
+// async handlers here). Without it Express answers with an HTML stack trace
+// whenever NODE_ENV is not "production".
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err.type === "entity.parse.failed") return res.status(400).json({ error: "Invalid request body" });
+  if (err.type === "entity.too.large") return res.status(413).json({ error: "Request body is too large" });
+  sendError(res, err, { log: `Unhandled error on ${req.method} ${req.path}` });
+});
 
 module.exports = app;

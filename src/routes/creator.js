@@ -27,6 +27,7 @@ const { staffWallet, recordCashSettlement, WalletError } = require("../services/
 const { setTemporaryPassword } = require("../services/passwordReset");
 const { createStaffAssignment } = require("../services/staffAssignments");
 const { readPage, pageOf } = require("../utils/paging");
+const { sendError } = require("../utils/httpError");
 
 const router = express.Router();
 
@@ -397,8 +398,7 @@ router.post("/creator/events", requireCreator, async (req, res) => {
       event: publicCreatorEvent(result.rows[0]),
     });
   } catch (err) {
-    console.error("Creator event publish failed:", err);
-    res.status(500).json({ error: err.message || "Event publish failed" });
+    sendError(res, err, { message: "Event publish failed", log: "Creator event publish failed" });
   }
 });
 
@@ -633,10 +633,9 @@ router.post("/creator/staff", requireCreator, async (req, res) => {
     });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Creator staff create failed:", err);
     if (err.code === "23505")
       return res.status(409).json({ error: "Staff login ID is already taken" });
-    res.status(400).json({ error: err.message || "Could not add staff" });
+    sendError(res, err, { message: "Could not add staff", log: "Creator staff create failed" });
   } finally {
     client.release();
   }
@@ -671,10 +670,7 @@ router.post(
       });
     } catch (err) {
       await client.query("ROLLBACK");
-      console.error("Creator staff assignment failed:", err);
-      res
-        .status(400)
-        .json({ error: err.message || "Could not assign tickets" });
+      sendError(res, err, { message: "Could not assign tickets", log: "Creator staff assignment failed" });
     } finally {
       client.release();
     }

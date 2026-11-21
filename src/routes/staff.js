@@ -19,6 +19,7 @@ const { requireStaff } = require("../middleware/auth");
 const { eventSalesClosed, isEventBookable } = require("../utils/events");
 const crypto = require("crypto");
 const { ticketResponse } = require("../services/tickets");
+const { HttpError, sendError } = require("../utils/httpError");
 
 const router = express.Router();
 
@@ -213,7 +214,7 @@ router.post("/staff/sales", requireStaff, async (req, res) => {
       "SELECT * FROM staff_accounts WHERE id=$1 AND status='active' FOR UPDATE",
       [req.staff.sub],
     );
-    if (!staff.rows.length) throw new Error("Staff account not found");
+    if (!staff.rows.length) throw new HttpError(400, "Staff account not found");
     const assignment = await client.query(
       `SELECT a.*, e.event_date, e.venue, e.banner_url, e.status AS event_status
        FROM staff_assignments a
@@ -222,15 +223,16 @@ router.post("/staff/sales", requireStaff, async (req, res) => {
        FOR UPDATE OF a`,
       [assignmentId, req.staff.sub],
     );
-    if (!assignment.rows.length) throw new Error("Assigned tickets not found");
+    if (!assignment.rows.length) throw new HttpError(400, "Assigned tickets not found");
     const assigned = assignment.rows[0];
     if (eventSalesClosed(assigned) || !isEventBookable(assigned.event_status)) {
-      throw new Error(EVENT_NOT_FOUND_ERROR);
+      throw new HttpError(400, EVENT_NOT_FOUND_ERROR);
     }
     const remaining =
       Number(assigned.qty || 0) - Number(assigned.sold_count || 0);
     if (cleanQty > remaining)
-      throw new Error(
+      throw new HttpError(
+        400,
         `Only ${remaining} tickets are available in this assignment`,
       );
     const id = `SLS-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
@@ -240,7 +242,7 @@ router.post("/staff/sales", requireStaff, async (req, res) => {
         ? "staff_owned"
         : "creator_quota";
     // Q5b: older resale assignments cannot be sold from while resale is disabled.
-    if (assignmentMode === "staff_owned") throw new Error("Staff resale is not available yet");
+    if (assignmentMode === "staff_owned") throw new HttpError(400, "Staff resale is not available yet");
     const salePrice =
       assignmentMode === "staff_owned"
         ? Number(assigned.resale_price || assigned.price || 0)
@@ -339,8 +341,7 @@ router.post("/staff/sales", requireStaff, async (req, res) => {
     });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Staff sale failed:", err);
-    res.status(400).json({ error: err.message || "Could not sell ticket" });
+    sendError(res, err, { message: "Could not sell ticket", log: "Staff sale failed" });
   } finally {
     client.release();
   }
