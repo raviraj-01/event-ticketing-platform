@@ -53,7 +53,8 @@ Verified against the code on 2026-11-21:
 2. `npm install`
 3. Copy `.env.example` to `.env` and fill it in. **Required:** `DATABASE_URL`, `JWT_SECRET` (the server exits without them).
 4. `npm start` → http://localhost:3003. `GET /health` checks the DB.
-5. Tables are created and altered automatically on startup (`initDb`, `server.js:750`). There is no migration tool yet.
+5. Schema = SQL files in `migrations/` (node-pg-migrate). The server runs pending migrations automatically **before** it starts listening; `npm run migrate` runs them by hand. Applied migrations are recorded in table `pgmigrations`.
+6. **New DB change = new file** `migrations/NNNN_description.sql` with `-- Up Migration` / `-- Down Migration` sections. Never edit an applied migration, and never add startup `ALTER`s.
 
 **Environment variables read by the code** (names only):
 `PORT, APP_BASE_URL, JWT_SECRET, DATABASE_URL, SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD, R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, GOOGLE_CLIENT_ID, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID, TWILIO_VERIFY_CHANNEL, SMTP_SERVICE, SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM, PASSWORD_RESET_TTL_MINUTES, PAYU_KEY, PAYU_SALT, PAYU_ENV`.
@@ -93,7 +94,9 @@ Reference: what each variable does.
 ## Architecture
 
 ```
-server.js            everything: config, JWT, middleware, R2 presign, initDb (schema), ~63 routes
+server.js            config, JWT, middleware, R2 presign, routes, startup (migrate → initDb data fix-ups → listen)
+migrations/          versioned SQL migrations (node-pg-migrate)
+src/db/migrate.js    migration runner (used at startup and by npm run migrate)
 public/index.html    live web SPA (was vybera_26.html; all roles in one page, "pages" toggled by showPage)
 public/firebaseconfig.js  Firebase Google sign-in helper (ES module, CDN imports)
 public/assets/       logos (BLAK Tickets)
@@ -115,7 +118,7 @@ vybera-cordova/      Cordova Android project; www/ is generated, never edit it
 - `staff_assignments`: tier inventory allocated to staff. `allocation_mode` is `creator_quota` (staff earns a commission) or `staff_owned` (staff resells), with `commission_rate`, `purchase_price`, `resale_price`, `sold_count`.
 - `staff_sales` and `staff_withdrawals`.
 - `payment_transactions`: PK `txnid` (**client-chosen**). Holds the PayU status and a `verified` flag. Not linked to bookings by any constraint.
-- **No indexes** beyond PKs/UNIQUEs. **No migrations table.**
+- **No indexes** beyond PKs/UNIQUEs (M2). Schema history: `migrations/` (`0001_baseline.sql` = the old startup schema, unchanged).
 
 ## Frontend consolidation (M14), done 2026-11-21
 **Single source:** `public/index.html` (was `vybera_26.html`). The Cordova app's `vybera-cordova/www/` is **generated** by `npm run build:cordova` (`scripts/build-cordova.js`, requires `CORDOVA_API_BASE=https://…`). Never edit `www/` by hand.
@@ -155,6 +158,7 @@ vybera-cordova/      Cordova Android project; www/ is generated, never edit it
 |---|---|---|
 | `POST /bookings/scan` runs in a transaction with `SELECT … FOR UPDATE OF b`, checks the staff assignment, returns 403 (wrong event) / 409 (duplicate or refunded), and sets `scanned_at` | Two gates scanning the same QR at once: the second waits on the row lock, then sees `scanned_at` and gets 409. Only one entry. | Holds a row lock for the scan transaction (milliseconds). Whole booking (all qty) is admitted in one scan. |
 | `qr_token = crypto.randomBytes(18)` (144 bits) | Unguessable, so a QR can't be forged even if the booking ID is known | Backfills in `/bookings/mine` use 24 bytes, which is inconsistent but harmless |
+| Versioned plain-SQL migrations run before `listen` | Every schema change is reviewable SQL with history; the app never serves requests on an old schema | Startup fails (by design) if a migration fails; a bad migration needs a new fixing migration |
 | `requireAdmin` / `requireStaff` re-check account status in the DB on every request | A suspended account loses access immediately | One extra query per request |
 | Twilio Verify issues a 10-minute, phone-bound signup token | The OTP state lives at Twilio; the server only signs "this phone was verified" | Token is reusable within 10 minutes (M17) |
 
@@ -196,7 +200,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 ### Medium
 | ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
 |---|---|---|---|---|---|---|---|---|
-| M1 | Medium | DB/startup | `server.js:1024-1076` | `initDb()` runs **after** `app.listen` starts accepting requests (race on first boot). Every boot deletes `admin_accounts` rows with role 'Super Admin' and **overwrites the super admin password** from env. | Super admin password changes are silently reverted on restart; a startup DELETE runs against live data. | Open | Versioned migrations (node-pg-migrate) run before listen; bootstrap the super admin only if none exists. | – |
+| M1 | Medium | DB/startup | `server.js:1024-1076` | `initDb()` runs **after** `app.listen` starts accepting requests (race on first boot). Every boot deletes `admin_accounts` rows with role 'Super Admin' and **overwrites the super admin password** from env. | Super admin password changes are silently reverted on restart; a startup DELETE runs against live data. | Partly fixed | Schema moved to `migrations/` and the server listens only after migrations succeed (no more request-before-table race). **Still open:** super-admin bootstrap overwrites the password from env on every boot and deletes legacy rows. | see change log
 | M2 | Medium | DB perf | (no `CREATE INDEX` anywhere) | Ravi#9 (indexes): confirmed missing: `bookings(event_id)`, `bookings(user_id)`, `bookings(LOWER(buyer_email))`, `staff_assignments(staff_id, event_id)`, `staff_sales(staff_id)`, `staff_sales(booking_id)`, `creator_events(creator_id)`, `payment_transactions(booking_id)`. | Full table scans on every dashboard and analytics query. | Open | One migration adding them. | – |
 | M3 | Medium | DB integrity | `server.js:752-1007`, `4338`, `2086` | `bookings.event_id` has no FK. No `CHECK (qty>0, price>=0)`. `status` columns are free text. Email UNIQUE is case-sensitive while lookups use `LOWER()`. `users.phone` is not unique (phone login bcrypt-compares *every* matching row). Staff email/phone are login identifiers but not unique (`LIMIT 1` picks an arbitrary one). | Inconsistent data, ambiguous logins, slow logins. | Open | Migration: FK, CHECKs, `UNIQUE (LOWER(email))`, decide phone uniqueness (Q). Check existing data first. | – |
 | M4 | Medium | API | `/events` 1558, `/admin/snapshot` 2893, `/bookings/mine` 3788, `/profile/tickets` 3816, `/creator/staff` 1698, `/staff/dashboard` 2221 | Ravi#9 (pagination): no list endpoint paginates. The snapshot dumps **all** users, bookings, payments and staff in one response. Ticket lists render a QR PNG per booking per request. | Slow, memory-heavy, and exposes too much at once. | Open | `limit`/`cursor` params; split the snapshot into per-tab endpoints. | – |
@@ -261,6 +265,7 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 | 2026-11-21 | Created CLAUDE.md with the Phase 0 inventory and Phase 1 audit. Added `.env.*` (except `.env.example`) to `.gitignore`. | Ravi's audit request; prevent committing env variants. |
 | 2026-11-21 | Fresh repo `ticketing-app/` (baseline `f915baf`), copied from the working tree without `.git`/`.env`. Scanned the copy: no live secret value is present in any file. | Remove `.env` from our history without rewriting the collaborator's remotes (D2). |
 | 2026-11-21 | H1: only `public/` is served; app HTML is now `public/index.html` (alias `/vybera_26.html` kept). L2 favicon path fixed. | Source code and CLAUDE.md were publicly downloadable (D8). |
+| 2026-11-21 | Versioned SQL migrations (node-pg-migrate 9). `0001_baseline.sql` holds the old startup schema verbatim; startup is now migrate → data fix-ups → listen. Added `embedded-postgres` (dev) for real-Postgres integration tests. | Ravi's rule: DB changes as migrations (needed by C4); M1 startup race. |
 | 2026-11-21 | C5: deleted 4 unauthenticated upload routes; all uploads validated by magic bytes, 5 MB cap, safe extensions; KYC R2-only; `/uploads` nosniff. | Anyone could host HTML on our domain (token theft) or overwrite avatars. |
 | 2026-11-21 | C3: removed `/social-login`; all Google sign-in paths send a verified Google ID token to `/auth/google`; forged tokens get 401. | Anyone could log in as any buyer by sending their email. |
 | 2026-11-21 | C2: removed the unverified legacy reset route; UI uses the emailed token flow (new reset-link handler). | Anyone could reset any account, including super admin. |
