@@ -120,6 +120,38 @@ vybera-cordova/      Cordova Android project; www/ = app bundle (forked index.ht
 - `payment_transactions`: PK `txnid` (**client-chosen**). Holds the PayU status and a `verified` flag. Not linked to bookings by any constraint.
 - **No indexes** beyond PKs/UNIQUEs. **No migrations table.**
 
+## Frontend consolidation (M14), done 2026-11-21
+**Single source:** `public/index.html` (was `vybera_26.html`). The Cordova app's `vybera-cordova/www/` is **generated** by `npm run build:cordova` (`scripts/build-cordova.js`, requires `CORDOVA_API_BASE=https://…`). Never edit `www/` by hand.
+
+**How platform differences are kept:**
+- App-only CSS lives in `<style data-platform="app" media="not all">` blocks, placed at the same cascade position they had in the old Cordova file. The build script flips them to `media="all"`, so web styling is unchanged and the APK keeps its black/grey palette and mobile layout.
+- App-only head scripts (`cordova.js`, `window.VYBERA_API_BASE`) are injected at the `<!-- CORDOVA_HEAD_INJECT … -->` marker.
+- App-only JS stays behind `window.cordova` checks, so it is inert on web.
+
+**Ported from the Cordova copy (now on both platforms):**
+1. App palette (`--purple/--neon/--grey/--muted/--brick/--teal`) as an app-only `:root` override.
+2. APK mobile layout CSS (`@media(max-width:700px)` block: bottom nav, creator nav, KPI grid, create-event, venue map, category grid), app-only.
+3. Page/logo enter animations (`bltPageEnter`, `bltLogoEnter`), app-only.
+4. Admin panel mobile CSS (admin modal contrast, tables, bottom-sheet modals), app-only.
+5. PayU checkout inside InAppBrowser: `getPayUPendingBooking`, `handlePayUInAppResult`, `submitPayUFormInAppBrowser`, `submitCheckoutOnce`, plus the cordova branch in `submitPayUForm` (to be revisited in C4).
+6. Creator dashboard KPI trend texts (real numbers instead of placeholders).
+7. Admin: suspend/reinstate creator now **calls the API** (`admSetCreatorStatus`, `admReinstateCreator`). On web it previously changed only local state, which was a bug. `(admCreatorsList||[])` null-safety.
+8. Admin: staff "pending" badge (yellow).
+9. Admin: working permission toggles in the invite form (`_adminPerms`, `toggleAdminPerm`, `setAdminPermState`, role-aware `admShowRolePerms`).
+10. Admin: `bindInviteCreateButton` defined before use and bound on `DOMContentLoaded` + `deviceready`.
+11. Add-staff form: inline error box (`#addStaffError`, `setAddStaffError`), auto-generated temporary password, submit button disabled while saving.
+12. Scanner: `#scannerLaunchOverlay`, `syncScannerViewportState`, Android camera permission request via `cordova.plugins.permissions`, WebView-specific messages.
+13. Android back button: `closeActiveAppOverlay` + `handleCordovaBackButton` (`backbutton` event; only fires in Cordova).
+14. Admin-login section comments changed from HTML `<!-- -->` to JS `//` inside the script block.
+
+**Deliberately NOT ported:**
+- Manual-UPI deep-link launch changes (`intent://pay…`, InAppBrowser `_system`): manual UPI is removed in C4 (decision D3).
+- `console.log` lines that printed whole bookings (debug noise, leaks data to logcat).
+- The APK's Google sign-in variant (system-browser polling of `/google-token/fetch`, `/social-login`, "local database sign-in" fallback): `/social-login` is removed in C3. The APK now runs the web code path until C3 replaces it with a verified ID-token flow.
+- APK `firebaseconfig.js`: the web version is the source (superset). Both contain the **client's** Firebase/OAuth IDs (see branding list); the web copy's `oauthClientId` is truncated, so in-app Google OAuth via that helper is broken on both until C3.
+
+**Verified:** inline scripts parse (0 syntax errors); web page loads with no console errors and the web palette; app blocks are off on web and switch the palette when enabled; the generated `www/index.html` differs from the old Cordova copy only in the items listed above.
+
 ## Key design decisions (existing, keep)
 
 | Decision | Reason | Trade-off |
@@ -147,7 +179,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 ### High
 | ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
 |---|---|---|---|---|---|---|---|---|
-| H1 | High | Static files | `server.js:61-62` | `express.static(__dirname)` serves the whole project root: `/server.js`, `/prev`, `/package.json`, `/README.md`, `/VYBERA.html`, `/vybera-cordova/www/server.js`, … (`.env` is safe only because dotfiles are ignored by default). | Full backend source disclosure. Attackers read every route and query. **This CLAUDE.md would also be public once deployed**, so do not deploy it before H1 is fixed. | Fixed | Moved browser files to `public/` (`vybera_26.html` → `public/index.html`, `firebaseconfig.js`, `assets/`); `express.static(publicDir, {index:false})`; removed the `/VYBERA` mount and the explicit firebaseconfig route. Verified: source files, CLAUDE.md, `.env` → 404. | see git log `fix(static)` |
+| H1 | High | Static files | `server.js:61-62` | `express.static(__dirname)` serves the whole project root: `/server.js`, `/prev`, `/package.json`, `/README.md`, `/VYBERA.html`, `/vybera-cordova/www/server.js`, … (`.env` is safe only because dotfiles are ignored by default). | Full backend source disclosure. Attackers read every route and query. **This CLAUDE.md would also be public once deployed**, so do not deploy it before H1 is fixed. | Fixed | Moved browser files to `public/` (`vybera_26.html` → `public/index.html`, `firebaseconfig.js`, `assets/`); `express.static(publicDir, {index:false})`; removed the `/VYBERA` mount and the explicit firebaseconfig route. Verified: source files, CLAUDE.md, `.env` → 404. | `d06d580` |
 | H2 | High | Auth | `server.js:4454` | Ravi#4. Reset token is reusable for its whole TTL; it is a stateless JWT tied only to the email. | A leaked or forwarded link can be reused after you change your password. | Open | Add a `users.password_version` column (migration), include it in the token, check it and increment it on reset (also invalidates sessions, ties in with H5). | – |
 | H3 | High | OTP/Cost | `server.js:4052` (routes `4163-4168`, duplicated as `/otp/msg91/*`) | Ravi#5. No rate limit on OTP send. Partly mitigated: only `+91` numbers are accepted, and Twilio Verify has per-number limits plus Fraud Guard. | SMS pumping, Twilio bill, and spamming a victim's phone. | Open | Limit per phone (e.g. 3 per 10 min) and per IP (e.g. 10 per hour), stored in Postgres (no Redis yet). Remove the duplicate `/otp/msg91/*` aliases if unused (the UI uses only `/otp/twilio/*`). | – |
 | H4 | High | Auth | `server.js:409` (also `requireScanIdentity` `543`, `requireProfileIdentity` `582`) | Ravi#6. `requireCreator` checks only the token, never `kyc_status` in the DB. | A suspended or rejected creator keeps full access (events, staff, finance, scanning) for up to 30 days. | Open | Same DB check as `requireAdmin`: creator exists and `kyc_status='Approved'`. | – |
@@ -180,7 +212,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 | M11 | Medium | DoS | `server.js:56` | 30 MB JSON body limit on every route, including unauthenticated ones; files are uploaded as base64 inside JSON. | Memory exhaustion with a few parallel requests. | Open | Small global limit (e.g. 100 KB); a larger limit only on authenticated upload routes (or switch uploads to multipart/presigned). | – |
 | M12 | Medium | Auth (APK) | `server.js:1092-1108`; `vybera_26.html:6962`, `7019-7040` | Google token relay: unauthenticated store/fetch of `{token, profile}` under any code; the APK accepts whatever it fetches. InAppBrowser `executeScript` reads `localStorage` from the browser tab. | Session-fixation style attacks; fragile login. | Open | Replace with the googleplus plugin `idToken` → `/auth/google`, then delete the relay. | – |
 | M13 | Medium | Passwords | `4190` (buyer: no minimum), `4460`/`2700`/`1844` (6 characters) | Weak or inconsistent password policy; temporary passwords never have to be changed. | Weak accounts. | Open | Minimum 8 everywhere, `must_change_password` for temporary passwords. | – |
-| M14 | Medium | Frontend | `vybera_26.html`, `vybera-cordova/www/index.html`, `VYBERA.html` | Three diverged copies. The Cordova copy has features web lacks (`admReinstateCreator`, admin permissions, InAppBrowser PayU, back button, `submitCheckoutOnce`); web has Google Identity Services, which Cordova lacks. `VYBERA.html` is dead but served. | Every fix must be made 2-3 times, and the copies drift apart. | Open | Consolidate into one source HTML + a tiny copy script that injects the Cordova config into `www/index.html` (Q9). | – |
+| M14 | Medium | Frontend | `vybera_26.html`, `vybera-cordova/www/index.html`, `VYBERA.html` | Three diverged copies. The Cordova copy has features web lacks (`admReinstateCreator`, admin permissions, InAppBrowser PayU, back button, `submitCheckoutOnce`); web has Google Identity Services, which Cordova lacks. `VYBERA.html` is dead but served. | Every fix must be made 2-3 times, and the copies drift apart. | Fixed | Merged into `public/index.html` + `scripts/build-cordova.js`; see "Frontend consolidation (M14)". | see change log
 | M15 | Medium | Hardening | `server.js` (no `helmet`, no `trust proxy`) | No CSP, HSTS or `nosniff`. Without `trust proxy`, `req.protocol` is `http` behind Render (share URLs come out as `http://`), while PayU `surl` is hard-coded to `https` (breaks local testing). | Weaker browser defences; broken links. | Open | `helmet` + CSP, `app.set('trust proxy', 1)`, build URLs from `APP_BASE_URL`. | – |
 | M16 | Medium | Finance PIN | `server.js:2504` | The first PIN anyone submits becomes the creator's finance PIN; it's 4 digits with no attempt limit. | Anyone holding a creator token can brute-force it in at most 10,000 tries. | Open | Set the PIN through an explicit flow, add an attempt limit and lockout. | – |
 | M17 | Medium | Signup | `server.js:4036`, `4171` | The OTP token is reusable within 10 min, and the phone is not unique, so one OTP can create several accounts. | Fake account creation. | Open | One-time use (store a jti), decide phone uniqueness. | – |
@@ -191,7 +223,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 | ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
 |---|---|---|---|---|---|---|---|---|
 | L1 | Low | Abuse | `server.js:1162` `/qr` | Ravi#10. Public endpoint renders any text as a QR (CPU, free QR service). It is only used for the staff share link (`vybera_26.html:2964`). | Minor abuse. | Open | Generate the share QR client-side or only for own share URLs; length cap + rate limit. | – |
-| L2 | Low | Bug | `server.js:59` | Favicon route points to `assets/blak-tickets-logo.svg`; the file is actually `blak-ticket-logo.svg`. | 404 / error log on every page load. | Fixed | Path corrected while moving assets (part of the H1 commit). | see git log `fix(static)` |
+| L2 | Low | Bug | `server.js:59` | Favicon route points to `assets/blak-tickets-logo.svg`; the file is actually `blak-ticket-logo.svg`. | 404 / error log on every page load. | Fixed | Path corrected while moving assets (part of the H1 commit). | `d06d580` |
 | L3 | Low | Cleanup | `prev`, `VYBERA.html` | An old server copy and an old frontend copy are tracked and publicly served. | Confusion, source disclosure (H1). | Open | Delete (ask first). | – |
 | L4 | Low | JWT | `server.js:161-202` | Ravi#11. The hand-written JWT is actually implemented safely (fixed HS256, timing-safe compare, exp checked), but it has no `iss`/`aud`, and one secret serves session, reset and OTP tokens (only `scope` separates them). | Token-confusion risk (see H12). | Open | Switch to `jose` with `aud` per token type; do it together with H5. | – |
 | L5 | Low | Validation | `1928`, `1594-1684` | Commission rate is unbounded (>100%). Event date and time are free text; lat/long, banner URL and visibility are unvalidated. | Bad data. | Open | Input validation on create endpoints. | – |
@@ -232,6 +264,7 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 | 2026-11-21 | Created CLAUDE.md with the Phase 0 inventory and Phase 1 audit. Added `.env.*` (except `.env.example`) to `.gitignore`. | Ravi's audit request; prevent committing env variants. |
 | 2026-11-21 | Fresh repo `ticketing-app/` (baseline `f915baf`), copied from the working tree without `.git`/`.env`. Scanned the copy: no live secret value is present in any file. | Remove `.env` from our history without rewriting the collaborator's remotes (D2). |
 | 2026-11-21 | H1: only `public/` is served; app HTML is now `public/index.html` (alias `/vybera_26.html` kept). L2 favicon path fixed. | Source code and CLAUDE.md were publicly downloadable (D8). |
+| 2026-11-21 | M14: Cordova-only features merged into `public/index.html`; `scripts/build-cordova.js` generates `vybera-cordova/www/`. | One frontend source, so every fix is made once (D6). |
 | 2026-11-21 | `.env.example` rewritten as a checklist of Ravi's own test accounts (dropped the unused `R2_ACCOUNT_ID`); CLAUDE.md records decisions D1-D8. | C1 / D1. |
 
 ## Open questions for Ravi

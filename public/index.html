@@ -437,6 +437,199 @@ textarea.form-input{resize:vertical;min-height:100px;}
     color:#111!important;
   }
 }
+</style>
+<!-- App-only styles: enabled by scripts/build-cordova.js (media="all"). -->
+<style data-platform="app" media="not all">
+/* App-only palette (Cordova APK). Web keeps the brick/teal palette. */
+:root{--purple:#232121;--neon:#000000;--grey:#030303;--muted:#0a0909;--brick:#130f0e;--teal:#000000;}
+/* APK/mobile panel responsiveness */
+@media(max-width:700px){
+  body{min-height:100svh;}
+  .page{padding-bottom:calc(118px + env(safe-area-inset-bottom,0px));}
+  .sub-page.active{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));}
+
+  .bottom-nav{
+    left:10px!important;
+    right:10px!important;
+    bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;
+    width:auto!important;
+    max-width:none!important;
+    transform:none!important;
+    margin:0!important;
+    border-radius:22px!important;
+    padding:8px 8px!important;
+    gap:2px!important;
+    justify-content:space-around!important;
+  }
+  .bottom-nav .nav-btn{
+    flex:1 1 0!important;
+    min-width:0!important;
+    padding:7px 4px!important;
+    font-size:9px!important;
+    line-height:1.15!important;
+    white-space:nowrap!important;
+  }
+  .bottom-nav .nav-btn svg{width:19px;height:19px;}
+
+  body.creator-mode .creator-nav{
+    display:flex!important;
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    width:100%!important;
+    max-width:480px!important;
+    transform:none!important;
+    margin:0 auto!important;
+    border-radius:18px 18px 0 0!important;
+    padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px))!important;
+    min-height:72px!important;
+    background:#050505!important;
+    border:0!important;
+    border-top:1px solid rgba(255,255,255,.12)!important;
+    box-shadow:0 -10px 34px rgba(0,0,0,.38)!important;
+  }
+  body:not(.creator-mode) .creator-nav{display:none!important;}
+  body.creator-mode .creator-nav .nav-btn{
+    color:rgba(255,255,255,.82)!important;
+    background:transparent!important;
+    border-radius:16px!important;
+    gap:4px!important;
+  }
+  body.creator-mode .creator-nav .nav-btn svg{
+    stroke:currentColor!important;
+    width:20px!important;
+    height:20px!important;
+  }
+  body.creator-mode .creator-nav .nav-btn.active{
+    color:#ffffff!important;
+    background:rgba(139,32,16,.62)!important;
+  }
+  body.creator-mode .creator-nav .nav-btn.active svg{
+    stroke:#ff5a4d!important;
+  }
+
+  #page-creator,
+  #page-create,
+  #page-scanner,
+  #page-revenue,
+  #page-staff-manage,
+  #page-staff-dashboard,
+  #page-staff-qr{
+    padding-bottom:calc(156px + env(safe-area-inset-bottom,0px))!important;
+    overflow-x:hidden;
+  }
+  #page-creator{padding-left:16px!important;padding-right:16px!important;}
+  #page-creator > div:first-child,
+  #page-revenue > div:first-child,
+  #page-staff-manage > div:first-child,
+  #page-staff-dashboard > div:first-child{
+    gap:10px;
+  }
+  #page-creator > div:first-child > div:first-child{min-width:0;}
+  #creatorRefreshBtn,
+  #revenueRefreshBtn{min-height:42px;}
+
+  .kpi-grid,
+  .rev-grid,
+  #page-creator div[style*="grid-template-columns:1fr 1fr"],
+  #page-revenue div[style*="grid-template-columns:1fr 1fr"],
+  #page-staff-dashboard div[style*="grid-template-columns:1fr 1fr"]{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  }
+  .kpi-card,
+  .rev-card,
+  .chart-card,
+  .finance-lock{min-width:0;}
+  .kpi-card{padding:14px!important;}
+  .kpi-label{
+    font-size:9.5px!important;
+    letter-spacing:.35px!important;
+    line-height:1.25!important;
+    min-height:26px!important;
+    display:flex!important;
+    align-items:flex-start!important;
+    gap:4px!important;
+    overflow-wrap:anywhere;
+  }
+  .kpi-value{font-size:22px!important;}
+
+  #page-creator div[onclick*="page-staff-manage"]{
+    align-items:center!important;
+    min-width:0!important;
+  }
+  #page-creator div[onclick*="page-staff-manage"] div,
+  #page-creator div[onclick*="page-staff-manage"] span{
+    color:#202124!important;
+  }
+  #page-creator div[onclick*="page-staff-manage"] svg{stroke:#008f8f!important;}
+  #page-creator div[onclick*="page-staff-manage"] [id="creatorStaffBadge"],
+  #page-creator div[onclick*="page-staff-manage"] div[style*="color:#00D4D4"]{
+    color:#008f8f!important;
+  }
+
+  .finance-lock{
+    padding:28px 16px!important;
+    border-radius:18px!important;
+  }
+  .finance-lock .btn-red{width:100%;max-width:260px;}
+  .chart-card > div[style*="grid-template-columns:1fr 1fr"]{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  }
+
+  .create-header{padding-top:14px!important;}
+  .create-step{padding-left:16px!important;padding-right:16px!important;}
+  #page-create #evtHour,
+  #page-create #evtMinute,
+  #page-create #evtEndHour,
+  #page-create #evtEndMinute{
+    background:#f7f7f8!important;
+    border-color:#dadce0!important;
+    color:#111!important;
+  }
+  #page-create #evtHour option,
+  #page-create #evtMinute option,
+  #page-create #evtEndHour option,
+  #page-create #evtEndMinute option{
+    background:#fff!important;
+    color:#111!important;
+  }
+  .cat-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+  .venue-map-canvas{height:min(360px,52vh)!important;}
+  .venue-map-sheet{max-height:94svh!important;}
+  .venue-map-actions{grid-template-columns:1fr!important;}
+
+  #page-staff-dashboard,
+  #page-staff-dashboard *{box-sizing:border-box;}
+  #page-staff-dashboard .form-input,
+  #page-staff-dashboard input,
+  #page-staff-dashboard select{min-width:0;}
+  #staffSellLink{min-width:0!important;}
+  #stpanel-sell div[style*="justify-content:center"]{flex-wrap:wrap!important;}
+  #stpanel-wallet div[style*="font-size:44px"]{font-size:34px!important;overflow-wrap:anywhere;}
+
+  #page-staff-manage div[style*="grid-template-columns:1fr 1fr 1fr"],
+  #page-scanner div[style*="grid-template-columns:1fr 1fr 1fr"]{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  }
+}
+
+@media(max-width:390px){
+  .kpi-grid,
+  .rev-grid,
+  #page-creator div[style*="grid-template-columns:1fr 1fr"],
+  #page-revenue div[style*="grid-template-columns:1fr 1fr"],
+  #page-staff-dashboard div[style*="grid-template-columns:1fr 1fr"]{
+    grid-template-columns:1fr!important;
+  }
+  #page-staff-manage div[style*="grid-template-columns:1fr 1fr 1fr"],
+  #page-scanner div[style*="grid-template-columns:1fr 1fr 1fr"]{
+    grid-template-columns:1fr!important;
+  }
+  .cat-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+  .bottom-nav .nav-btn{font-size:8px!important;padding-left:2px!important;padding-right:2px!important;}
+}
+</style>
+<style>
 
 body.on-login,
 body.on-creator-login{
@@ -594,6 +787,23 @@ img.vylogo { background: transparent; mix-blend-mode: multiply; }
 .sub-page .cta-full.secondary-action{background:var(--bg2);border:1px solid var(--glass-border);color:var(--white);box-shadow:none;}
 .sub-page .cta-full:disabled{cursor:not-allowed;opacity:1;color:#6b7280;background:#f3f4f6;border-color:#d1d5db;transform:none;}
 @media (max-height:700px){#page-splash .entry-logo{width:min(64vw,270px)!important;max-height:270px;}}
+</style>
+<style data-platform="app" media="not all">
+@keyframes bltPageEnter{
+  from{opacity:0;transform:translateY(6px);}
+  to{opacity:1;transform:translateY(0);}
+}
+@keyframes bltLogoEnter{
+  from{opacity:0;transform:scale(.94);}
+  to{opacity:1;transform:scale(1);}
+}
+.page.active{animation:bltPageEnter .22s cubic-bezier(.2,.8,.2,1);}
+#page-splash.active .vylogo{animation:bltLogoEnter .55s cubic-bezier(.2,.8,.2,1);}
+@media(prefers-reduced-motion:reduce){
+  .page.active,#page-splash.active .vylogo{animation:none!important;}
+}
+</style>
+<style>
 /* Prevent Space Mono font vertical cutting/clipping */
 [style*="Space Mono"], [style*="Space Mono"] *, .ticket-price, .tier-price, .price-badge, .kpi-value, .rev-value, .payout-amt, .qty-num {
   line-height: 1.35 !important;
@@ -642,6 +852,7 @@ window.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
+<!-- CORDOVA_HEAD_INJECT: replaced by scripts/build-cordova.js -->
 <script>
 window.VYBERA_GOOGLE_USE_REDIRECT=false;
 </script>
@@ -1163,7 +1374,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:20px;border:1px solid var(--glass-border);"><div style="font-size:13px;color:var(--muted);margin-bottom:4px;">Amount to pay</div><div id="payAmountLabel" style="font-family:'Space Mono',monospace;font-size:24px;font-weight:700;color:var(--neon)">₹4,836</div></div>
 <button class="cta-full" id="payNowBtn" onclick="payWithPayU()">🔒 Pay via PayU — ₹4,836</button>
 <div id="cancelPayBtnWrap" style="display:none;text-align:center;margin-top:12px;">
-  <span onclick="cancelPendingPaymentFlow()" style="font-size:12px;color:var(--red);cursor:pointer;text-decoration:underline;">Cancel Pending Payment &amp; Retry</span>
+  <span onclick="cancelPendingPaymentFlow()" style="font-size:12px;color:var(--red);cursor:pointer;text-decoration:underline;">Cancel &amp; Retry</span>
 </div>
 </div>
 </div>
@@ -1935,7 +2146,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
       <!-- Scan line animation -->
       <div id="scanLine" style="position:absolute;left:20px;right:20px;height:2px;background:linear-gradient(90deg,transparent,#00D4D4,transparent);animation:scanAnim 2s linear infinite;"></div>
       <video id="scannerVideo" playsinline muted autoplay style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"></video>
-      <div style="text-align:center;z-index:1;">
+      <div id="scannerLaunchOverlay" style="text-align:center;z-index:1;transition:opacity .2s ease;">
         <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:8px;">Point camera at ticket QR</div>
         <button onclick="startQrCamera()" style="padding:10px 20px;background:#00D4D4;border:none;border-radius:20px;color:#000;font-weight:700;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;">Open Camera</button>
       </div>
@@ -2154,7 +2365,8 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
   <input id="addStaffPwd" style="flex:1;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="Auto-generated if blank"/>
   <button onclick="var c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#';var p='';for(var i=0;i<10;i++)p+=c[Math.floor(Math.random()*c.length)];document.getElementById('addStaffPwd').value=p;" style="padding:10px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:rgba(255,255,255,.6);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Generate</button>
   </div></div>
-  <button onclick="confirmAddStaff()" style="width:100%;padding:14px;background:#8B2010;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Add Staff Member</button>
+  <div id="addStaffError" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.35);border-radius:10px;color:#fecaca;font-size:12px;font-weight:600;line-height:1.35;"></div>
+  <button id="addStaffSubmitBtn" onclick="confirmAddStaff()" style="width:100%;padding:14px;background:#8B2010;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Add Staff Member</button>
 </div>
 </div>
 
@@ -3781,6 +3993,98 @@ function getBuyerForPayment(){
   return {name:name,email:email,phone:'9999999999'};
 }
 
+function getPayUPendingBooking(){
+  var pendingRaw=localStorage.getItem('VYBERA_PENDING_PAYU_BOOKING');
+  try{return pendingRaw?JSON.parse(pendingRaw):null;}catch(err){return null;}
+}
+
+function handlePayUInAppResult(resultJson, payuWindow){
+  if(!resultJson)return false;
+  try{
+    JSON.parse(resultJson);
+  }catch(err){
+    console.error('Invalid PayU result from app browser:',err);
+    return false;
+  }
+  localStorage.setItem('VYBERA_PAYU_RESULT', resultJson);
+  if(payuWindow){
+    try{payuWindow.close();}catch(closeErr){}
+  }
+  setTimeout(completePayUReturn, 50);
+  return true;
+}
+
+function submitPayUFormInAppBrowser(action, fields){
+  var browser=cordova.InAppBrowser.open('about:blank','_blank','location=no,hidden=no,clearcache=no,clearsessioncache=no');
+  var submitted=false;
+  var completed=false;
+  var fallbackTimer=setTimeout(function(){
+    if(completed)return;
+    var pending=getPayUPendingBooking();
+    if(pending&&pending.bookingId){
+      showToast('Complete payment in the opened checkout window');
+    }
+  },6000);
+
+  function submitCheckoutOnce(){
+    if(submitted)return;
+    submitted=true;
+    var script="(function(){"+
+      "var form=document.createElement('form');"+
+      "form.method='POST';"+
+      "form.action="+JSON.stringify(action)+";"+
+      "form.acceptCharset='UTF-8';"+
+      "var fields="+JSON.stringify(fields||{})+";"+
+      "Object.keys(fields).forEach(function(key){"+
+        "var input=document.createElement('input');"+
+        "input.type='hidden';"+
+        "input.name=key;"+
+        "input.value=fields[key]==null?'':String(fields[key]);"+
+        "form.appendChild(input);"+
+      "});"+
+      "document.body.innerHTML='<div style=\"font-family:Arial,sans-serif;padding:24px;text-align:center;\">Opening secure payment...</div>';"+
+      "document.body.appendChild(form);"+
+      "form.submit();"+
+    "})();";
+    browser.executeScript({code:script});
+  }
+
+  browser.addEventListener('loadstop',function(event){
+    var url=String((event&&event.url)||'');
+    if(!submitted){
+      submitCheckoutOnce();
+      return;
+    }
+
+    if(url.indexOf('/payments/payu/')>=0 || url.indexOf('payment=payu')>=0 || url.indexOf('vybera.onrender.com')>=0){
+      browser.executeScript({code:"localStorage.getItem('VYBERA_PAYU_RESULT');"},function(values){
+        if(completed)return;
+        var resultJson=values&&values.length?values[0]:'';
+        if(handlePayUInAppResult(resultJson,browser)){
+          completed=true;
+          clearTimeout(fallbackTimer);
+        }
+      });
+    }
+  });
+  setTimeout(submitCheckoutOnce,500);
+
+  browser.addEventListener('loaderror',function(event){
+    console.error('PayU app browser load failed:',event);
+  });
+
+  browser.addEventListener('exit',function(){
+    clearTimeout(fallbackTimer);
+    if(completed)return;
+    var btn=document.getElementById('payNowBtn');
+    if(btn){
+      btn.disabled=false;
+      var totals=getCurrentBookingTotals();
+      btn.textContent='🔒 Pay via PayU — ₹'+totals.total.toLocaleString('en-IN');
+    }
+  });
+}
+
 function submitPayUForm(action, fields){
   if(!action) throw new Error('PayU checkout URL is missing');
   var checkoutUrl;
@@ -3788,6 +4092,10 @@ function submitPayUForm(action, fields){
     checkoutUrl = new URL(String(action));
   } catch (err) {
     throw new Error('PayU checkout URL is invalid');
+  }
+  if(window.cordova && window.cordova.InAppBrowser){
+    submitPayUFormInAppBrowser(checkoutUrl.href, fields);
+    return;
   }
   var form=document.createElement('form');
   form.method='POST';
@@ -5217,6 +5525,23 @@ function refreshCreatorDashboard() {
   var activeEl=document.getElementById('creatorKpiActive');if(activeEl)activeEl.textContent=active;
   var checkinEl=document.getElementById('creatorKpiCheckins');if(checkinEl)checkinEl.textContent=checkins;
   var conversionEl=document.getElementById('creatorKpiConversion');if(conversionEl)conversionEl.textContent='0%';
+  var kpiCards=document.querySelectorAll('#page-creator .kpi-card');
+  if(kpiCards[0]){
+    var trend=kpiCards[0].querySelector('.kpi-trend');
+    if(trend)trend.textContent=totalTickets>0?formatTicketCount(totalTickets)+' tickets sold':'No sales yet';
+  }
+  if(kpiCards[1]){
+    var activeTrend=kpiCards[1].querySelector('.kpi-trend');
+    if(activeTrend)activeTrend.textContent=active>0?active+' active '+(active===1?'event':'events'):'No events yet';
+  }
+  if(kpiCards[2]){
+    var checkinTrend=kpiCards[2].querySelector('.kpi-trend');
+    if(checkinTrend)checkinTrend.textContent=checkins>0?formatTicketCount(checkins)+' checked in today':'No check-ins yet';
+  }
+  if(kpiCards[3]){
+    var conversionTrend=kpiCards[3].querySelector('.kpi-trend');
+    if(conversionTrend)conversionTrend.textContent=totalTickets>0?'Based on sold tickets':'No sales yet';
+  }
 
   var scroll = document.querySelector('#page-creator .hscroll');
   if(scroll) {
@@ -6503,6 +6828,7 @@ function refreshStaffManage(){
 
 function openAddStaffModal(){
   ['addStaffName','addStaffPhone','addStaffEmail','addStaffId','addStaffPwd'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  setAddStaffError('');
   var role=document.getElementById('addStaffRole');if(role)role.value='Scanner';
   var gate=document.getElementById('addStaffGate');if(gate)gate.value='';
   var tickets=document.getElementById('addStaffTickets');if(tickets)tickets.value='50';
@@ -7768,7 +8094,7 @@ function admRenderCreators(){
   var lbl = document.getElementById('creatorCountLbl');
   if(!tbody) return;
   syncCreatorApplicationsFromCreators();
-  if(lbl) lbl.textContent = admCreatorsList.length + ' registered creators';
+  if(lbl) lbl.textContent = (admCreatorsList||[]).length + ' registered creators';
   tbody.innerHTML = admCreatorsList.map(function(c,i){
     var verified = c.status==='Verified'||c.status==='Approved';
     var pending = c.status==='Pending';
@@ -7790,7 +8116,10 @@ function admRenderCreators(){
       +'<td><div style="display:flex;gap:4px;" onclick="event.stopPropagation();">'
       +'<button onclick="admOpenCreatorReview(\''+escapeHtml(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-teal">View Documents</button>'
       +(!pending?'<button onclick="admAdjustFee(\''+c.id+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Fee</button>':'')
-      +'<button onclick="admSuspendCreator(\''+c.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>'
+      +(c.status==='Suspended'
+        ? '<button onclick="admReinstateCreator(\''+c.id+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
+        : '<button onclick="admSuspendCreator(\''+c.id+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
+      +'<button onclick="admNotifyUser(\''+escapeHtml(c.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
       +'</div></td></tr>';
   }).join('');
 }
@@ -7823,6 +8152,34 @@ function admReinstateUser(id){
   admSetBuyerStatus(id,'Active');
 }
 function admNotifyUser(name){ admShowToast('Notification sent to: '+name); STORE.addAdminLog('Notify User',name); }
+
+async function admSetCreatorStatus(id,status){
+  var c=admFindCreatorByAnyId(id);
+  if(!c)return;
+  try{
+    var resp=await fetch(apiUrl('/admin/creators/'+encodeURIComponent(c.id)+'/status'),{
+      method:'PATCH',
+      headers:adminAuthHeaders(),
+      body:JSON.stringify({status:status})
+    });
+    var data=await readAuthResponse(resp);
+    if(!resp.ok)throw new Error(data.error||'Could not update creator');
+    c.status=status;
+    var app=(STORE.creatorApplications||[]).find(function(a){return String(a.email||'').toLowerCase()===String(c.email||'').toLowerCase();});
+    if(app)app.status=status;
+    await loadAdminSnapshot().catch(function(err){console.error('Creator refresh failed:',err);});
+    admRenderCreators();
+    if(typeof admRenderApplications==='function')admRenderApplications();
+    admShowToast(status==='Suspended'?'Creator suspended: '+c.name:'Creator reinstated: '+c.name);
+    STORE.addAdminLog(status==='Suspended'?'Suspend Creator':'Reinstate Creator',c.name);
+  }catch(err){
+    admShowToast(err.message||'Could not update creator');
+  }
+}
+
+function admReinstateCreator(id){
+  admSetCreatorStatus(id,'Approved');
+}
 
 function admFindCreatorByAnyId(id){
   return (admCreatorsList||[]).find(function(x){
@@ -8091,8 +8448,8 @@ function admRefreshStaff(){
       +'<td style="font-size:10px;color:var(--adm-text2);">@'+s.staffId+'</td>'
       +'<td>'+ss.assigned+'</td><td>'+ss.sold+'</td>'
       +'<td style="font-size:11px;">₹'+ss.earnings.toLocaleString('en-IN')+'</td>'
-      +'<td><span class="adm-badge '+(s.status==='active'?'green':'red')+'">'+(s.status==='active'?'Active':'Suspended')+'</span></td>'
-      +'<td><button onclick="admDisableStaff(\''+s.id+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':'Enable')+'</button></td></tr>';
+      +'<td><span class="adm-badge '+(s.status==='active'?'green':s.status==='pending'?'yellow':'red')+'">'+(s.status==='active'?'Active':s.status==='pending'?'Pending Verification':'Suspended')+'</span></td>'
+      +'<td><button onclick="admDisableStaff(\''+s.id+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':s.status==='pending'?'Verify':'Enable')+'</button></td></tr>';
   }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff members yet</td></tr>';
 }
 
@@ -8561,11 +8918,12 @@ var ADM_PERM_LABELS = {users:'User Management',events:'Event Moderation',payment
 function admShowRolePerms(role){
   var grid=document.getElementById('admPermsGrid'); if(!grid) return;
   var def=ADM_ROLE_DEFAULTS[role]||{};
+  _adminPerms = Object.assign({}, def);
   grid.innerHTML=Object.keys(ADM_PERM_LABELS).map(function(key){
-    var chk=def[key]?'checked':''; var dis='disabled';
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--adm-bg3);border-radius:8px;border:1px solid var(--adm-border);">'
+    var checked=!!_adminPerms[key];
+    return '<div class="admin-perm-row" data-admin-perm="'+key+'" onclick="toggleAdminPerm(\''+key+'\',this)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:'+(checked?'rgba(139,32,16,0.16)':'rgba(255,255,255,0.04)')+';border-radius:8px;border:1px solid '+(checked?'rgba(139,32,16,0.6)':'rgba(255,255,255,0.12)')+';cursor:pointer;">'
       +'<span style="font-size:12px;color:var(--adm-text);">'+ADM_PERM_LABELS[key]+'</span>'
-      +'<label class="adm-sw" style="width:34px;height:19px;"><input type="checkbox" '+chk+' '+dis+' name="perm_'+key+'" /><span class="adm-sw-slider"></span></label></div>';
+      +'<span class="adm-sw" style="width:34px;height:19px;pointer-events:none;"><input type="checkbox" '+(checked?'checked':'')+' name="perm_'+key+'" tabindex="-1" aria-hidden="true" /><span class="adm-sw-slider"></span></span></div>';
   }).join('');
 }
 
@@ -8910,6 +9268,7 @@ function admRefreshDashboard(){
 var _inviteStep = 1;
 var _inviteType = 'admin';
 var _staffPerms = {sell:true, scan:true, clients:true, wallet:false};
+var _adminPerms = Object.assign({}, ADM_ROLE_DEFAULTS.Admin||{});
 var _inviteCreating = false;
 
 function makeTempPassword(len){
@@ -8931,10 +9290,23 @@ function setInviteError(msg){
   }
 }
 
+function setAddStaffError(msg){
+  var el=document.getElementById('addStaffError');
+  if(!el) return;
+  if(msg){
+    el.textContent=msg;
+    el.style.display='block';
+  } else {
+    el.textContent='';
+    el.style.display='none';
+  }
+}
+
 function admOpenAdminModal(){
   _inviteStep = 1;
   _inviteType = isSuperAdmin()?'admin':'staff';
   _staffPerms = {sell:true, scan:true, clients:true, wallet:false};
+  _adminPerms = Object.assign({}, ADM_ROLE_DEFAULTS.Admin||{});
   setInviteError('');
   ['iStep1','iStep2','iStep3','iStep4'].forEach(function(s,i){
     var el=document.getElementById(s); if(el) el.style.display=i===0?'block':'none';
@@ -8983,6 +9355,22 @@ function toggleStaffPerm(perm, el){
     el.style.border='1.5px solid rgba(255,255,255,0.08)'; el.style.background='rgba(255,255,255,0.04)';
     if(check){ check.style.background='transparent'; check.style.border='1.5px solid rgba(255,255,255,0.2)'; check.innerHTML=''; }
   }
+}
+
+function setAdminPermState(perm, value, row){
+  if(!row) row=document.querySelector('[data-admin-perm="'+perm+'"]');
+  _adminPerms[perm]=!!value;
+  var input=row?row.querySelector('input[type=checkbox]'):null;
+  if(input) input.checked=!!_adminPerms[perm];
+  if(row){
+    row.style.border=_adminPerms[perm]?'1px solid rgba(139,32,16,0.6)':'1px solid rgba(255,255,255,0.12)';
+    row.style.background=_adminPerms[perm]?'rgba(139,32,16,0.16)':'rgba(255,255,255,0.04)';
+    row.setAttribute('aria-pressed',_adminPerms[perm]?'true':'false');
+  }
+}
+
+function toggleAdminPerm(perm, row){
+  setAdminPermState(perm,!_adminPerms[perm],row);
 }
 
 function inviteStepNext(){
@@ -9041,7 +9429,7 @@ function inviteUpdateStepUI(){
     var admP=document.getElementById('iAdminPerms'), stP=document.getElementById('iStaffPerms');
     if(admP) admP.style.display=_inviteType==='admin'?'block':'none';
     if(stP)  stP.style.display=_inviteType==='staff'?'block':'none';
-    if(_inviteType==='admin') admShowRolePerms('Admin');
+    if(_inviteType==='admin') admShowRolePerms((document.getElementById('newAdmRole')||{}).value||'Admin');
   }
   if(step===3){
     var sidGroup=document.getElementById('staffIdGroup');
@@ -9062,7 +9450,7 @@ function inviteBuildConfirmation(){
   var staffId=_inviteType==='staff'?((document.getElementById('newAdmStaffId')||{}).value||''):'';
   var permsText='';
   if(_inviteType==='admin'){
-    var active=[]; document.querySelectorAll('#admPermsGrid input[type=checkbox]').forEach(function(cb){ if(cb.checked) active.push(cb.name.replace('perm_','')); });
+    var active=Object.keys(_adminPerms).filter(function(key){return !!_adminPerms[key];});
     permsText=active.join(', ')||'None';
   } else {
     var sp=[];
@@ -9101,6 +9489,15 @@ function resetInviteCreateButton(){
   }
 }
 
+function bindInviteCreateButton(){
+  var btn=document.getElementById('iBtnCreate');
+  if(!btn || btn._vyberaBound) return;
+  btn._vyberaBound=true;
+  btn.addEventListener('click',function(evt){
+    inviteCreateAccount(evt);
+  },false);
+}
+
 async function inviteCreateAccount(evt){
   if(evt){
     if(evt.preventDefault) evt.preventDefault();
@@ -9134,7 +9531,7 @@ async function inviteCreateAccount(evt){
 
     if(_inviteType==='admin'){
       var role=(document.getElementById('newAdmRole')||{}).value||'Admin';
-      var perms=[]; document.querySelectorAll('#admPermsGrid input[type=checkbox]').forEach(function(cb){ if(cb.checked) perms.push(cb.name.replace('perm_','')); });
+      var perms=Object.keys(_adminPerms||{}).filter(function(key){return !!_adminPerms[key];});
       var admin=await createAdminFromApi({name:name,email:email,phone:phone,role:role,password:pwd,permissions:perms,notes:notes});
       if(admin){
         admin.phone=phone;
@@ -9183,22 +9580,13 @@ async function inviteCreateAccount(evt){
   return false;
 }
 
+document.addEventListener('DOMContentLoaded',bindInviteCreateButton,false);
+document.addEventListener('deviceready',bindInviteCreateButton,false);
+
 function genInvitePwd(){
   var p=makeTempPassword(12);
   var el=document.getElementById('newAdmPwd'); if(el) el.value=p;
 }
-
-function bindInviteCreateButton(){
-  var btn=document.getElementById('iBtnCreate');
-  if(!btn || btn._vyberaBound) return;
-  btn._vyberaBound=true;
-  btn.addEventListener('click',function(evt){
-    inviteCreateAccount(evt);
-  },false);
-}
-
-document.addEventListener('DOMContentLoaded',bindInviteCreateButton,false);
-document.addEventListener('deviceready',bindInviteCreateButton,false);
 
 function admOpenModal(id){
   var m=document.getElementById(id); if(m){ m.style.display='flex'; }
@@ -9775,13 +10163,9 @@ function admGetRiskBadge(score){
 
 // ── WIRE admSuspendCreator → full freeze ──
 function admSuspendCreator(id){
-  var c = admCreatorsList.find(function(x){ return x.id===id; });
+  var c = admFindCreatorByAnyId(id);
   if(!c || !confirm('Suspend ' + c.name + '? All their events will be paused.')) return;
-  c.status = 'Suspended';
-  admRenderCreators();
-  admRenderAllUsers();
-  admShowToast('Creator suspended: ' + c.name);
-  STORE.addAdminLog('Suspend Creator', c.name);
+  admSetCreatorStatus(id,'Suspended');
   // Pause all their events
   (STORE.events||[]).forEach(function(ev){
     if(ev.creatorName === c.name){ ev._salesPaused = true; }
@@ -10309,9 +10693,9 @@ if(!STORE.creatorWallet) STORE.creatorWallet = 0;
 
 
 
-<!-- ═══════════════════════════════════════════════════ -->
-<!-- ADMIN LOGIN                                          -->
-<!-- ═══════════════════════════════════════════════════ -->
+// ═══════════════════════════════════════════════════
+// ADMIN LOGIN
+// ═══════════════════════════════════════════════════
 
 
 
@@ -10367,6 +10751,72 @@ function openStaffScanner(){
 function openCreatorRevenue(){
   showCreatorPage('page-revenue', document.querySelectorAll('.creator-nav .nav-btn')[3]);
 }
+
+function closeActiveAppOverlay(){
+  var creatorReview=document.getElementById('creatorKycReviewModal');
+  if(creatorReview){creatorReview.remove();return true;}
+  var subPage=document.querySelector('.sub-page.active');
+  if(subPage){ subPage.classList.remove('active'); return true; }
+  var notifModal=document.getElementById('notifModal');
+  if(notifModal && notifModal.style.display==='flex'){ closeNotifModal(); return true; }
+  var modalIds=['adminModal','couponModal','creatorApplyModal','addStaffModal','assignMoreModal','financePinModal'];
+  for(var i=0;i<modalIds.length;i++){
+    var modal=document.getElementById(modalIds[i]);
+    if(modal && modal.style.display==='flex'){ admCloseModal ? admCloseModal(modalIds[i]) : modal.style.display='none'; return true; }
+  }
+  var locationSheet=document.getElementById('locationSheet');
+  if(locationSheet && locationSheet.classList.contains('open')){ closeLocationSheet(); return true; }
+  var venueModal=document.getElementById('venueMapModal');
+  if(venueModal && venueModal.classList.contains('open')){ venueModal.classList.remove('open'); return true; }
+  var adminSidebar=document.getElementById('admSidebar');
+  if(adminSidebar && adminSidebar.classList.contains('open')){ admCloseSidebar(); return true; }
+  return false;
+}
+
+function handleCordovaBackButton(event){
+  if(closeActiveAppOverlay()){
+    if(event&&event.preventDefault)event.preventDefault();
+    return;
+  }
+  var activePage=document.querySelector('.page.active');
+  var activeId=activePage?activePage.id:'';
+  if(activeId==='page-admin'){
+    if(admPageStack.length>0) admGoBack();
+    else if(navigator.app&&typeof navigator.app.exitApp==='function')navigator.app.exitApp();
+    if(event&&event.preventDefault)event.preventDefault();
+    return;
+  }
+  if(activeId==='page-scanner' || activeId==='page-revenue' || activeId==='page-staff-manage' || activeId==='page-create'){
+    goBackCreator();
+    if(event&&event.preventDefault)event.preventDefault();
+    return;
+  }
+  if(activeId==='page-creator'){
+    document.body.classList.remove('creator-mode');
+    var creatorNav=document.getElementById('creatorNavBar');
+    if(creatorNav) creatorNav.style.display='none';
+    navigateBuyerHome();
+    if(event&&event.preventDefault)event.preventDefault();
+    return;
+  }
+  if(activeId==='page-staff-qr'){
+    showPage('page-staff-dashboard');
+    if(event&&event.preventDefault)event.preventDefault();
+    return;
+  }
+  if(activeId==='page-staff-dashboard'){
+    navigateBuyerHome();
+    if(event&&event.preventDefault)event.preventDefault();
+    return;
+  }
+  goBack();
+  if(event&&event.preventDefault)event.preventDefault();
+}
+
+document.addEventListener('backbutton',handleCordovaBackButton,false);
+document.addEventListener('deviceready',function(){
+  document.addEventListener('backbutton',handleCordovaBackButton,false);
+},false);
 
 // ── Show creator nav when logged in ──
 // loginAsCreator wrapper removed (handled in main function)
@@ -10473,6 +10923,7 @@ function openAddStaffModal(){
 }
 
 async function confirmAddStaff(){
+  setAddStaffError('');
   var name  = (document.getElementById('addStaffName')||{}).value||'';
   var phone = (document.getElementById('addStaffPhone')||{}).value||'';
   var email = (document.getElementById('addStaffEmail')||{}).value||'';
@@ -10480,18 +10931,23 @@ async function confirmAddStaff(){
   var role  = (document.getElementById('addStaffRole')||{}).value||'Scanner';
   var evId  = (document.getElementById('addStaffEvent')||{}).value||'';
   var qty   = parseInt((document.getElementById('addStaffTickets')||{}).value||50);
-  var pwd   = (document.getElementById('addStaffPwd')||{}).value||'';
+  var pwdInput = document.getElementById('addStaffPwd');
+  var pwd   = (pwdInput||{}).value||'';
   var allocationMode = ((document.getElementById('addStaffAllocationMode')||{}).value==='staff_owned')?'staff_owned':'creator_quota';
   var commissionRate = parseFloat((document.getElementById('addStaffCommission')||{}).value||0);
   var purchasePrice = parseFloat((document.getElementById('addStaffPurchasePrice')||{}).value||0);
   var resalePrice = parseFloat((document.getElementById('addStaffResalePrice')||{}).value||0);
 
-  if(!name){ showToast('Enter staff name'); return; }
+  if(!name){ setAddStaffError('Enter staff name'); showToast('Enter staff name'); return; }
   if(!staffId){ staffId = name.toLowerCase().replace(/\s+/g,'.')+'.staff'; }
-  if(!pwd||pwd.length<6){ showToast('Enter or generate a temporary password with at least 6 characters'); return; }
+  if(!pwd){
+    pwd=makeTempPassword(12);
+    if(pwdInput) pwdInput.value=pwd;
+  }
+  if(pwd.length<6){ setAddStaffError('Temporary password must be at least 6 characters'); showToast('Temporary password must be at least 6 characters'); return; }
 
   if((STORE.staff||[]).find(function(s){ return s.staffId===staffId; })){
-    showToast('Staff ID already taken'); return;
+    setAddStaffError('Staff ID already taken'); showToast('Staff ID already taken'); return;
   }
 
   var gate = (document.getElementById('addStaffGate')||{}).value||'';
@@ -10502,12 +10958,16 @@ async function confirmAddStaff(){
     if(!purchasePrice) purchasePrice=Number(tier.price||0);
     if(!resalePrice) resalePrice=Number(tier.price||0);
   }
-  if(evId && (!ev || !tierName)){ showToast('Selected event has no ticket tier to assign'); return; }
+  if(evId && (!ev || !tierName)){ setAddStaffError('Selected event has no ticket tier to assign'); showToast('Selected event has no ticket tier to assign'); return; }
   if(evId && qty>Number(((ev.tickets||[])[0]||{}).qty||0)){
-    showToast('Only '+formatTicketCount(((ev.tickets||[])[0]||{}).qty)+' tickets are available for this event');
+    var qtyMsg='Only '+formatTicketCount(((ev.tickets||[])[0]||{}).qty)+' tickets are available for this event';
+    setAddStaffError(qtyMsg);
+    showToast(qtyMsg);
     return;
   }
+  var btn=document.getElementById('addStaffSubmitBtn');
   try{
+    if(btn){ btn.disabled=true; btn.textContent='Adding...'; btn.style.opacity='.75'; }
     var token=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
     if(!token) throw new Error('Sign in as a creator first');
     var resp=await fetch(apiUrl('/creator/staff'),{
@@ -10519,7 +10979,15 @@ async function confirmAddStaff(){
     if(!resp.ok) throw new Error(data.error||'Could not add staff');
     await loadCreatorStaff();
     await loadCreatorEvents();
-  }catch(err){ console.error(err); showToast(err.message||'Could not add staff'); return; }
+  }catch(err){
+    console.error(err);
+    var msg=err.message||'Could not add staff';
+    setAddStaffError(msg);
+    showToast(msg);
+    return;
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='Add Staff Member'; btn.style.opacity='1'; }
+  }
 
   // Emit to admin
   VyberaEventBus.emit('creator_update', {type:'staff_created', staffName:name, staffId:staffId});
@@ -10783,18 +11251,45 @@ function scanTypedQr(){
   validateTicketQr(payload);
 }
 var scannerStream=null,scannerTimer=null;
+function syncScannerViewportState(active){
+  var video=document.getElementById('scannerVideo');
+  var overlay=document.getElementById('scannerLaunchOverlay');
+  var line=document.getElementById('scanLine');
+  if(video) video.style.display=active?'block':'none';
+  if(overlay){
+    overlay.style.display=active?'none':'block';
+    overlay.style.opacity=active?'0':'1';
+  }
+  if(line) line.style.display=active?'block':'none';
+}
 async function startQrCamera(){
   var video=document.getElementById('scannerVideo');
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    showToast('Camera is unavailable here. Use localhost/HTTPS or paste the QR value below.');
+    showToast('Camera is unavailable on this WebView. Update Android System WebView or paste the QR value below.');
     return;
   }
-  if(window.isSecureContext===false && !/^localhost$|^127\.0\.0\.1$/.test(location.hostname)){
+  var isCordovaApp=!!window.cordova;
+  if(!isCordovaApp && window.isSecureContext===false && !/^localhost$|^127\.0\.0\.1$/.test(location.hostname)){
     showToast('Camera permission needs HTTPS or localhost. Open this on localhost/HTTPS.');
     return;
   }
   try{
     stopQrCamera();
+    syncScannerViewportState(false);
+    if(isCordovaApp && window.cordova.plugins && window.cordova.plugins.permissions){
+      try{
+        await new Promise(function(resolve,reject){
+          var permissions=window.cordova.plugins.permissions;
+          permissions.requestPermission(permissions.CAMERA,function(status){
+            if(status&&status.hasPermission)resolve();
+            else reject(new Error('Camera permission was denied. Allow camera access in app settings.'));
+          },reject);
+        });
+      }catch(nativePermErr){
+        showToast(nativePermErr.message||'Camera permission was denied. Allow camera access in app settings.');
+        return;
+      }
+    }
     if(navigator.permissions&&navigator.permissions.query){
       try{
         var camPerm=await navigator.permissions.query({name:'camera'});
@@ -10811,12 +11306,12 @@ async function startQrCamera(){
     }
     if(!video){showToast('Scanner video element was not found');return;}
     video.srcObject=scannerStream;
-    video.style.display='block';
     video.setAttribute('playsinline','');
     video.muted=true;
     await video.play();
+    syncScannerViewportState(true);
     if(typeof BarcodeDetector==='undefined'){
-      showToast('Camera opened. QR auto scan is unavailable in this browser.');
+      showToast('Camera opened. Auto scan is unavailable on this WebView, so paste the QR value below if needed.');
       return;
     }
     var detector=new BarcodeDetector({formats:['qr_code']});
@@ -10841,7 +11336,8 @@ async function startQrCamera(){
 function stopQrCamera(){
   if(scannerTimer){clearInterval(scannerTimer);scannerTimer=null;}
   if(scannerStream){scannerStream.getTracks().forEach(function(track){track.stop();});scannerStream=null;}
-  var video=document.getElementById('scannerVideo');if(video){video.pause();video.srcObject=null;video.style.display='none';}
+  var video=document.getElementById('scannerVideo');if(video){video.pause();video.srcObject=null;}
+  syncScannerViewportState(false);
 }
 
 function showScanResult(type, msg){
@@ -11545,6 +12041,127 @@ function showStaffOTPAfterLogin(){
 .adm-light #page-admin .adm-select option {
   background: #ffffff !important;
   color: #111111 !important;
+}
+</style>
+<style data-platform="app" media="not all">
+#adminModal > div{
+  background:#0d0d0d!important;
+  border-color:rgba(255,255,255,0.14)!important;
+}
+#adminModal div,
+#adminModal span,
+#adminModal label{
+  color:#ffffff!important;
+}
+#adminModal input,
+#adminModal select{
+  background:#161616!important;
+  color:#ffffff!important;
+  border-color:rgba(255,255,255,0.14)!important;
+}
+#adminModal input::placeholder{
+  color:rgba(255,255,255,0.45)!important;
+}
+#adminModal [style*="color:var(--adm-text2)"]{
+  color:rgba(255,255,255,0.72)!important;
+}
+
+@media(max-width:899px){
+  #page-admin{
+    min-height:100svh!important;
+    padding-bottom:0!important;
+    overflow-x:hidden;
+  }
+  #page-admin .adm-shell,
+  #page-admin .adm-main{
+    min-width:0!important;
+    width:100%!important;
+  }
+  #page-admin .adm-main{
+    margin-left:0!important;
+    overflow-x:hidden!important;
+  }
+  #page-admin .adm-sidebar{
+    width:min(82vw,280px)!important;
+    max-width:280px!important;
+  }
+  #page-admin .adm-topbar{
+    height:auto!important;
+    min-height:54px!important;
+    padding:8px 12px!important;
+    gap:8px!important;
+  }
+  #page-admin .adm-topbar > div{
+    min-width:0!important;
+  }
+  #page-admin #admPanelBreadcrumb{
+    max-width:38vw;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  #page-admin #admTopName,
+  #page-admin .adm-topbar span[style*="LIVE"]{
+    display:none!important;
+  }
+  #page-admin .adm-panel{
+    padding:12px!important;
+    overflow-x:hidden!important;
+  }
+  #page-admin .adm-sec-hdr{
+    align-items:stretch!important;
+  }
+  #page-admin .adm-sec-hdr > div{
+    min-width:0!important;
+  }
+  #page-admin .adm-sec-hdr input,
+  #page-admin .adm-search{
+    width:100%!important;
+    min-width:0!important;
+  }
+  #page-admin .adm-sec-hdr > div:last-child{
+    width:100%!important;
+  }
+  #page-admin .adm-tabs{
+    overflow-x:auto!important;
+    scrollbar-width:none;
+  }
+  #page-admin .adm-tabs::-webkit-scrollbar{display:none;}
+  #page-admin .adm-tab{
+    flex:0 0 auto!important;
+    min-width:96px!important;
+    padding-left:10px!important;
+    padding-right:10px!important;
+  }
+  #page-admin div[style*="grid-template-columns:1fr 1fr"],
+  #page-admin div[style*="grid-template-columns:repeat(3,1fr)"],
+  #page-admin div[style*="grid-template-columns:repeat(4,1fr)"]{
+    grid-template-columns:1fr!important;
+  }
+  #page-admin .adm-card{
+    min-width:0!important;
+  }
+  #page-admin .adm-card[style*="overflow-x:auto"],
+  #page-admin div[style*="overflow-x:auto"]{
+    -webkit-overflow-scrolling:touch;
+  }
+  #page-admin .adm-table{
+    min-width:680px;
+  }
+  #page-admin .adm-stat-val{
+    font-size:21px!important;
+    overflow-wrap:anywhere;
+  }
+  #page-admin .adm-modal-bg{
+    align-items:flex-end!important;
+    padding:0!important;
+  }
+  #page-admin .adm-modal{
+    max-width:none!important;
+    max-height:92svh!important;
+    border-radius:18px 18px 0 0!important;
+    padding:18px!important;
+  }
 }
 </style>
 
