@@ -11,7 +11,8 @@
     "test:syntax": "node --check server.js && node --check public/firebaseconfig.js",
     "reset-super-admin": "node scripts/reset-super-admin.js",
     "lint": "eslint .",
-    "report-duplicate-phones": "node scripts/report-duplicate-phones.js"
+    "report-duplicate-phones": "node scripts/report-duplicate-phones.js",
+    "db:fixups": "node scripts/db-fixups.js"
   },
   "keywords": [],
   "author": "",

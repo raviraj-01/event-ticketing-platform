@@ -66,7 +66,7 @@ test("Q12: phone_key normalises formats and ignores empty phones", async () => {
   assert.equal(row.none, null);
 });
 
-test("Q12: migration backfills phone_verified and the report lists duplicates (phoneless accounts never collide)", async () => {
+test("Q12 + M22: the migration leaves existing rows untouched; their phones still count as verified; the report lists duplicates", async () => {
   const { runner } = await import("node-pg-migrate");
   const migrationsDir = path.join(__dirname, "..", "migrations");
   const laterMigrations = fs.readdirSync(migrationsDir).filter((name) => name >= "0012");
@@ -91,18 +91,26 @@ test("Q12: migration backfills phone_verified and the report lists duplicates (p
   const dupTwo = await insert(`old-c-${Date.now()}@test.local`, "+919812345605", null);
   const googleOne = await insert(`old-d-${Date.now()}@test.local`, null, null);
   const googleTwo = await insert(`old-e-${Date.now()}@test.local`, "", "+91");
+  const ids = [withPhone, dupOne, dupTwo, googleOne, googleTwo];
+  const snapshot = () => server.db.query(
+    "SELECT id, username, email, phone, country_code, password FROM users WHERE id = ANY($1::int[]) ORDER BY id",
+    [ids],
+  ).then((r) => r.rows);
+  const before = await snapshot();
   await migrate("up", Infinity);
+  assert.deepEqual(await snapshot(), before, "existing values unchanged");
 
-  const flags = await server.db.query(
-    "SELECT id, phone_verified FROM users WHERE id = ANY($1::int[])",
-    [[withPhone, dupOne, dupTwo, googleOne, googleTwo]],
+  const rows = await server.db.query(
+    "SELECT id, phone_verified, verified_phone_key(phone_verified, country_code, phone) AS key FROM users WHERE id = ANY($1::int[])",
+    [ids],
   );
-  const verified = Object.fromEntries(flags.rows.map((r) => [r.id, r.phone_verified]));
-  assert.equal(verified[withPhone], true);
-  assert.equal(verified[dupOne], true);
-  assert.equal(verified[dupTwo], true);
-  assert.equal(verified[googleOne], false);
-  assert.equal(verified[googleTwo], false);
+  const byId = Object.fromEntries(rows.rows.map((r) => [r.id, r]));
+  for (const id of ids) assert.equal(byId[id].phone_verified, null, "no backfill: the flag stays empty");
+  assert.equal(byId[withPhone].key, "919812345604");
+  assert.equal(byId[dupOne].key, "919812345605");
+  assert.equal(byId[dupTwo].key, "919812345605");
+  assert.equal(byId[googleOne].key, null);
+  assert.equal(byId[googleTwo].key, null);
 
   const groups = await findDuplicatePhones(server.db);
   const group = groups.find((g) => g.phone === "919812345605");

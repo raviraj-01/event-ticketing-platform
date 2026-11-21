@@ -48,6 +48,15 @@ http://localhost:3003
 - Android app: your backend's origin must be in `vybera-cordova/config.xml` `<access>` (`https://*.onrender.com` is there by default; the build checks this). `CORDOVA_API_BASE=https://your-backend npm run build:cordova` generates `vybera-cordova/www/` from `public/`, then `cd vybera-cordova && npx cordova build android`. Never edit `vybera-cordova/www/` by hand.
 - Project notes, audit and decisions: `CLAUDE.md`.
 
+## Your existing data
+
+Starting the app runs the schema migrations, which add tables, columns, functions and indexes. Neither the migrations nor startup change or delete rows that already exist (the one write is creating the first super admin when `SUPERADMIN_EMAIL` has no account yet). One-off repairs are manual:
+
+```
+npm run db:fixups             # dry run: prints what would change, changes nothing
+npm run db:fixups -- --apply  # recount event counters, move legacy super admins
+```
+
 ## Deploy (e.g. Render)
 
 1. Create a PostgreSQL database and set every variable from `.env.example` in the host's environment (never commit `.env`).

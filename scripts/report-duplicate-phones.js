@@ -10,12 +10,12 @@ const path = require("path");
 const { Pool } = require("pg");
 
 const DUPLICATES_SQL = `
-  SELECT phone_key(country_code, phone) AS phone,
+  SELECT verified_phone_key(phone_verified, country_code, phone) AS phone,
          json_agg(json_build_object(
            'id', id, 'email', email, 'createdAt', created_at, 'status', status
          ) ORDER BY created_at, id) AS accounts
   FROM users
-  WHERE phone_verified AND phone_key(country_code, phone) IS NOT NULL
+  WHERE verified_phone_key(phone_verified, country_code, phone) IS NOT NULL
   GROUP BY 1
   HAVING COUNT(*) > 1
   ORDER BY 1`;
@@ -28,7 +28,7 @@ async function findDuplicatePhones(pool) {
 async function main() {
   // Only when run as a script: tests import findDuplicatePhones and must
   // never pick up the developer's .env (H18).
-  require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+  if (process.env.SKIP_ENV_FILE !== "true") require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     console.error("DATABASE_URL is missing.");

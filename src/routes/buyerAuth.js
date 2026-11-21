@@ -182,7 +182,7 @@ router.post("/signup", async (req, res) => {
     // Q12 / D23: one buyer account per verified phone. phone_key() (migration
     // 0012) treats "98765 43210" and "+919876543210" as the same number.
     const phoneTaken = await pool.query(
-      "SELECT 1 FROM users WHERE phone_verified AND phone_key(country_code, phone) = phone_key($1, $2) LIMIT 1",
+      "SELECT 1 FROM users WHERE verified_phone_key(phone_verified, country_code, phone) = phone_key($1, $2) LIMIT 1",
       [cleanCountryCode, cleanPhone],
     );
     if (phoneTaken.rows.length) {
@@ -291,7 +291,7 @@ router.put("/profile/phone", requireBuyer, async (req, res) => {
     if (!phone) return res.status(400).json({ error: "Enter a valid 10-digit mobile number" });
     const result = await pool.query(
       `UPDATE users SET phone=$2, country_code='+91', phone_verified=FALSE
-       WHERE id=$1 AND NOT phone_verified
+       WHERE id=$1 AND verified_phone_key(phone_verified, country_code, phone) IS NULL
        RETURNING id, username, first_name, last_name, email, phone, country_code, city,
          profile_image_url, profile_image_key, profile_image_storage, status`,
       [req.buyer.sub, phone],
@@ -323,7 +323,7 @@ router.post("/login", async (req, res) => {
       FROM users
       WHERE LOWER(email)=LOWER($1)
         -- Only an OTP-verified phone is a login name (Q14 phones are unverified).
-        OR ($2 <> '' AND phone_verified AND (
+        OR ($2 <> '' AND verified_phone_key(phone_verified, country_code, phone) IS NOT NULL AND (
           REGEXP_REPLACE(COALESCE(country_code,'') || COALESCE(phone,''), '\\D', '', 'g')=$2
           OR REGEXP_REPLACE(COALESCE(phone,''), '\\D', '', 'g')=RIGHT($2,10)
         ))

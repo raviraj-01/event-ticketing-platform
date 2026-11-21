@@ -30,30 +30,6 @@ const requireSuperAdmin = async (req, res, next) => {
     if (!req.admin) {
       return res.status(403).json({ error: "Super Admin access required" });
     }
-    const migrateLegacySuperAdmin = async (legacyAdmin) => {
-      const migrated = await pool.query(
-        `INSERT INTO super_admin_accounts (name, email, password, status, last_login, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (email) DO UPDATE SET
-           name=EXCLUDED.name,
-           password=EXCLUDED.password,
-           status=EXCLUDED.status,
-           last_login=EXCLUDED.last_login
-         RETURNING id, status`,
-        [
-          legacyAdmin.name,
-          legacyAdmin.email,
-          legacyAdmin.password,
-          legacyAdmin.status,
-          legacyAdmin.last_login,
-          legacyAdmin.created_at,
-        ],
-      );
-      await pool.query("DELETE FROM admin_accounts WHERE id=$1", [
-        legacyAdmin.id,
-      ]);
-      return migrated;
-    };
     let result =
       req.admin.adminType === "super"
         ? await pool.query(
@@ -64,23 +40,16 @@ const requireSuperAdmin = async (req, res, next) => {
             "SELECT id, status FROM super_admin_accounts WHERE LOWER(email)=LOWER($1)",
             [req.admin.email || ""],
           );
+    // Legacy data: an old "Super Admin" row in admin_accounts. Accepted as it
+    // is; it used to be copied over and DELETED here on first use (M22: the
+    // app never changes or deletes existing rows on its own).
     if (!result.rows.length) {
-      const legacyById = await pool.query(
-        "SELECT * FROM admin_accounts WHERE id=$1 AND role='Super Admin'",
-        [req.admin.sub],
+      result = await pool.query(
+        `SELECT id, status FROM admin_accounts
+         WHERE role='Super Admin' AND (id=$1 OR LOWER(email)=LOWER($2))
+         ORDER BY (id=$1) DESC LIMIT 1`,
+        [Number(req.admin.sub) || 0, req.admin.email || ""],
       );
-      if (legacyById.rows.length) {
-        result = await migrateLegacySuperAdmin(legacyById.rows[0]);
-      }
-    }
-    if (!result.rows.length && req.admin.email) {
-      const legacyByEmail = await pool.query(
-        "SELECT * FROM admin_accounts WHERE LOWER(email)=LOWER($1) AND role='Super Admin'",
-        [req.admin.email],
-      );
-      if (legacyByEmail.rows.length) {
-        result = await migrateLegacySuperAdmin(legacyByEmail.rows[0]);
-      }
     }
     const admin = result.rows[0];
     if (!admin || admin.status !== "Active") {

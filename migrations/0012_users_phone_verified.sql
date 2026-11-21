@@ -19,13 +19,12 @@ LANGUAGE SQL IMMUTABLE AS $$
   END
 $$;
 
-ALTER TABLE users ADD COLUMN phone_verified BOOLEAN NOT NULL DEFAULT FALSE;
-
--- Backfill: users.phone is only ever written by POST /signup, and signup
--- requires a Twilio OTP for that exact phone. So every account with a phone
--- verified it. (Accounts made by older code without OTP cannot be told apart;
--- the duplicate report shows them for a manual decision.)
-UPDATE users SET phone_verified = TRUE WHERE phone_key(country_code, phone) IS NOT NULL;
+-- TRUE: verified by OTP at signup. FALSE: typed in later (Q14), unverified.
+-- NULL: account from before this column existed. No backfill (M22: migrations
+-- never change existing rows); verified_phone_key() (migration 0015) treats a
+-- NULL with a phone as verified, because users.phone was only ever written by
+-- OTP signup. Edited 2026-11-22 before it ran on any real database.
+ALTER TABLE users ADD COLUMN phone_verified BOOLEAN;
 
 -- Down Migration
 ALTER TABLE users DROP COLUMN phone_verified;
