@@ -119,3 +119,32 @@ test("Q4: only a super admin resets an admin; the admin still needs the emailed 
   assert.equal(blocked.status, 403);
   assert.equal(blocked.body.passwordChangeRequired, true);
 });
+
+// ── Q4: super admin recovery via CLI; bootstrap never overwrites (M1) ──
+const { execFileSync } = require("child_process");
+const path = require("path");
+const { startApp } = require("./helpers/testServer");
+
+test("Q4: the CLI gives a super admin a temporary password; login still needs the code, then a forced change", async () => {
+  await clearLimits();
+  const superAdmin = await adminWithPassword({ superAdmin: true });
+  const output = execFileSync(process.execPath, [path.join(__dirname, "..", "scripts", "reset-super-admin.js"), superAdmin.email], {
+    env: { ...process.env, DATABASE_URL: server.databaseUrl },
+  }).toString();
+  const temp = (output.match(/Temporary password for \S+: (\S+)/) || [])[1];
+  assert.ok(temp, output);
+  assert.equal((await api(server.baseUrl, "GET", "/admin/snapshot", { token: superAdmin.token })).status, 401, "old sessions ended");
+  const step1 = await api(server.baseUrl, "POST", "/admin/login", { json: { email: superAdmin.email, password: temp } });
+  assert.equal(step1.body.otpRequired, true);
+  const audit = await server.db.query("SELECT 1 FROM admin_audit_log WHERE action='super_admin.cli_reset' AND admin_email=$1", [superAdmin.email]);
+  assert.equal(audit.rows.length, 1);
+});
+
+test("M1: restarting with SUPERADMIN_PASSWORD set never overwrites an existing super admin password", async () => {
+  const superAdmin = await adminWithPassword({ superAdmin: true });
+  const before = (await server.db.query("SELECT password FROM super_admin_accounts WHERE id=$1", [superAdmin.id])).rows[0].password;
+  const second = await startApp(server.databaseUrl, { SUPERADMIN_EMAIL: superAdmin.email, SUPERADMIN_PASSWORD: "Env-password-from-env-1" });
+  second.stop();
+  const after = (await server.db.query("SELECT password FROM super_admin_accounts WHERE id=$1", [superAdmin.id])).rows[0].password;
+  assert.equal(after, before);
+});

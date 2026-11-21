@@ -156,6 +156,18 @@ vybera-cordova/      Cordova Android project; www/ is generated, never edit it
 
 **Verified:** inline scripts parse (0 syntax errors); web page loads with no console errors and the web palette; app blocks are off on web and switch the palette when enabled; the generated `www/index.html` differs from the old Cordova copy only in the items listed above.
 
+## Password recovery (D18, implemented 2026-11-21)
+| Account | How the password is recovered | Code |
+|---|---|---|
+| Buyer | "Forgot password?" → emailed link (single use, 10 min) | `src/services/passwordReset.js`, `/auth/forgot-password`, `/auth/reset-password-by-token` |
+| Organizer (creator) | Same emailed link (role `creator`) | same |
+| Staff with email | Same emailed link; one link per account if several staff share the email | same |
+| Staff without email | Their organizer (`POST /creator/staff/:id/reset-password`) or an admin (`POST /admin/staff/:id/reset-password`, re-confirm + audit) sets a temporary password; forced change at next login | `setTemporaryPassword`, `requireRole` → 403 `passwordChangeRequired`, `/auth/change-password` |
+| Admin | Only a super admin: `POST /admin/accounts/:id/reset-password` (re-confirm + audit); next login = password → emailed code → forced change | same |
+| Super admin | No self-service. On the server: `npm run reset-super-admin -- <email>` (prints a temporary password once, forced change, sessions ended, audited) | `scripts/reset-super-admin.js` |
+
+Every reset ends all sessions of that account (token_version + refresh tokens). Temporary passwords are 12 random characters from an unambiguous alphabet, shown once, never stored in plain text.
+
 ## Key design decisions (existing, keep)
 
 | Decision | Reason | Trade-off |
@@ -217,7 +229,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 ### Medium
 | ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
 |---|---|---|---|---|---|---|---|---|
-| M1 | Medium | DB/startup | `server.js:1024-1076` | `initDb()` runs **after** `app.listen` starts accepting requests (race on first boot). Every boot deletes `admin_accounts` rows with role 'Super Admin' and **overwrites the super admin password** from env. | Super admin password changes are silently reverted on restart; a startup DELETE runs against live data. | Partly fixed | Schema moved to `migrations/` and the server listens only after migrations succeed (no more request-before-table race). **Still open:** super-admin bootstrap overwrites the password from env on every boot and deletes legacy rows. | see change log
+| M1 | Medium | DB/startup | `server.js:1024-1076` | `initDb()` runs **after** `app.listen` starts accepting requests (race on first boot). Every boot deletes `admin_accounts` rows with role 'Super Admin' and **overwrites the super admin password** from env. | Super admin password changes are silently reverted on restart; a startup DELETE runs against live data. | Fixed | Schema in `migrations/`, listen only after migrations (2026-11-21). Super-admin bootstrap is now insert-only (`ON CONFLICT DO NOTHING`), as is the legacy-row copy, so an existing super admin's password is never overwritten on restart. Test: `test/tempPassword.test.js` (second boot on the same DB). | see change log
 | M2 | Medium | DB perf | (no `CREATE INDEX` anywhere) | Ravi#9 (indexes): confirmed missing: `bookings(event_id)`, `bookings(user_id)`, `bookings(LOWER(buyer_email))`, `staff_assignments(staff_id, event_id)`, `staff_sales(staff_id)`, `staff_sales(booking_id)`, `creator_events(creator_id)`, `payment_transactions(booking_id)`. | Full table scans on every dashboard and analytics query. | Open | One migration adding them. | – |
 | M3 | Medium | DB integrity | `server.js:752-1007`, `4338`, `2086` | `bookings.event_id` has no FK. No `CHECK (qty>0, price>=0)`. `status` columns are free text. Email UNIQUE is case-sensitive while lookups use `LOWER()`. `users.phone` is not unique (phone login bcrypt-compares *every* matching row). Staff email/phone are login identifiers but not unique (`LIMIT 1` picks an arbitrary one). | Inconsistent data, ambiguous logins, slow logins. | Open | Migration: FK, CHECKs, `UNIQUE (LOWER(email))`, decide phone uniqueness (Q). Check existing data first. | – |
 | M4 | Medium | API | `/events` 1558, `/admin/snapshot` 2893, `/bookings/mine` 3788, `/profile/tickets` 3816, `/creator/staff` 1698, `/staff/dashboard` 2221 | Ravi#9 (pagination): no list endpoint paginates. The snapshot dumps **all** users, bookings, payments and staff in one response. Ticket lists render a QR PNG per booking per request. | Slow, memory-heavy, and exposes too much at once. | Open | `limit`/`cursor` params; split the snapshot into per-tab endpoints. | – |
@@ -284,6 +296,8 @@ Frontend consolidation (M14) happens before the first frontend-touching fix (C2)
 | D15 | Proxy | `TRUST_PROXY_HOPS` approved; documented in README → Deploy (Render = 1). |
 | D16 | Legacy guest bookings | Visible to the event's creator and assigned staff (needed for scanning); hidden from buyers. Current C6 behaviour is correct. |
 | D17 | Order of work after the Criticals | M20 → H7 → H5+H16 → H10 → H6 → H12/H14/H15 → server-side coupons → remaining Medium/Low. Every fix adds a 2-line Interview note. |
+| D18 | Password recovery (Q4) | Buyers, organizers, staff with email: emailed single-use link. Staff without email: organizer or admin sets a temporary password, forced change at next login. Admins: only a super admin resets them; next login still needs the emailed code. Super admin: no self-service; `npm run reset-super-admin -- <email>` on the server. |
+| D19 | Staff resale (Q5b) | Out of scope: staff-owned resale disabled in UI and API; listed in README as future work. |
 | D8 | Static files | Serve only a dedicated `public/` folder; CLAUDE.md is never public. |
 
 Still open (ask when reached): password reset for non-buyers (old Q4), event approval before live (Q6), refunds in v1 (Q8), global scanner staff (Q10, M18), unique phone per buyer (Q12), staff_owned upfront payment (rest of Q5).
@@ -294,6 +308,7 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 | 2026-11-21 | Created CLAUDE.md with the Phase 0 inventory and Phase 1 audit. Added `.env.*` (except `.env.example`) to `.gitignore`. | Ravi's audit request; prevent committing env variants. |
 | 2026-11-21 | Fresh repo `ticketing-app/` (baseline `f915baf`), copied from the working tree without `.git`/`.env`. Scanned the copy: no live secret value is present in any file. | Remove `.env` from our history without rewriting the collaborator's remotes (D2). |
 | 2026-11-21 | H1: only `public/` is served; app HTML is now `public/index.html` (alias `/vybera_26.html` kept). L2 favicon path fixed. | Source code and CLAUDE.md were publicly downloadable (D8). |
+| 2026-11-21 | Q4: emailed reset for organizers/staff (migration 0010), temporary passwords + forced change (migration 0011), super admin CLI recovery; M1 bootstrap insert-only. SMTP sink for email tests. | Decision D18. |
 | 2026-11-21 | H15: Cordova WebView allowlists made explicit; build checks the backend is allowed. All High items now fixed. | `access *`, http intents and dev ngrok navigation were allowed. |
 | 2026-11-21 | H14: KYC files only via an audited super-admin route with 60 s links; public media limited to banners/profiles; snapshot hides KYC from normal admins. | Government ID scans were reachable by anyone with the object key. |
 | 2026-11-21 | H12: created-events list by creator id with a creator session only (no email matching across account types). | A buyer registering with an organizer's email could read the organizer's revenue. |
@@ -330,7 +345,6 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 (Answered ones moved to "Decisions from Ravi".)
 - Q14. PayU requires a phone number. Google-only buyers may have none; we send the placeholder `9999999999`. Collect a phone before checkout instead?
 - Q15. Share-token regeneration (D12) needs a UI button and an endpoint. Should staff do it, the creator, or both?
-- Q4. **Password reset for non-buyers** once the legacy route is gone: creators → same email-token flow; staff → reset by their creator/admin; admins → by super admin; super admin → DB/CLI only. OK?
 - Q5b. In `staff_owned` mode, does staff pay the creator the purchase price upfront? Who pays commission withdrawals (platform or creator)?
 - Q6. Should creator events need **admin approval** before going live?
 - Q8. Are **refunds** needed for v1? Who triggers them, and should they go through the PayU refund API?
@@ -376,3 +390,5 @@ _(One entry per fixed issue: a 2-line explanation to say out loud.)_
 - **H12 cross-account email matching:** "The profile page matched a buyer's email to a creator account and showed that creator's events and revenue, and buyer emails aren't verified, so anyone could register with an organizer's email and see their sales. Now each account type only sees its own data, looked up by its own id."
 - **H14 KYC documents:** "The media route presigned any storage key without login, including Aadhaar and PAN scans. Now it only serves public folders like banners; KYC files go through a super-admin-only route that logs every view and redirects to a link that expires in sixty seconds."
 - **H15 Cordova allowlist:** "The app's WebView was allowed to talk to any origin and navigate to dev tunnels. I replaced the wildcards with the exact hosts the app needs, and made the build fail if the backend URL isn't on that list, so a misconfiguration shows up at build time instead of as a broken app."
+- **Q4 password recovery:** "Each account type has a recovery path that matches its risk: buyers, organizers and staff get a single-use emailed link; staff without email and admins get a temporary password from someone above them and must change it at the next login, enforced on every API call; the super admin can only be recovered with a script on the server."
+- **M1 bootstrap overwrite:** "On every restart the server wrote the super admin password from an environment variable, which silently undid password changes. I made the bootstrap insert-only, and tested it by booting a second server against the same database."

@@ -713,53 +713,31 @@ const initDb = async () => {
     WHERE e.id=s.event_id
   `);
 
-  const superAdminEmail = String(
-    process.env.SUPERADMIN_EMAIL || "superadmin@blaktickets.in",
-  )
-    .trim()
-    .toLowerCase();
-  const superAdminPassword = process.env.SUPERADMIN_PASSWORD;
+  // Legacy rows: copy old "Super Admin" admin_accounts into super_admin_accounts
+  // without ever overwriting an existing super admin (M1).
   await pool.query(`
     INSERT INTO super_admin_accounts (name, email, password, status, last_login, created_at)
     SELECT name, email, password, status, last_login, created_at
     FROM admin_accounts
     WHERE role='Super Admin'
-    ON CONFLICT (email) DO UPDATE SET
-      name=EXCLUDED.name,
-      password=EXCLUDED.password,
-      status=EXCLUDED.status,
-      last_login=EXCLUDED.last_login
+    ON CONFLICT (email) DO NOTHING
   `);
   await pool.query("DELETE FROM admin_accounts WHERE role='Super Admin'");
-  if (!superAdminPassword) {
-    console.warn(
-      "SUPERADMIN_PASSWORD is missing. Skipping super-admin account bootstrap.",
-    );
-    return;
-  }
-  const existingAdmin = await pool.query(
-    "SELECT id, password FROM super_admin_accounts WHERE email=$1",
-    [superAdminEmail],
-  );
-  const passwordMatches = existingAdmin.rows[0]
-    ? await bcrypt.compare(superAdminPassword, existingAdmin.rows[0].password)
-    : false;
-  const passwordHash = passwordMatches
-    ? existingAdmin.rows[0].password
-    : await bcrypt.hash(superAdminPassword, 10);
-  await pool.query(
+
+  // First super admin from SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD. Insert-only:
+  // an existing super admin is never touched, so a password changed in the app
+  // or reset with scripts/reset-super-admin.js survives restarts (M1, Q4).
+  const superAdminEmail = String(process.env.SUPERADMIN_EMAIL || "").trim().toLowerCase();
+  const superAdminPassword = process.env.SUPERADMIN_PASSWORD;
+  if (!superAdminEmail || !superAdminPassword) return;
+  const created = await pool.query(
     `INSERT INTO super_admin_accounts (name, email, password, status)
-     VALUES ($1,$2,$3,'Active')
-     ON CONFLICT (email) DO UPDATE SET
-       name=EXCLUDED.name,
-       password=EXCLUDED.password,
-       status=EXCLUDED.status`,
-    ["BLAK Tickets Super Admin", superAdminEmail, passwordHash],
+     VALUES ('Super Admin', $1, $2, 'Active')
+     ON CONFLICT (email) DO NOTHING
+     RETURNING id`,
+    [superAdminEmail, await bcrypt.hash(superAdminPassword, 10)],
   );
-  await pool.query(
-    "DELETE FROM admin_accounts WHERE email=$1 AND role='Super Admin'",
-    [superAdminEmail],
-  );
+  if (created.rows.length) console.log(`Created the first super admin (${superAdminEmail}).`);
 };
 
 

@@ -23,23 +23,9 @@ function signTestToken(payload, expiresInSeconds = 3600, audience = tokens.AUDIE
 
 const freePort = () => 20000 + Math.floor(Math.random() * 20000);
 
-async function startTestServer(extraEnv = {}) {
-  const { default: EmbeddedPostgres } = await import("embedded-postgres");
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ticketing-test-pg-"));
-  const pgPort = freePort();
-  const pg = new EmbeddedPostgres({
-    databaseDir: dataDir,
-    user: "postgres",
-    password: "test",
-    port: pgPort,
-    persistent: false,
-    onLog: () => {},
-  });
-  await pg.initialise();
-  await pg.start();
-  await pg.createDatabase("ticketing_test");
-  const databaseUrl = `postgresql://postgres:test@localhost:${pgPort}/ticketing_test`;
-
+// Start server.js against an existing database (used by startTestServer, and
+// by tests that need a second boot on the same database).
+async function startApp(databaseUrl, extraEnv = {}) {
   const appPort = freePort();
   const baseUrl = `http://localhost:${appPort}`;
   const child = spawn(process.execPath, ["server.js"], {
@@ -80,15 +66,38 @@ async function startTestServer(extraEnv = {}) {
     });
   });
   child.removeAllListeners("exit");
+  return { baseUrl, output: () => output, stop: () => child.kill() };
+
+}
+
+async function startTestServer(extraEnv = {}) {
+  const { default: EmbeddedPostgres } = await import("embedded-postgres");
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ticketing-test-pg-"));
+  const pgPort = freePort();
+  const pg = new EmbeddedPostgres({
+    databaseDir: dataDir,
+    user: "postgres",
+    password: "test",
+    port: pgPort,
+    persistent: false,
+    onLog: () => {},
+  });
+  await pg.initialise();
+  await pg.start();
+  await pg.createDatabase("ticketing_test");
+  const databaseUrl = `postgresql://postgres:test@localhost:${pgPort}/ticketing_test`;
+
+  const app = await startApp(databaseUrl, extraEnv);
 
   const db = new Pool({ connectionString: databaseUrl, max: 5 });
 
   return {
-    baseUrl,
+    baseUrl: app.baseUrl,
+    databaseUrl,
     db,
-    serverOutput: () => output,
+    serverOutput: app.output,
     async stop() {
-      child.kill();
+      app.stop();
       await db.end().catch(() => {});
       await pg.stop().catch(() => {});
       fs.rmSync(dataDir, { recursive: true, force: true });
@@ -110,4 +119,4 @@ async function api(baseUrl, method, urlPath, { token, json, form } = {}) {
   return { status: res.status, body: parsed, headers: res.headers };
 }
 
-module.exports = { startTestServer, signTestToken, api, TEST_PAYU };
+module.exports = { startTestServer, startApp, signTestToken, api, TEST_PAYU };
