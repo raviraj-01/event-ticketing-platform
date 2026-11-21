@@ -68,7 +68,19 @@ function makeFixtures(db) {
     return id;
   }
 
-  return { uid, createCreator, createBuyer, createEvent, createStaff, createBooking };
+  async function createAdmin({ superAdmin = false } = {}) {
+    const email = `${superAdmin ? "super" : "admin"}${uid()}@test.local`;
+    const table = superAdmin ? "super_admin_accounts" : "admin_accounts";
+    const result = await db.query(
+      `INSERT INTO ${table} (name, email, password, status) VALUES ('Admin', $1, 'x', 'Active') RETURNING id`,
+      [email],
+    );
+    const id = result.rows[0].id;
+    const adminType = superAdmin ? "super" : "admin";
+    return { id, email, adminType, token: await signTestToken({ sub: id, email, scope: "admin", adminType }) };
+  }
+
+  return { uid, createCreator, createBuyer, createEvent, createStaff, createBooking, createAdmin };
 }
 
 module.exports = { makeFixtures };

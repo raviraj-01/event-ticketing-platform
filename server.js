@@ -249,14 +249,10 @@ const publicCreator = (creator) => ({
   joinedAt: creator.created_at,
 });
 
-const creatorKycDocumentUrl = (document) => {
-  if (!document) return "";
-  if (document.storage === "r2") return `/r2/media/${encodeR2Key(document.object_key)}`;
-  if (document.storage === "local") {
-    return `/uploads/${String(document.object_key || "").replace(/^local\//, "")}`;
-  }
-  return "";
-};
+// KYC scans (Aadhaar, PAN, bank) are never public: they are opened through
+// an authenticated, audited super-admin route (H14).
+const creatorKycDocumentUrl = (document) =>
+  document && document.id ? `/admin/kyc-documents/${encodeURIComponent(document.id)}/file` : "";
 
 const publicCreatorKycDocument = (document) => ({
   id: document.id,
@@ -2558,7 +2554,10 @@ app.get("/admin/snapshot", requireAdmin, async (req, res) => {
         status: normalizeUserStatus(buyer.status),
         createdAt: buyer.created_at,
       })),
-      creators: creators.rows.map(publicAdminCreator),
+      // KYC documents are for super admins only (H14).
+      creators: creators.rows
+        .map((creator) => (req.admin.adminType === "super" ? creator : { ...creator, documents: [] }))
+        .map(publicAdminCreator),
       events: events.rows.map(publicCreatorEvent),
       bookings: bookings.rows.map((booking) => ({
         id: booking.id,
@@ -2668,6 +2667,29 @@ app.patch("/admin/users/:userId/status", requireAdmin, confirmed, audit("user.st
     res.status(500).json({ error: "Could not update user status" });
   }
 });
+
+// Open one KYC document: super admin only, every view is audited, and the
+// storage link it redirects to expires after 60 seconds.
+app.get(
+  "/admin/kyc-documents/:documentId/file",
+  requireAdmin,
+  requireSuperAdmin,
+  audit("kyc.view", (req) => ({ targetType: "creator_document", targetId: req.params.documentId })),
+  async (req, res) => {
+    try {
+      const documentId = Number(req.params.documentId);
+      if (!Number.isInteger(documentId) || documentId < 1) return res.status(404).json({ error: "Document not found" });
+      const result = await pool.query("SELECT * FROM creator_kyc_documents WHERE id=$1", [documentId]);
+      const document = result.rows[0];
+      if (!document || document.storage !== "r2") return res.status(404).json({ error: "Document not found" });
+      res.set("Cache-Control", "no-store");
+      res.redirect(presignR2({ method: "GET", key: document.object_key, expires: 60 }));
+    } catch (err) {
+      console.error("KYC document open failed:", err);
+      res.status(500).json({ error: "Could not open document" });
+    }
+  },
+);
 
 app.get("/admin/creators/:creatorId", requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
@@ -2858,12 +2880,15 @@ app.patch("/admin/staff/:staffId/status", requireAdmin, confirmed, audit("staff.
   }
 });
 
+// Public media only (event banners, profile photos). Any other key, e.g.
+// kyc-documents/..., is a 404 here (H14).
+const PUBLIC_MEDIA_PREFIXES = ["event-banners/", "profiles/"];
 app.get("/r2/media/*key", (req, res) => {
   try {
     const key = Array.isArray(req.params.key)
       ? req.params.key.join("/")
       : req.params.key;
-    if (!key) {
+    if (!key || key.includes("..") || !PUBLIC_MEDIA_PREFIXES.some((prefix) => key.startsWith(prefix))) {
       return res.status(404).send("Not found");
     }
     res.redirect(presignR2({ method: "GET", key, expires: 300 }));
