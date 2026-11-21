@@ -44,8 +44,9 @@ http://localhost:3003
 
 - `.env` is intentionally not committed because it contains secrets.
 - `node_modules` is intentionally not committed. Run `npm install` after cloning.
-- The frontend calls the API on the same origin when served from `http://localhost:3003`.
-- If you open the HTML file directly, browser login/API calls will still try `http://localhost:3003`, so keep the Node server running.
+- The frontend lives in `public/` (the only folder the server publishes). It calls the API on the same origin.
+- Android app: `CORDOVA_API_BASE=https://your-backend npm run build:cordova` generates `vybera-cordova/www/` from `public/`, then `cd vybera-cordova && npx cordova build android`. Never edit `vybera-cordova/www/` by hand.
+- Project notes, audit and decisions: `CLAUDE.md`.
 
 ## Health Check
 

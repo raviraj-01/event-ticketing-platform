@@ -11,3 +11,4 @@ vybera-cordova/plugins/
 *.log
 .env.*
 !.env.example
+vybera-cordova/www/

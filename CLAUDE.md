@@ -39,13 +39,11 @@ Purpose tokens use the same secret: `{scope:'password-reset', email}` (TTL `PASS
 Verified against the code on 2026-11-21:
 - **Backend:** one file, `server.js` (4,585 lines). Node (local v25.9; README says ≥20), Express 5.2, `pg` Pool, `bcrypt`, hand-written HS256 JWT on Node `crypto` (`server.js:161-202`), `nodemailer`, `qrcode`, `google-auth-library` (added in uncommitted work). Twilio Verify is called through raw `fetch` (no SDK). PayU uses a form post + SHA-512 hash. **Cloudflare R2** storage uses a hand-written SigV4 presigner (`server.js:598-671`), with a fallback to local disk `uploads/`.
 - **Frontend:** plain HTML + inline JS, no build step.
-  - `vybera_26.html` (12,171 lines, ~750 KB) is the **live web app**, served at `/` (`server.js:23,1129`).
-  - `VYBERA.html` (11,210 lines, ~1.1 MB) is a **legacy** copy, last changed 2026-06-28, still publicly reachable at `/VYBERA.html`, and hardcodes `http://localhost:3003` (`VYBERA.html:6344`).
+  - `public/index.html` (~12,800 lines) is the **only** frontend source (web + APK), served at `/` (see "Frontend consolidation"). The legacy `VYBERA.html` and `prev` were deleted.
   - Firebase JS SDK v10 is loaded from the gstatic CDN in `firebaseconfig.js`. The `firebase` npm dependency is not used by the server.
 - **Android:** Cordova (`cordova-android` 15, target SDK 36), app id `com.vybera.app`. Plugins: inappbrowser, customurlscheme (`vybera://`), googleplus, android-permissions.
-  - `vybera-cordova/www/index.html` is a **diverged fork** of `vybera_26.html` (~900 changed lines in both directions; see M14). It sets `window.VYBERA_API_BASE='https://vybera.onrender.com'`.
-  - `vybera-cordova/www/server.js` is a **stale, unused** copy of the backend (a WebView cannot run Node), but it gets bundled into the APK (see H15).
-  - **Source of truth:** backend = root `server.js`. Web frontend = `vybera_26.html`, but some features exist only in the Cordova copy, so right now neither HTML file is complete.
+  - `vybera-cordova/www/` is **generated** (git-ignored) by `CORDOVA_API_BASE=https://… npm run build:cordova`, then `cd vybera-cordova && npx cordova build android`.
+  - **Source of truth:** backend = `server.js`, frontend = `public/`.
 - **Hosting:** Render (`https://vybera.onrender.com`, referenced in the HTML and `config.xml`).
 - **Tests:** none. `npm test` only runs `node --check`.
 
@@ -97,13 +95,12 @@ Reference: what each variable does.
 ```
 server.js            everything: config, JWT, middleware, R2 presign, initDb (schema), ~63 routes
 public/index.html    live web SPA (was vybera_26.html; all roles in one page, "pages" toggled by showPage)
-VYBERA.html          legacy SPA copy (unused, still served)
 public/firebaseconfig.js  Firebase Google sign-in helper (ES module, CDN imports)
 public/assets/       logos (BLAK Tickets)
 public/              the ONLY folder served by express.static (H1)
-prev                 old server.js copy from 2026-06-22 (tracked, publicly served!)
 uploads/             local file fallback (git-ignored, publicly served at /uploads)
-vybera-cordova/      Cordova Android project; www/ = app bundle (forked index.html, stale server.js)
+scripts/build-cordova.js  generates vybera-cordova/www/ from public/
+vybera-cordova/      Cordova Android project; www/ is generated, never edit it
 ```
 
 **Request flow:** `cors` (reflects any origin) → a hand-written CORS/COOP middleware → `bodyParser.json({limit:'30mb'})` → `express.static(public/)` (fixed H1; previously the whole repo root) → routes. Auth is per-route middleware: `requireCreator`, `requireAdmin`, `requireSuperAdmin`, `requireStaff`, `requireBuyer`, `requireScanIdentity`, `requireProfileIdentity`. Tokens are sent as `Authorization: Bearer`. The frontend stores them in `localStorage` (`VYBERA_BUYER_TOKEN`, `VYBERA_CREATOR_TOKEN`, `VYBERA_STAFF_TOKEN`, `VYBERA_ADMIN_TOKEN`).
@@ -193,7 +190,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 | H12 | High | Auth/IDOR | `server.js:4561` `/session`; `582` `requireProfileIdentity` → `3816` `/profile/tickets`, `3845` | `/session` checks no scope and looks up `users.id = sub`, so a creator or admin token with `sub=5` returns buyer #5's profile. `requireProfileIdentity` accepts **any** token with an email (creator, admin, even password-reset tokens) and returns all bookings for that email. Creator emails are never verified. | Someone can apply as a creator using a victim's email; once approved, they read the victim's tickets and QRs and other users' PII. | Open | `/session` and profile routes require a buyer token (`requireBuyer`); match bookings by `user_id`; verify creator email at application. | – |
 | H13 | High | Auth | `server.js:1457-1495` | Creator login matches by email **or name or email prefix** (`john@a.com` ≈ `john@b.com`), still supports plaintext passwords, and returns `reason: creator_not_found/password_mismatch` + echoes `loginReceived`. | Ambiguous logins, account enumeration, and easier guessing across accounts. | Open | Exact `LOWER(email)` match only, one generic error, rate limit; force-reset any remaining plaintext passwords. | – |
 | H14 | High | Privacy (KYC) | `server.js:3256` `/r2/media/*key`, `2919` snapshot | Any R2 object, including Aadhaar/PAN/bank KYC scans, is served to anyone who knows the key (no auth; keys are random but include the creator's email). `/admin/snapshot` sends KYC document data to **non-super** admins too. | Exposure of sensitive government-ID documents. | Open | Separate the public media route (banners/avatars) from a super-admin-only KYC route; strip documents from the snapshot for normal admins. | – |
-| H15 | High | Cordova | `vybera-cordova/www/server.js`, `config.xml:42-52` | The APK bundles the full backend source (stale copy). `config.xml` has `<access origin="*">`, `allow-intent http://*`, and `allow-navigation` to `*.ngrok-free.dev` (a dev leftover). | Anyone can unzip the APK and read the backend; the WebView navigation policy is too loose. | Open | Delete `www/server.js` (ask first), tighten the allowlist to the API host + PayU + Google. | – |
+| H15 | High | Cordova | `vybera-cordova/www/server.js`, `config.xml:42-52` | The APK bundles the full backend source (stale copy). `config.xml` has `<access origin="*">`, `allow-intent http://*`, and `allow-navigation` to `*.ngrok-free.dev` (a dev leftover). | Anyone can unzip the APK and read the backend; the WebView navigation policy is too loose. | Partly fixed | `www/server.js` deleted and `www/` is now generated from `public/`, so no backend source ships in the APK. **Still open:** tighten `config.xml` (`<access origin="*">`, `allow-intent http://*`, ngrok). | see change log
 | H16 | High | CORS | `server.js:27-55` | Ravi#10. `origin: true` plus a second hand-written middleware both reflect **any** Origin. Harmless while tokens are Bearer headers, but it becomes **critical the moment cookies are introduced (H5)**. | Cross-site requests with credentials once cookies exist. | Open | Explicit allowlist (web origin, Cordova `https://localhost`), delete the duplicate middleware. Must ship together with H5. | – |
 
 ### Medium
@@ -224,7 +221,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 |---|---|---|---|---|---|---|---|---|
 | L1 | Low | Abuse | `server.js:1162` `/qr` | Ravi#10. Public endpoint renders any text as a QR (CPU, free QR service). It is only used for the staff share link (`vybera_26.html:2964`). | Minor abuse. | Open | Generate the share QR client-side or only for own share URLs; length cap + rate limit. | – |
 | L2 | Low | Bug | `server.js:59` | Favicon route points to `assets/blak-tickets-logo.svg`; the file is actually `blak-ticket-logo.svg`. | 404 / error log on every page load. | Fixed | Path corrected while moving assets (part of the H1 commit). | `d06d580` |
-| L3 | Low | Cleanup | `prev`, `VYBERA.html` | An old server copy and an old frontend copy are tracked and publicly served. | Confusion, source disclosure (H1). | Open | Delete (ask first). | – |
+| L3 | Low | Cleanup | `prev`, `VYBERA.html` | An old server copy and an old frontend copy are tracked and publicly served. | Confusion, source disclosure (H1). | Fixed | Deleted `prev` and `VYBERA.html` (approved D6). | see change log
 | L4 | Low | JWT | `server.js:161-202` | Ravi#11. The hand-written JWT is actually implemented safely (fixed HS256, timing-safe compare, exp checked), but it has no `iss`/`aud`, and one secret serves session, reset and OTP tokens (only `scope` separates them). | Token-confusion risk (see H12). | Open | Switch to `jose` with `aud` per token type; do it together with H5. | – |
 | L5 | Low | Validation | `1928`, `1594-1684` | Commission rate is unbounded (>100%). Event date and time are free text; lat/long, banner URL and visibility are unvalidated. | Bad data. | Open | Input validation on create endpoints. | – |
 | L6 | Low | Repo hygiene | `.gitignore`, `.env.example` | `.env.local` / `.env.*` weren't ignored (fixed in Phase 0). `.env.example` lists the unused `R2_ACCOUNT_ID`. The local `.env` holds commented plaintext login credentials and an unused `PAYU_TEST_MODE`. The `firebase` npm dependency is unused. | Accidental secret commits. | Partly fixed | `.gitignore` updated. Ravi: remove the commented credentials from `.env`. | – |
@@ -264,6 +261,7 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 | 2026-11-21 | Created CLAUDE.md with the Phase 0 inventory and Phase 1 audit. Added `.env.*` (except `.env.example`) to `.gitignore`. | Ravi's audit request; prevent committing env variants. |
 | 2026-11-21 | Fresh repo `ticketing-app/` (baseline `f915baf`), copied from the working tree without `.git`/`.env`. Scanned the copy: no live secret value is present in any file. | Remove `.env` from our history without rewriting the collaborator's remotes (D2). |
 | 2026-11-21 | H1: only `public/` is served; app HTML is now `public/index.html` (alias `/vybera_26.html` kept). L2 favicon path fixed. | Source code and CLAUDE.md were publicly downloadable (D8). |
+| 2026-11-21 | Deleted `VYBERA.html`, `prev`, `vybera-cordova/www/server.js`; untracked generated `vybera-cordova/www/` and git-ignored it. | D6; stops backend source shipping in the APK (H15) and stops copies drifting (M14). |
 | 2026-11-21 | M14: Cordova-only features merged into `public/index.html`; `scripts/build-cordova.js` generates `vybera-cordova/www/`. | One frontend source, so every fix is made once (D6). |
 | 2026-11-21 | `.env.example` rewritten as a checklist of Ravi's own test accounts (dropped the unused `R2_ACCOUNT_ID`); CLAUDE.md records decisions D1-D8. | C1 / D1. |
 
@@ -284,9 +282,10 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 - **Payment identity:** a personal UPI ID and payee name are hardcoded at `vybera_26.html:3808-3809` (and the Cordova copy). These are a real person's payment details; replace with config.
 - **Logos:** `assets/blak-ticket-logo.{svg,jpeg}`, `blak-ticket-name.{svg,jpeg}`, `balk-ticket-logo-2.jpeg` (typo), Cordova `resources/` icons + splash, `www/assets/` copies. Hardcoded HTML pages in `server.js:1111` (Google success) and `3392` (PayU return), and the reset email template `4404-4436`.
 - **Documents:** no privacy/T&C/press/blog PDFs exist in the repo. The signup "Terms" and "Privacy" are non-clickable text (`vybera_26.html:825`), so there is nothing to link yet.
-- **Dead files:** `prev`, `VYBERA.html`, `vybera-cordova/www/server.js`.
+- **Dead files:** deleted 2026-11-21 (`prev`, `VYBERA.html`, `vybera-cordova/www/server.js`).
 
 ## Interview notes
 _(One entry per fixed issue: a 2-line explanation to say out loud.)_
 
 - **H1 static files:** "The server used `express.static` on the project root, so anyone could download `server.js` and internal docs. I moved browser files into a `public/` folder and serve only that, so the attack surface is an explicit allowlist instead of everything on disk."
+- **M14 one frontend source:** "We had a web HTML and an APK HTML that had drifted by about 900 lines, so every fix had to be made twice. I merged them into one file. Platform-only CSS sits in a disabled style block that the Cordova build script switches on, so both platforms look the same as before but there's a single place to fix bugs."
