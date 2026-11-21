@@ -64,3 +64,41 @@ test("H6 audit: only super admins can read the audit log", async () => {
   const asAdmin = await api(server.baseUrl, "GET", "/admin/audit-log", { token: admin.token });
   assert.equal(asAdmin.status, 403);
 });
+
+// ── H6 part 2: rate limit + lockout ──
+const adminLogin = (email, password) => api(server.baseUrl, "POST", "/admin/login", { json: { email, password } });
+
+test("H6 lockout: 5 wrong passwords lock the account, even the right password is refused", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  const admin = await makeAdmin();
+  for (let i = 0; i < 5; i += 1) assert.equal((await adminLogin(admin.email, `wrong-${i}`)).status, 401);
+  const locked = await adminLogin(admin.email, PASSWORD);
+  assert.equal(locked.status, 429);
+  assert.match(locked.body.error, /Too many attempts/);
+  const actions = (await auditRows("admin_email = $1", [admin.email])).map((r) => r.action);
+  assert.ok(actions.includes("login.locked"));
+  // After the lock expires the right password works and the counter resets.
+  await server.db.query("UPDATE admin_accounts SET locked_until = NOW() - INTERVAL '1 second' WHERE id = $1", [admin.id]);
+  assert.equal((await adminLogin(admin.email, PASSWORD)).status, 200);
+  const row = (await server.db.query("SELECT failed_login_count, locked_until FROM admin_accounts WHERE id=$1", [admin.id])).rows[0];
+  assert.equal(row.failed_login_count, 0);
+  assert.equal(row.locked_until, null);
+});
+
+test("H6 lockout: a correct password resets the failure count", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  const admin = await makeAdmin({ superAdmin: true });
+  for (let i = 0; i < 4; i += 1) await adminLogin(admin.email, "wrong");
+  assert.equal((await adminLogin(admin.email, PASSWORD)).status, 200);
+  for (let i = 0; i < 4; i += 1) await adminLogin(admin.email, "wrong");
+  assert.equal((await adminLogin(admin.email, PASSWORD)).status, 200, "still not locked: count was reset");
+});
+
+test("H6 rate limit: unknown emails are limited too, with the same message", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  const email = `nobody${fx.uid()}@test.local`;
+  const statuses = [];
+  for (let i = 0; i < 11; i += 1) statuses.push((await adminLogin(email, "x")).status);
+  assert.deepEqual(statuses.slice(0, 10), Array(10).fill(401));
+  assert.equal(statuses[10], 429);
+});

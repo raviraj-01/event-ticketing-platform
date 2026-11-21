@@ -1981,100 +1981,94 @@ app.post("/creator/finance/unlock", requireCreator, async (req, res) => {
   }
 });
 
-app.post("/admin/login", async (req, res) => {
-  try {
-    const email = String((req.body && req.body.email) || "")
-      .trim()
-      .toLowerCase();
-    const password = String((req.body && req.body.password) || "");
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
-    const superResult = await pool.query(
-      "SELECT * FROM super_admin_accounts WHERE email=$1",
-      [email],
-    );
-    const superAdmin = superResult.rows[0];
-    if (
-      superAdmin &&
-      superAdmin.status === "Active" &&
-      (await bcrypt.compare(password, superAdmin.password))
-    ) {
-      const updatedSuper = await pool.query(
-        "UPDATE super_admin_accounts SET last_login=NOW() WHERE id=$1 RETURNING *",
-        [superAdmin.id],
+// ── Admin login (H6) ───────────────────────────────────────────────────────
+// Rate limited per IP and per email; 5 wrong passwords in a row lock the
+// account for 15 minutes. Locked accounts and rate limits get the same 429
+// message, so the response does not reveal which emails are admins.
+const ADMIN_LOCKOUT = { maxFailures: 5, lockMinutes: 15 };
+const TOO_MANY_ATTEMPTS = "Too many attempts. Please try again later.";
+// Compared against when the email is unknown, so both cases take about as long.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("not-a-real-password", 10);
+const adminTable = (adminType) => (adminType === "super" ? "super_admin_accounts" : "admin_accounts");
+
+// Super admins live in their own table; check it first.
+async function findAdminByEmail(email) {
+  const superAdmin = await pool.query(
+    "SELECT *, 'super' AS admin_type FROM super_admin_accounts WHERE LOWER(email)=$1",
+    [email],
+  );
+  if (superAdmin.rows.length) return superAdmin.rows[0];
+  const admin = await pool.query("SELECT *, 'admin' AS admin_type FROM admin_accounts WHERE LOWER(email)=$1", [email]);
+  return admin.rows[0] || null;
+}
+
+// One atomic UPDATE: count the failure, and on the 5th lock the account and
+// reset the counter. Returns true when this failure locked the account.
+async function registerFailedAdminLogin(account) {
+  const result = await pool.query(
+    `UPDATE ${adminTable(account.admin_type)} SET
+       locked_until = CASE WHEN failed_login_count + 1 >= $2
+                           THEN NOW() + make_interval(mins => $3) ELSE locked_until END,
+       failed_login_count = CASE WHEN failed_login_count + 1 >= $2 THEN 0 ELSE failed_login_count + 1 END
+     WHERE id=$1
+     RETURNING locked_until`,
+    [account.id, ADMIN_LOCKOUT.maxFailures, ADMIN_LOCKOUT.lockMinutes],
+  );
+  const lockedUntil = result.rows[0] && result.rows[0].locked_until;
+  return Boolean(lockedUntil && new Date(lockedUntil) > new Date());
+}
+
+// Password (and, from H6 part 3, the second factor) verified: start the session.
+async function completeAdminLogin(req, res, account) {
+  const adminType = account.admin_type;
+  const fresh = await pool.query(`SELECT * FROM ${adminTable(adminType)} WHERE id=$1`, [account.id]);
+  await recordAdminAction(pool, req, { action: "login.success", admin: { sub: account.id, adminType, email: account.email } });
+  res.json({
+    message: adminType === "super" ? "Super admin login successful" : "Admin login successful",
+    admin: publicAdmin(adminType === "super" ? { ...fresh.rows[0], role: "Super Admin", is_super_admin: true } : fresh.rows[0]),
+    ...(await startSession(pool, req, res, { role: "admin", accountId: account.id, adminType })),
+  });
+}
+
+const adminLoginEmail = (req) => String((req.body && req.body.email) || "").trim().toLowerCase();
+
+app.post(
+  "/admin/login",
+  rateLimit({ name: "admin-login-ip", windowSeconds: 600, max: 20, key: (req) => req.ip, message: TOO_MANY_ATTEMPTS }),
+  rateLimit({ name: "admin-login-email", windowSeconds: 600, max: 10, key: (req) => adminLoginEmail(req) || null, message: TOO_MANY_ATTEMPTS }),
+  async (req, res) => {
+    try {
+      const email = adminLoginEmail(req);
+      const password = String((req.body && req.body.password) || "");
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+      const account = await findAdminByEmail(email);
+      if (account && account.locked_until && new Date(account.locked_until) > new Date()) {
+        await recordAdminAction(pool, req, { action: "login.blocked_locked", email }).catch(() => {});
+        return res.status(429).json({ error: TOO_MANY_ATTEMPTS });
+      }
+      const storedHash = account && String(account.password || "").startsWith("$2") ? account.password : DUMMY_PASSWORD_HASH;
+      const passwordOk = await bcrypt.compare(password, storedHash);
+      if (!account || account.status !== "Active" || !passwordOk) {
+        if (account && account.status === "Active") {
+          const locked = await registerFailedAdminLogin(account);
+          if (locked) await recordAdminAction(pool, req, { action: "login.locked", email }).catch(() => {});
+        }
+        await recordAdminAction(pool, req, { action: "login.failed", email }).catch(() => {});
+        return res.status(401).json({ error: "Invalid admin email or password" });
+      }
+      await pool.query(
+        `UPDATE ${adminTable(account.admin_type)} SET failed_login_count=0, locked_until=NULL, last_login=NOW() WHERE id=$1`,
+        [account.id],
       );
-      await recordAdminAction(pool, req, { action: "login.success", admin: { sub: superAdmin.id, adminType: "super", email } });
-      res.json({
-        message: "Super admin login successful",
-        admin: publicAdmin({
-          ...updatedSuper.rows[0],
-          role: "Super Admin",
-          is_super_admin: true,
-        }),
-        ...(await startSession(pool, req, res, { role: "admin", accountId: superAdmin.id, adminType: "super" })),
-      });
-      return;
+      await completeAdminLogin(req, res, account);
+    } catch (err) {
+      console.error("Admin login failed:", err);
+      res.status(500).json({ error: "Admin login failed" });
     }
-    const result = await pool.query(
-      "SELECT * FROM admin_accounts WHERE email=$1",
-      [email],
-    );
-    const admin = result.rows[0];
-    if (
-      !admin ||
-      admin.status !== "Active" ||
-      !(await bcrypt.compare(password, admin.password))
-    ) {
-      await recordAdminAction(pool, req, { action: "login.failed", email }).catch(() => {});
-      return res.status(401).json({ error: "Invalid admin email or password" });
-    }
-    if (admin.role === "Super Admin") {
-      const migrated = await pool.query(
-        `INSERT INTO super_admin_accounts (name, email, password, status, last_login, created_at)
-         VALUES ($1,$2,$3,$4,NOW(),$5)
-         ON CONFLICT (email) DO UPDATE SET
-           name=EXCLUDED.name,
-           password=EXCLUDED.password,
-           status=EXCLUDED.status,
-           last_login=NOW()
-         RETURNING *`,
-        [
-          admin.name,
-          admin.email,
-          admin.password,
-          admin.status,
-          admin.created_at,
-        ],
-      );
-      await pool.query("DELETE FROM admin_accounts WHERE id=$1", [admin.id]);
-      await recordAdminAction(pool, req, { action: "login.success", admin: { sub: migrated.rows[0].id, adminType: "super", email } });
-      res.json({
-        message: "Super admin login successful",
-        admin: publicAdmin({
-          ...migrated.rows[0],
-          role: "Super Admin",
-          is_super_admin: true,
-        }),
-        ...(await startSession(pool, req, res, { role: "admin", accountId: migrated.rows[0].id, adminType: "super" })),
-      });
-      return;
-    }
-    const updated = await pool.query(
-      "UPDATE admin_accounts SET last_login=NOW() WHERE id=$1 RETURNING *",
-      [admin.id],
-    );
-    await recordAdminAction(pool, req, { action: "login.success", admin: { sub: admin.id, adminType: "admin", email } });
-    res.json({
-      message: "Admin login successful",
-      admin: publicAdmin(updated.rows[0]),
-      ...(await startSession(pool, req, res, { role: "admin", accountId: admin.id, adminType: "admin" })),
-    });
-  } catch (err) {
-    console.error("Admin login failed:", err);
-    res.status(500).json({ error: "Admin login failed" });
-  }
-});
+  },
+);
 
 app.get("/admin/session", requireAdmin, async (req, res) => {
   try {
