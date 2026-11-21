@@ -45,7 +45,7 @@ http://localhost:3003
 - `.env` is intentionally not committed because it contains secrets.
 - `node_modules` is intentionally not committed. Run `npm install` after cloning.
 - The frontend lives in `public/` (the only folder the server publishes). It calls the API on the same origin.
-- Android app: `CORDOVA_API_BASE=https://your-backend npm run build:cordova` generates `vybera-cordova/www/` from `public/`, then `cd vybera-cordova && npx cordova build android`. Never edit `vybera-cordova/www/` by hand.
+- Android app: your backend's origin must be in `vybera-cordova/config.xml` `<access>` (`https://*.onrender.com` is there by default; the build checks this). `CORDOVA_API_BASE=https://your-backend npm run build:cordova` generates `vybera-cordova/www/` from `public/`, then `cd vybera-cordova && npx cordova build android`. Never edit `vybera-cordova/www/` by hand.
 - Project notes, audit and decisions: `CLAUDE.md`.
 
 ## Deploy (e.g. Render)

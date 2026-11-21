@@ -22,6 +22,23 @@ if (!/^https:\/\/[^\s'"<>]+$/.test(apiBase)) {
   process.exit(1);
 }
 
+// H15: the backend must be in config.xml's <access> allowlist, otherwise the
+// app would build fine and then fail to reach its own API.
+const configXml = fs.readFileSync(path.join(root, "vybera-cordova", "config.xml"), "utf8");
+const accessOrigins = [...configXml.matchAll(/<access\s+origin="([^"]+)"/g)].map((m) => m[1]);
+const apiOrigin = new URL(apiBase).origin;
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const allowed = accessOrigins.some((pattern) => {
+  if (pattern === "*") return true;
+  // "https://*.onrender.com" -> ^https://[^/]+\.onrender\.com$
+  const regex = new RegExp("^" + pattern.split("*").map(escapeRegExp).join("[^/]+") + "$");
+  return regex.test(apiOrigin);
+});
+if (!allowed) {
+  console.error(`${apiOrigin} is not in vybera-cordova/config.xml <access> list. Add <access origin="${apiOrigin}" /> there.`);
+  process.exit(1);
+}
+
 const MARKER = "<!-- CORDOVA_HEAD_INJECT: replaced by scripts/build-cordova.js -->";
 const APP_STYLE_OFF = '<style data-platform="app" media="not all">';
 const APP_STYLE_ON = '<style data-platform="app" media="all">';
