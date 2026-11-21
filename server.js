@@ -3709,13 +3709,17 @@ app.post("/auth/forgot-password", async (req, res) => {
 
     // Look up user (but don't reveal whether email exists — security best practice)
     const result = await pool.query(
-      "SELECT id FROM users WHERE LOWER(email)=LOWER($1) AND COALESCE(status,'Active') NOT IN ('Suspended','Blocked','Inactive') LIMIT 1",
+      "SELECT id, password_version FROM users WHERE LOWER(email)=LOWER($1) AND COALESCE(status,'Active') NOT IN ('Suspended','Blocked','Inactive') LIMIT 1",
       [email],
     );
 
     if (result.rows.length) {
       const ttlMinutes = Number(process.env.PASSWORD_RESET_TTL_MINUTES || 10);
-      const token = signJwt({ scope: "password-reset", email }, ttlMinutes * 60);
+      // pv = password_version: the link stops working once the password changes (H2).
+      const token = signJwt(
+        { scope: "password-reset", email, pv: result.rows[0].password_version },
+        ttlMinutes * 60,
+      );
       const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3003}`).replace(/\/$/, "");
       const resetLink = `${baseUrl}/?reset_token=${encodeURIComponent(token)}`;
 
@@ -3788,18 +3792,24 @@ app.post("/auth/reset-password-by-token", async (req, res) => {
       return res.status(400).json({ error: "Reset link is invalid or has expired. Please request a new one." });
     }
 
-    if (payload.scope !== "password-reset" || !payload.email) {
+    if (payload.scope !== "password-reset" || !payload.email || !Number.isInteger(payload.pv)) {
       return res.status(400).json({ error: "Invalid reset link" });
     }
 
+    // One atomic statement: it only matches while password_version still
+    // equals the version in the token, and it bumps the version. So the first
+    // use wins and every later (or concurrent) use of the same link fails.
     const hash = await bcrypt.hash(newPassword, 10);
     const result = await pool.query(
-      "UPDATE users SET password=$1 WHERE LOWER(email)=LOWER($2) AND COALESCE(status,'Active') NOT IN ('Suspended','Blocked','Inactive') RETURNING id",
-      [hash, payload.email],
+      `UPDATE users SET password=$1, password_version = password_version + 1
+       WHERE LOWER(email)=LOWER($2) AND password_version = $3
+         AND COALESCE(status,'Active') NOT IN ('Suspended','Blocked','Inactive')
+       RETURNING id`,
+      [hash, payload.email, payload.pv],
     );
 
     if (!result.rows.length) {
-      return res.status(404).json({ error: "Account not found or is inactive" });
+      return res.status(400).json({ error: "Reset link is invalid or has already been used. Please request a new one." });
     }
 
     res.json({ success: true, message: "Password updated successfully. You can now sign in with your new password." });

@@ -79,3 +79,32 @@ test("H13: creator login is rate limited per email", async () => {
   assert.deepEqual(statuses.slice(0, 10), Array(10).fill(401));
   assert.equal(statuses[10], 429);
 });
+
+// ── H2: single-use password reset links ──
+const { signTestToken } = require("./helpers/testServer");
+const resetWith = (token, password = "New-password-1") =>
+  api(server.baseUrl, "POST", "/auth/reset-password-by-token", { json: { token, password } });
+
+test("H2: a reset link works once", async () => {
+  const buyer = await fx.createBuyer();
+  const token = signTestToken({ scope: "password-reset", email: buyer.email, pv: 0 }, 600);
+  assert.equal((await resetWith(token, "First-new-pass-1")).status, 200);
+  const reuse = await resetWith(token, "Second-new-pass-1");
+  assert.equal(reuse.status, 400);
+  assert.match(reuse.body.error, /already been used/);
+  const login = await api(server.baseUrl, "POST", "/login", { json: { email: buyer.email, password: "First-new-pass-1" } });
+  assert.equal(login.status, 200, "the first new password is the one that stuck");
+});
+
+test("H2: links without a password version (old format) are rejected", async () => {
+  const buyer = await fx.createBuyer();
+  const token = signTestToken({ scope: "password-reset", email: buyer.email }, 600);
+  assert.equal((await resetWith(token)).status, 400);
+});
+
+test("H2: two simultaneous uses of one link: exactly one succeeds", async () => {
+  const buyer = await fx.createBuyer();
+  const token = signTestToken({ scope: "password-reset", email: buyer.email, pv: 0 }, 600);
+  const results = await Promise.all(Array.from({ length: 5 }, (_, i) => resetWith(token, `Parallel-pass-${i}`)));
+  assert.equal(results.filter((r) => r.status === 200).length, 1);
+});
