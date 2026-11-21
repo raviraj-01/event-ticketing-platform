@@ -41,7 +41,7 @@ async function createBuyer({ email, phone } = {}) {
   const result = await db.query(
     `INSERT INTO users (username, first_name, email, password, phone)
      VALUES ('Buyer', 'Buyer', $1, 'x', $2) RETURNING id, email`,
-    [email || `buyer${uid()}@test.local`, phone || null],
+    [email || `buyer${uid()}@test.local`, phone === undefined ? `98${String(Date.now()).slice(-8)}` : phone],
   );
   const user = result.rows[0];
   return { ...user, token: await signTestToken({ sub: user.id, email: user.email }) };

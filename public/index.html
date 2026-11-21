@@ -4293,6 +4293,33 @@ function submitPayUForm(action, fields){
 }
 
 // "Pay" / "Confirm free booking" button.
+// Q14 / D24: ask a buyer without a phone (e.g. Google sign-in) for one, once,
+// and save it to their profile. Resolves true when saved.
+function askAndSaveBuyerPhone(){
+  return new Promise(function(resolve){
+    var settled=false;
+    var modal=showPasswordModal('buyerPhoneModal','Your phone number',
+      'The payment gateway needs a mobile number for your booking. We save it to your profile so you only enter it once.',
+      '<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Mobile number (+91)</label>'
+        +'<input id="buyerPhoneInput" inputmode="tel" autocomplete="tel-national" maxlength="14" placeholder="98765 43210" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>',
+      'Save and continue',
+      async function(m){
+        var phone=((document.getElementById('buyerPhoneInput')||{}).value||'').trim();
+        try{
+          var resp=await fetch(apiUrl('/profile/phone'),{method:'PUT',headers:authHeaders('buyer',{'Content-Type':'application/json'}),body:JSON.stringify({phone:phone})});
+          var data=await readAuthResponse(resp);
+          if(!resp.ok){showToast(data.error||'Could not save phone number');return;}
+          if(STORE.currentUser&&data.user){STORE.currentUser.phone=data.user.phone;}
+          settled=true; m.remove(); resolve(true);
+        }catch(err){showToast('Could not save phone number');}
+      });
+    modal.addEventListener('click',function(e){
+      if((e.target===modal||e.target.closest('[data-cancel]'))&&!settled){settled=true;resolve(false);}
+    });
+    setTimeout(function(){var e=document.getElementById('buyerPhoneInput');if(e)e.focus();},50);
+  });
+}
+
 async function payWithPayU(){
   if(!CURRENT_EVENT){ showToast('Select an event first'); return; }
   var selected=document.querySelector('.ticket-option.selected');
@@ -4307,17 +4334,23 @@ async function payWithPayU(){
   var btn=document.getElementById('payNowBtn');
   if(btn){ btn.disabled=true; btn.textContent='Please wait...'; }
   try{
-    var resp=await fetch(apiUrl('/orders'),{
-      method:'POST',
-      headers:authHeaders('buyer',{'Content-Type':'application/json'}),
-      body:JSON.stringify({
-        eventId:CURRENT_EVENT.id,
-        tierName:selected.getAttribute('data-name'),
-        qty:qty||1,
-        shareToken:(STAFF_REFERRAL&&STAFF_REFERRAL.shareToken)||''
-      })
+    var orderBody=JSON.stringify({
+      eventId:CURRENT_EVENT.id,
+      tierName:selected.getAttribute('data-name'),
+      qty:qty||1,
+      shareToken:(STAFF_REFERRAL&&STAFF_REFERRAL.shareToken)||''
     });
+    var postOrder=function(){
+      return fetch(apiUrl('/orders'),{method:'POST',headers:authHeaders('buyer',{'Content-Type':'application/json'}),body:orderBody});
+    };
+    var resp=await postOrder();
     var data=await readAuthResponse(resp);
+    // Q14: PayU needs a phone. Ask once, save it to the profile, try again.
+    if(resp.status===400&&data.code==='phone_required'){
+      if(!(await askAndSaveBuyerPhone())) throw new Error('A phone number is needed to pay online');
+      resp=await postOrder();
+      data=await readAuthResponse(resp);
+    }
     if(resp.status===401){
       rememberCheckoutSelection();
       showPage('page-login');

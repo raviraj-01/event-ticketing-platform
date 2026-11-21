@@ -7,12 +7,16 @@ const path = require("path");
 const { startTestServer, signTestToken, api } = require("./helpers/testServer");
 const tokens = require("../src/utils/tokens");
 const { findDuplicatePhones } = require("../scripts/report-duplicate-phones");
+const bcrypt = require("bcrypt");
+const { makeFixtures } = require("./helpers/fixtures");
 
 let server;
+let fx;
 let n = 0;
 
 before(async () => {
   server = await startTestServer();
+  fx = makeFixtures(server.db);
 });
 after(async () => {
   if (server) await server.stop();
@@ -105,4 +109,60 @@ test("Q12: migration backfills phone_verified and the report lists duplicates (p
   assert.ok(group, JSON.stringify(groups));
   assert.deepEqual(group.accounts.map((a) => a.id).sort(), [dupOne, dupTwo].sort());
   assert.ok(!groups.some((g) => g.phone === "919812345604"));
+});
+
+// ── Q14 / D24: phone before the first paid checkout ──
+
+const order = (buyer, eventId, tierName) =>
+  api(server.baseUrl, "POST", "/orders", { token: buyer.token, json: { eventId, tierName, qty: 1 } });
+
+test("Q14: a buyer without a phone must add one before a paid order (no hold is created); free tiers don't need it", async () => {
+  const creator = await fx.createCreator();
+  const eventId = await fx.createEvent({
+    creatorId: creator.id,
+    tiers: [{ name: "General", price: 500, qty: 10 }, { name: "Free", price: 0, qty: 10 }],
+  });
+  const buyer = await fx.createBuyer({ phone: null });
+
+  const refused = await order(buyer, eventId, "General");
+  assert.equal(refused.status, 400);
+  assert.equal(refused.body.code, "phone_required");
+  const holds = await server.db.query("SELECT 1 FROM orders WHERE user_id=$1", [buyer.id]);
+  assert.equal(holds.rows.length, 0);
+  assert.equal((await order(buyer, eventId, "Free")).status, 201);
+
+  const bad = await api(server.baseUrl, "PUT", "/profile/phone", { token: buyer.token, json: { phone: "12345" } });
+  assert.equal(bad.status, 400);
+  const saved = await api(server.baseUrl, "PUT", "/profile/phone", { token: buyer.token, json: { phone: "+91 98765 43210" } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.user.phone, "9876543210");
+  const row = await server.db.query("SELECT phone_verified FROM users WHERE id=$1", [buyer.id]);
+  assert.equal(row.rows[0].phone_verified, false);
+
+  const paid = await order(buyer, eventId, "General");
+  assert.equal(paid.status, 201, JSON.stringify(paid.body));
+  assert.equal(paid.body.payment.fields.phone, "9876543210");
+});
+
+test("Q14: a phone verified by OTP cannot be overwritten through the profile route", async () => {
+  const res = await signup({ phone: "9812345606", identifier: "919812345606" });
+  assert.equal(res.status, 200);
+  const token = await signTestToken({ sub: res.body.user.id, email: res.body.user.email });
+  const change = await api(server.baseUrl, "PUT", "/profile/phone", { token, json: { phone: "9876500000" } });
+  assert.equal(change.status, 409);
+});
+
+test("Q14: only a verified phone works as a login name", async () => {
+  const password = "Buyer-pass-123";
+  const hash = await bcrypt.hash(password, 4);
+  const insert = (email, phone, verified) => server.db.query(
+    `INSERT INTO users (username, first_name, email, password, phone, country_code, phone_verified)
+     VALUES ('B', 'B', $1, $2, $3, '+91', $4)`,
+    [email, hash, phone, verified],
+  );
+  await insert(`unverified-${Date.now()}@test.local`, "9812345607", false);
+  await insert(`verified-${Date.now()}@test.local`, "9812345608", true);
+  const login = (id) => api(server.baseUrl, "POST", "/login", { json: { email: id, password } });
+  assert.notEqual((await login("9812345607")).status, 200);
+  assert.equal((await login("9812345608")).status, 200);
 });

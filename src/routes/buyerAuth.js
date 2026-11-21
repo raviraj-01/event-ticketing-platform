@@ -20,6 +20,8 @@ const { pool } = require("../db/pool");
 const { isUserActive } = require("../utils/accounts");
 const { USER_NOT_FOUND_ERROR, publicUser } = require("../utils/serializers");
 const { startSession } = require("../services/sessions");
+const { requireBuyer } = require("../middleware/auth");
+const { payablePhone } = require("../services/orders");
 
 const router = express.Router();
 
@@ -287,6 +289,28 @@ router.post("/auth/google", async (req, res) => {
   }
 });
 
+// Q14 / D24: buyers without a phone (Google sign-in) add one before their
+// first paid checkout. Saved unverified: it is a contact number for PayU, not
+// a login name, and it never replaces a phone that was verified by OTP.
+router.put("/profile/phone", requireBuyer, async (req, res) => {
+  try {
+    const phone = payablePhone(req.body && req.body.phone);
+    if (!phone) return res.status(400).json({ error: "Enter a valid 10-digit mobile number" });
+    const result = await pool.query(
+      `UPDATE users SET phone=$2, country_code='+91', phone_verified=FALSE
+       WHERE id=$1 AND NOT phone_verified
+       RETURNING id, username, first_name, last_name, email, phone, country_code, city,
+         profile_image_url, profile_image_key, profile_image_storage, status`,
+      [req.buyer.sub, phone],
+    );
+    if (!result.rows.length) return res.status(409).json({ error: "Your verified phone number cannot be changed here" });
+    res.json({ user: publicUser(result.rows[0]) });
+  } catch (err) {
+    console.error("Saving phone failed:", err);
+    res.status(500).json({ error: "Could not save phone number" });
+  }
+});
+
 // LOGIN API
 router.post("/login", async (req, res) => {
   try {
@@ -305,7 +329,8 @@ router.post("/login", async (req, res) => {
         profile_image_url, profile_image_key, profile_image_storage, password, status
       FROM users
       WHERE LOWER(email)=LOWER($1)
-        OR ($2 <> '' AND (
+        -- Only an OTP-verified phone is a login name (Q14 phones are unverified).
+        OR ($2 <> '' AND phone_verified AND (
           REGEXP_REPLACE(COALESCE(country_code,'') || COALESCE(phone,''), '\\D', '', 'g')=$2
           OR REGEXP_REPLACE(COALESCE(phone,''), '\\D', '', 'g')=RIGHT($2,10)
         ))

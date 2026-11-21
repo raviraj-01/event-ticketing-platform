@@ -30,11 +30,19 @@ const ORDER_SETTINGS = {
 };
 
 class OrderError extends Error {
-  constructor(status, message) {
+  // code: optional machine-readable reason the client can act on.
+  constructor(status, message, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
+
+// PayU needs a real mobile number. 10 digits after removing spaces, +91 etc.
+const payablePhone = (phone) => {
+  const digits = String(phone || "").replace(/\D/g, "").slice(-10);
+  return /^[6-9]\d{9}$/.test(digits) ? digits : null;
+};
 
 const roundMoney = (value) => Math.round(value * 100) / 100;
 const randomId = (prefix, bytes) => `${prefix}${crypto.randomBytes(bytes).toString("hex")}`;
@@ -227,6 +235,11 @@ async function createOrder(pool, { userId, eventId, tierName, qty, shareToken })
 
     const buyer = await loadBuyer(client, userId);
     if (!buyer) throw new OrderError(401, "Buyer login required");
+    // Q14 / D24: paid checkout needs the buyer's phone (asked once, then saved
+    // to the profile). Checked before any hold is released or created.
+    if (unitPrice > 0 && !payablePhone(buyer.phone)) {
+      throw new OrderError(400, "Add your phone number to pay", "phone_required");
+    }
 
     // Starting a new checkout releases this buyer's earlier hold for the same
     // event, so one person cannot block the event with many open checkouts.
@@ -400,4 +413,5 @@ module.exports = {
   getOrderForBuyer,
   withAvailability,
   expireStaleOrders,
+  payablePhone,
 };

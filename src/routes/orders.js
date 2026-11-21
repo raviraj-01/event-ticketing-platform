@@ -11,6 +11,7 @@ const {
   OrderError,
   applyPayuResult,
   getOrderForBuyer,
+  payablePhone,
 } = require("../services/orders");
 const { rateLimit } = require("../middleware/rateLimit");
 const { requireBuyer } = require("../middleware/auth");
@@ -95,8 +96,8 @@ router.post("/orders", requireBuyer, ...orderRateLimits, async (req, res) => {
       productinfo: cleanPayuText(`Tickets ${event.name}`, 100) || "Event tickets",
       firstname: cleanPayuText(buyer.first_name || buyer.username || "Buyer", 60) || "Buyer",
       email: buyer.email,
-      // PayU requires a phone; Google-only accounts may not have one yet.
-      phone: String(buyer.phone || "").replace(/\D/g, "").slice(-10) || "9999999999",
+      // Q14: createOrder refuses paid orders without a usable phone, so this is real.
+      phone: payablePhone(buyer.phone),
       surl: `${APP_BASE_URL}/payments/payu/success`,
       furl: `${APP_BASE_URL}/payments/payu/failure`,
       udf1: order.id,
@@ -104,7 +105,7 @@ router.post("/orders", requireBuyer, ...orderRateLimits, async (req, res) => {
     fields.hash = makeRequestHash(fields, payu.salt);
     res.status(201).json({ order: publicOrder(order), payment: { action: payu.action, fields } });
   } catch (err) {
-    if (err instanceof OrderError) return res.status(err.status).json({ error: err.message });
+    if (err instanceof OrderError) return res.status(err.status).json({ error: err.message, code: err.code });
     console.error("Order creation failed:", err);
     res.status(500).json({ error: "Could not create order" });
   }
