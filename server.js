@@ -1737,22 +1737,26 @@ app.post("/staff/login", async (req, res) => {
         .status(400)
         .json({ error: "Staff login ID and password are required" });
     }
+    // H17: only treat the input as a phone number when it has at least 10
+    // digits; otherwise "evil.staff" (no digits) matched every staff member
+    // without a phone. Exact login ID wins over email, email over phone.
+    const phoneDigits = digits.length >= 10 ? digits.slice(-10) : null;
     const result = await pool.query(
       `SELECT *
        FROM staff_accounts
        WHERE status='active'
          AND (
-           LOWER(staff_id)=LOWER($1)
-           OR LOWER(COALESCE(email,''))=LOWER($1)
-           OR regexp_replace(COALESCE(phone,''), '[^0-9]', '', 'g')=$2
+           LOWER(staff_id)=$1
+           OR LOWER(COALESCE(email,''))=$1
+           OR ($2::text IS NOT NULL AND RIGHT(regexp_replace(COALESCE(phone,''), '[^0-9]', '', 'g'), 10)=$2)
          )
+       ORDER BY CASE WHEN LOWER(staff_id)=$1 THEN 0 WHEN LOWER(COALESCE(email,''))=$1 THEN 1 ELSE 2 END
        LIMIT 1`,
-      [cleanStaffId, digits],
+      [cleanStaffId, phoneDigits],
     );
+    // Same answer for "no such staff" and "wrong password" (no account enumeration).
     if (!result.rows.length || !result.rows[0].password) {
-      return res
-        .status(404)
-        .json({ error: "Staff account not found", staffNotFound: true });
+      return res.status(401).json({ error: "Invalid staff login ID or password" });
     }
     const member = result.rows[0];
     const ok = await bcrypt.compare(password, member.password);
@@ -1813,20 +1817,14 @@ app.get("/staff/share/:token", async (req, res) => {
     const token = decodeURIComponent(String(req.params.token || ""))
       .trim()
       .replace(/[.)\]\s]+$/g, "");
-    const digits = token.replace(/\D/g, "");
+    // Share links resolve by the secret share token only (D12); looking up
+    // staff by email/phone/login ID let anyone probe staff details.
     const result = await pool.query(
-      `SELECT s.id, s.name, s.staff_id, s.email, s.phone, s.share_token, s.primary_event_id, e.name AS event_name
+      `SELECT s.id, s.name, s.staff_id, s.share_token, s.primary_event_id, e.name AS event_name
        FROM staff_accounts s
        LEFT JOIN creator_events e ON e.id=s.primary_event_id
-       WHERE s.status='active'
-         AND (
-           s.share_token=$1
-           OR LOWER(s.staff_id)=LOWER($1)
-           OR LOWER(COALESCE(s.email,''))=LOWER($1)
-           OR regexp_replace(COALESCE(s.phone,''), '\\D', '', 'g')=$2
-         )
-       LIMIT 1`,
-      [token, digits],
+       WHERE s.status='active' AND s.share_token=$1`,
+      [token],
     );
     if (!result.rows.length)
       return res.status(404).json({ error: "Staff share link not found" });

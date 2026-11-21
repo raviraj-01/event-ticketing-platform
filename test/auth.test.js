@@ -145,3 +145,48 @@ test("H3: the unused /otp/msg91 aliases are gone", async () => {
 test("M20: the anonymous staff existence lookup is gone", async () => {
   assert.equal((await api(server.baseUrl, "GET", "/staff/lookup?identifier=someone@test.local")).status, 404);
 });
+
+// ── H17: staff login resolves the right account ──
+async function staffWithPassword({ staffId, phone = null, email = null, password }) {
+  const id = `STF-h17-${fx.uid()}`;
+  await server.db.query(
+    `INSERT INTO staff_accounts (id, creator_id, name, staff_id, email, phone, password, share_token, status)
+     VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, 'active')`,
+    [id, staffId, staffId, email, phone, await bcrypt.hash(password, 4), `share-${fx.uid()}`],
+  );
+  return id;
+}
+const staffLogin = (staffId, password) => api(server.baseUrl, "POST", "/staff/login", { json: { staffId, password } });
+
+test("H17: a login ID without digits does not match staff who have no phone", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  await staffWithPassword({ staffId: `nophone${fx.uid()}`, password: "Other-pass-1" }); // phone NULL
+  const mineId = await staffWithPassword({ staffId: `evil.staff.${fx.uid().replace(/\d/g, "x")}`, password: "Mine-pass-1" });
+  const loginId = (await server.db.query("SELECT staff_id FROM staff_accounts WHERE id=$1", [mineId])).rows[0].staff_id;
+  const res = await staffLogin(loginId, "Mine-pass-1");
+  assert.equal(res.status, 200);
+  assert.equal(res.body.staff.id, mineId, "logged into the right account");
+});
+
+test("H17: staff can still log in by phone (10+ digits)", async () => {
+  const id = await staffWithPassword({ staffId: `byphone${fx.uid()}`, phone: "+91 98111 22233", password: "Phone-pass-1" });
+  const res = await staffLogin("9811122233", "Phone-pass-1");
+  assert.equal(res.status, 200);
+  assert.equal(res.body.staff.id, id);
+});
+
+test("H17: unknown staff and wrong password get the same 401", async () => {
+  await staffWithPassword({ staffId: `known${fx.uid()}`, password: "Known-pass-1" });
+  const unknown = await staffLogin(`nobody${fx.uid()}`, "x");
+  assert.equal(unknown.status, 401);
+});
+
+test("D12: staff share links resolve by share token only", async () => {
+  const email = `share${fx.uid()}@test.local`;
+  const id = await staffWithPassword({ staffId: `sharer${fx.uid()}`, email, password: "Share-pass-1" });
+  const token = (await server.db.query("SELECT share_token FROM staff_accounts WHERE id=$1", [id])).rows[0].share_token;
+  assert.equal((await api(server.baseUrl, "GET", `/staff/share/${encodeURIComponent(email)}`)).status, 404);
+  const ok = await api(server.baseUrl, "GET", `/staff/share/${token}`);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.staff.email, undefined, "no email in the public share response");
+});
