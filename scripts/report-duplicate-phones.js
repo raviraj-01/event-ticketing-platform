@@ -7,7 +7,6 @@
 // has to be resolved by hand (e.g. mark the extra accounts unverified) before
 // the partial unique index can be created.
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const { Pool } = require("pg");
 
 const DUPLICATES_SQL = `
@@ -27,6 +26,9 @@ async function findDuplicatePhones(pool) {
 }
 
 async function main() {
+  // Only when run as a script: tests import findDuplicatePhones and must
+  // never pick up the developer's .env (H18).
+  require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     console.error("DATABASE_URL is missing.");

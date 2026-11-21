@@ -2,8 +2,10 @@
 // The app itself is built in src/app.js.
 // L10: load .env before requiring anything else. Some modules read their
 // settings (fee %, token lifetimes, ...) at load time.
+// H18: the test helper sets SKIP_ENV_FILE so a developer's .env (real
+// database, R2, SMTP, Twilio, PayU) can never leak into a test server.
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+if (process.env.SKIP_ENV_FILE !== "true") require("dotenv").config({ path: path.join(__dirname, ".env") });
 const { runMigrations } = require("./src/db/migrate");
 const { pool, dbSsl } = require("./src/db/pool");
 const { initDb } = require("./src/db/initDb");

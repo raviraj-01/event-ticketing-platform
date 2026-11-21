@@ -1,6 +1,8 @@
 // Starts a throwaway real PostgreSQL (embedded-postgres) and the real
 // server.js against it, for integration tests. Nothing here touches .env or
-// any real account: all secrets below are test-only values.
+// any real account: all secrets below are test-only values, the inherited
+// environment is stripped of real-service variables and the server is told
+// not to read .env (H18).
 const { spawn } = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -22,6 +24,15 @@ function signTestToken(payload, expiresInSeconds = 3600, audience = tokens.AUDIE
 
 const freePort = () => 20000 + Math.floor(Math.random() * 20000);
 
+// H18: anything that could point a test server at a real service. Removed
+// from the inherited environment; the server also skips .env (SKIP_ENV_FILE).
+const REAL_SERVICE_VARS = /^(DATABASE_URL|JWT_SECRET|APP_BASE_URL|CORS_ORIGINS|PAYU_|TWILIO_|SMTP_|R2_|GOOGLE_|SUPERADMIN_|PGHOST|PGUSER|PGPASSWORD|PGDATABASE|PGPORT)/;
+
+function testEnv(parentEnv, overrides) {
+  const base = Object.fromEntries(Object.entries(parentEnv).filter(([name]) => !REAL_SERVICE_VARS.test(name)));
+  return { ...base, ...overrides, SKIP_ENV_FILE: "true" };
+}
+
 // Start server.js against an existing database (used by startTestServer, and
 // by tests that need a second boot on the same database).
 async function startApp(databaseUrl, extraEnv = {}) {
@@ -29,8 +40,7 @@ async function startApp(databaseUrl, extraEnv = {}) {
   const baseUrl = `http://localhost:${appPort}`;
   const child = spawn(process.execPath, ["server.js"], {
     cwd: ROOT,
-    env: {
-      ...process.env,
+    env: testEnv(process.env, {
       NODE_ENV: "test",
       PORT: String(appPort),
       APP_BASE_URL: baseUrl,
@@ -46,7 +56,7 @@ async function startApp(databaseUrl, extraEnv = {}) {
       // Admin login code is returned in the response (dev mode, never in production).
       ADMIN_OTP_DEV_MODE: "true",
       ...extraEnv,
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
@@ -118,4 +128,4 @@ async function api(baseUrl, method, urlPath, { token, json, form } = {}) {
   return { status: res.status, body: parsed, headers: res.headers };
 }
 
-module.exports = { startTestServer, startApp, signTestToken, api, TEST_PAYU };
+module.exports = { startTestServer, startApp, signTestToken, api, TEST_PAYU, testEnv };
