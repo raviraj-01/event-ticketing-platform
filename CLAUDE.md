@@ -269,6 +269,11 @@ Frontend consolidation (M14) happens before the first frontend-touching fix (C2)
 | D10 | Inventory | 15-minute hold at order creation, atomic (event row lock), expired holds stop counting, late-payment rule (re-check → `paid` or `paid_needs_refund`), idempotent callbacks, max qty per order (10), race test required. |
 | D11 | Free tiers | Confirm instantly only when the DB price is 0; buyer login required; same atomic inventory check; status `paid`, amount 0, method `free`; per-user limit (default 2) per event; rate limit per user + IP; no platform fee; no commission. |
 | D12 | Staff referral | `share_token` only, resolved at order creation; active + assigned to the event/tier; commission computed server-side, only when paid; no self-referral; reversal by status, never deletion; staff/creator can regenerate the token. |
+| D13 | Coupons | Keep hidden at checkout for now. Server-side coupons are built **after all High items**. |
+| D14 | Hold release | Approved: a new checkout releases the same buyer's earlier pending hold for that event. |
+| D15 | Proxy | `TRUST_PROXY_HOPS` approved; documented in README → Deploy (Render = 1). |
+| D16 | Legacy guest bookings | Visible to the event's creator and assigned staff (needed for scanning); hidden from buyers. Current C6 behaviour is correct. |
+| D17 | Order of work after the Criticals | M20 → H7 → H5+H16 → H10 → H6 → H12/H14/H15 → server-side coupons → remaining Medium/Low. Every fix adds a 2-line Interview note. |
 | D8 | Static files | Serve only a dedicated `public/` folder; CLAUDE.md is never public. |
 
 Still open (ask when reached): password reset for non-buyers (old Q4), event approval before live (Q6), refunds in v1 (Q8), global scanner staff (Q10, M18), unique phone per buyer (Q12), staff_owned upfront payment (rest of Q5).
@@ -293,9 +298,13 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 | 2026-11-21 | M14: Cordova-only features merged into `public/index.html`; `scripts/build-cordova.js` generates `vybera-cordova/www/`. | One frontend source, so every fix is made once (D6). |
 | 2026-11-21 | `.env.example` rewritten as a checklist of Ravi's own test accounts (dropped the unused `R2_ACCOUNT_ID`); CLAUDE.md records decisions D1-D8. | C1 / D1. |
 
+## Before calling the project done (Ravi's acceptance list)
+- [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt).
+- [ ] Android build installed and tested on a real device (`npm run build:cordova` → `cordova build android`).
+- [ ] Rename/rebrand (Ravi gives the name; see "Branding/cleanup to do").
+
 ## Open questions for Ravi
 (Answered ones moved to "Decisions from Ravi".)
-- Q13. **Coupons and platform settings are browser-only.** The admin "Coupon Manager" and "System Config" pages only change the admin's own browser (`STORE.coupons`, `STORE.platformConfig`); the server never saw them. With server-side pricing, coupons are hidden at checkout. Build server-side coupons (table + validation in `POST /orders`), or drop the feature? Fee/GST are now env settings (`PLATFORM_FEE_PERCENT`, `GST_PERCENT`).
 - Q14. PayU requires a phone number. Google-only buyers may have none; we send the placeholder `9999999999`. Collect a phone before checkout instead?
 - Q15. Share-token regeneration (D12) needs a UI button and an endpoint. Should staff do it, the creator, or both?
 - Q4. **Password reset for non-buyers** once the legacy route is gone: creators → same email-token flow; staff → reset by their creator/admin; admins → by super admin; super admin → DB/CLI only. OK?

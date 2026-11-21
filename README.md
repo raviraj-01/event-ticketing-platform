@@ -1,6 +1,6 @@
-# VYBERA
+# Ticketing app (name TBD)
 
-VYBERA is a Node/Express app that serves the single-page frontend and API from the same server.
+A Node/Express app that serves the single-page frontend and API from the same server.
 
 ## Run Locally
 
@@ -48,6 +48,17 @@ http://localhost:3003
 - Android app: `CORDOVA_API_BASE=https://your-backend npm run build:cordova` generates `vybera-cordova/www/` from `public/`, then `cd vybera-cordova && npx cordova build android`. Never edit `vybera-cordova/www/` by hand.
 - Project notes, audit and decisions: `CLAUDE.md`.
 
+## Deploy (e.g. Render)
+
+1. Create a PostgreSQL database and set every variable from `.env.example` in the host's environment (never commit `.env`).
+2. Set `APP_BASE_URL` to the public https URL (used for PayU return URLs and email links).
+3. **Set `TRUST_PROXY_HOPS=1` on Render** (or the number of reverse proxies in front of the app). Without it every visitor appears to have the proxy's IP, so all per-IP rate limits (OTP, login, orders) would be shared by everyone. Locally keep it `0`, otherwise clients could fake their IP with an `X-Forwarded-For` header.
+4. Start command: `npm start`. Pending database migrations in `migrations/` run automatically before the server accepts requests.
+
+## Tests
+
+`npm test` starts a throwaway real PostgreSQL (embedded-postgres, downloaded on first `npm install`) and the real server, then runs the integration tests in `test/`.
+
 ## Health Check
 
 After starting the server, this URL should return database status:
@@ -55,4 +66,3 @@ After starting the server, this URL should return database status:
 ```text
 http://localhost:3003/health
 ```
-# Blak-tickets
