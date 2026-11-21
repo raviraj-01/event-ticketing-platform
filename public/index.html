@@ -1750,7 +1750,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
   <div style="font-size:14px;color:var(--grey);">Tap to upload image</div>
   <div style="font-size:12px;color:var(--muted)">JPG, PNG · Max 20MB</div>
 </div>
-<input type="file" id="bannerFile" accept="image/*" style="display:none;" onchange="handleBannerUpload(this)"/>
+<input type="file" id="bannerFile" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleBannerUpload(this)"/>
 <button class="cta-full" style="margin-top:24px;" onclick="nextCStep(2)">Continue →</button>
 </div>
 <div class="create-step" id="cstep2">
@@ -2290,26 +2290,26 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
   <div style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:10px;font-weight:600;">KYC Documents</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
     <div style="padding:14px;background:rgba(255,255,255,0.04);border:1.5px dashed rgba(255,255,255,0.15);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
-      <input type="file" accept=".pdf,.jpg,.png" style="display:none;" onchange="applyDocSelected(this,'pan')"/>
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;" onchange="applyDocSelected(this,'pan')"/>
       <div style="font-size:20px;margin-bottom:6px;">📄</div>
       <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">PAN Card</div>
       <div id="applyPanLabel" style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;">Tap to upload</div>
     </div>
     <div style="padding:14px;background:rgba(255,255,255,0.04);border:1.5px dashed rgba(255,255,255,0.15);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
-      <input type="file" accept=".pdf,.jpg,.png" style="display:none;" onchange="applyDocSelected(this,'aadhaar')"/>
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;" onchange="applyDocSelected(this,'aadhaar')"/>
       <div style="font-size:20px;margin-bottom:6px;">🪪</div>
       <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">Aadhaar / ID</div>
       <div id="applyAadhaarLabel" style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;">Tap to upload</div>
     </div>
     <div style="padding:14px;background:rgba(255,255,255,0.04);border:1.5px dashed rgba(255,255,255,0.15);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
-      <input type="file" accept=".pdf,.jpg,.png" style="display:none;" onchange="applyDocSelected(this,'gst')"/>
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;" onchange="applyDocSelected(this,'gst')"/>
       <div style="font-size:20px;margin-bottom:6px;">📄</div>
       <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">GST Certificate</div>
       <div id="applyGSTLabel" style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;">Tap to upload</div>
     </div>
   </div>
   <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.04);border:1.5px dashed rgba(255,255,255,0.15);border-radius:12px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="this.querySelector('input').click()">
-    <input type="file" accept=".pdf,.jpg,.png" style="display:none;" onchange="applyDocSelected(this,'bank')"/>
+    <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;" onchange="applyDocSelected(this,'bank')"/>
     <div style="font-size:20px;">🏦</div>
     <div style="flex:1;"><div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">Bank Details / Cancelled Cheque</div>
     <div id="applyBankLabel" style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Tap to upload</div></div>
@@ -5362,13 +5362,13 @@ var draftEvent = {};
 async function handleBannerUpload(input) {
   if(input.files && input.files[0]) {
     var file=input.files[0];
-    if(file.size > 20 * 1024 * 1024){ showToast('Banner image must be 20 MB or smaller'); input.value=''; return; }
+    if(file.size > 5 * 1024 * 1024){ showToast('Banner image must be 5 MB or smaller (JPG, PNG or WebP)'); input.value=''; return; }
     var reader = new FileReader();
     reader.onload = async function(e) {
       var prev = document.getElementById('bannerPreview');
       setBannerBackground(prev,e.target.result);
       draftEvent.bannerUploading=true;
-      showToast('Uploading banner to Cloudflare R2...');
+      showToast('Uploading banner...');
       try {
         var token=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
         if(!token) throw new Error('Sign in as a creator before uploading a banner');
@@ -11454,7 +11454,7 @@ var _applyDocs = {pan:null, aadhaar:null, gst:null, bank:null};
 function applyDocSelected(input, type){
   var file = input.files[0];
   if(!file) return;
-  if(file.size > 8 * 1024 * 1024){ showToast('Each KYC document must be 8 MB or smaller'); input.value=''; return; }
+  if(file.size > 5 * 1024 * 1024){ showToast('Each KYC document must be 5 MB or smaller (PDF, JPG, PNG or WebP)'); input.value=''; return; }
   _applyDocs[type] = file;
   var labelId = {pan:'applyPanLabel', aadhaar:'applyAadhaarLabel', gst:'applyGSTLabel', bank:'applyBankLabel'}[type];
   var el = document.getElementById(labelId);

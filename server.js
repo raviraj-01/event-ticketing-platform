@@ -63,7 +63,11 @@ app.get("/favicon.ico", (req, res) => {
 });
 // index:false so "/" always goes through the no-cache route below.
 app.use(express.static(publicDir, { index: false }));
-app.use("/uploads", express.static(uploadsDir));
+// nosniff: browsers must use the stored Content-Type and never guess that a
+// file is HTML/script.
+app.use("/uploads", express.static(uploadsDir, {
+  setHeaders: (res) => res.setHeader("X-Content-Type-Options", "nosniff"),
+}));
 
 if (!process.env.DATABASE_URL) {
   console.error(
@@ -670,9 +674,55 @@ const presignR2 = ({ method, key, expires = 900 }) => {
 const parseDataUrl = (dataUrl) => {
   const match = String(dataUrl || "").match(/^data:([^;]+);base64,(.+)$/);
   if (!match) {
-    throw new Error("Invalid data URL");
+    throw uploadError("Invalid file data");
   }
   return { contentType: match[1], buffer: Buffer.from(match[2], "base64") };
+};
+
+// ── Upload validation ──────────────────────────────────────────────────────
+// A file is accepted only if its real first bytes ("magic number") match an
+// allowed type. The browser-supplied name and MIME type are never trusted, and
+// the stored extension comes from the detected type, so nobody can upload an
+// .html/.svg file that would run as a page on our domain.
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const UPLOAD_TYPES = {
+  "image/jpeg": { ext: "jpg", matches: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  "image/png": {
+    ext: "png",
+    matches: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  },
+  "image/webp": {
+    ext: "webp",
+    matches: (b) => b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP",
+  },
+  "application/pdf": { ext: "pdf", matches: (b) => b.subarray(0, 5).toString("latin1") === "%PDF-" },
+  // Server-generated ticket records only (never accepted from a user upload).
+  "application/json": { ext: "json", matches: (b) => b[0] === 0x7b },
+};
+const IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const KYC_UPLOAD_TYPES = [...IMAGE_UPLOAD_TYPES, "application/pdf"];
+
+function uploadError(message, status = 400) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+const detectUploadType = (buffer, allowedTypes) =>
+  allowedTypes.find((type) => UPLOAD_TYPES[type] && UPLOAD_TYPES[type].matches(buffer));
+
+const validateUpload = (dataUrl, allowedTypes) => {
+  const { buffer } = parseDataUrl(dataUrl);
+  if (!buffer.length) throw uploadError("The file is empty");
+  if (buffer.length > MAX_UPLOAD_BYTES) {
+    throw uploadError(`Each file must be ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB or smaller`, 413);
+  }
+  const contentType = detectUploadType(buffer, allowedTypes);
+  if (!contentType) {
+    const names = allowedTypes.map((type) => UPLOAD_TYPES[type].ext.toUpperCase()).join(", ");
+    throw uploadError(`Unsupported file type. Allowed: ${names}`);
+  }
+  return { buffer, contentType, ext: UPLOAD_TYPES[contentType].ext };
 };
 
 const saveLocalBuffer = ({ key, buffer, contentType }) => {
@@ -709,28 +759,21 @@ const uploadBufferToR2 = async ({ key, buffer, contentType }) => {
   };
 };
 
-const saveAsset = async ({ fileName, folder, dataUrl, requireR2 = false }) => {
-  const parsed = parseDataUrl(dataUrl);
-  const key = makeObjectKey(folder, fileName);
+// allowedTypes is required: every caller must say which file types it accepts.
+// requireR2: true for private documents (KYC) that must never land in the
+// public /uploads folder.
+const saveAsset = async ({ fileName, folder, dataUrl, allowedTypes, requireR2 = false }) => {
+  const file = validateUpload(dataUrl, allowedTypes);
+  const baseName = cleanFileName(fileName).replace(/\.[^.]*$/, "") || "file";
+  const key = makeObjectKey(folder, `${baseName}.${file.ext}`);
   try {
-    return await uploadBufferToR2({
-      key,
-      buffer: parsed.buffer,
-      contentType: parsed.contentType,
-    });
+    return await uploadBufferToR2({ key, buffer: file.buffer, contentType: file.contentType });
   } catch (err) {
     console.error("R2 asset upload failed:", err.message);
     if (requireR2) {
-      throw err;
+      throw uploadError("File storage is unavailable. Please try again later.", 503);
     }
-    const localName = key;
-    const saved = saveLocalBuffer({
-      key: localName,
-      buffer: parsed.buffer,
-      contentType: parsed.contentType,
-    });
-    saved.r2Error = err.message;
-    return saved;
+    return saveLocalBuffer({ key, buffer: file.buffer, contentType: file.contentType });
   }
 };
 
@@ -1174,121 +1217,6 @@ app.get("/qr", async (req, res) => {
   }
 });
 
-app.post("/r2/upload-url", (req, res) => {
-  try {
-    const { fileName, contentType, folder } = req.body || {};
-    if (!fileName) {
-      return res.status(400).json({ error: "fileName is required" });
-    }
-    const key = makeObjectKey(folder, fileName);
-    res.json({
-      key,
-      uploadUrl: presignR2({ method: "PUT", key }),
-      mediaUrl: `/r2/media/${encodeR2Key(key)}`,
-      contentType: contentType || "application/octet-stream",
-    });
-  } catch (err) {
-    console.error("R2 upload URL failed:", err);
-    res.status(500).json({ error: err.message || "R2 upload URL failed" });
-  }
-});
-
-app.post("/local-upload", (req, res) => {
-  try {
-    const { fileName, folder, dataUrl } = req.body || {};
-    if (!fileName || !dataUrl) {
-      return res
-        .status(400)
-        .json({ error: "fileName and dataUrl are required" });
-    }
-    const match = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) {
-      return res.status(400).json({ error: "Invalid data URL" });
-    }
-    const safeFolder = String(folder || "misc").replace(
-      /[^a-zA-Z0-9/_-]+/g,
-      "-",
-    );
-    const dir = path.join(uploadsDir, safeFolder);
-    fs.mkdirSync(dir, { recursive: true });
-    const safeName = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}-${cleanFileName(fileName)}`;
-    const filePath = path.join(dir, safeName);
-    fs.writeFileSync(filePath, Buffer.from(match[2], "base64"));
-    res.json({
-      key: `local/${safeFolder}/${safeName}`,
-      mediaUrl: `/uploads/${safeFolder}/${safeName}`,
-      contentType: match[1],
-      storage: "local",
-    });
-  } catch (err) {
-    console.error("Local upload failed:", err);
-    res.status(500).json({ error: err.message || "Local upload failed" });
-  }
-});
-
-app.post("/assets/upload", async (req, res) => {
-  try {
-    const { fileName, folder, dataUrl, purpose, userId, email } =
-      req.body || {};
-    if (!fileName || !dataUrl) {
-      return res
-        .status(400)
-        .json({ error: "fileName and dataUrl are required" });
-    }
-
-    const isProfileUpload = purpose === "profile";
-    const cleanEmail = String(email || "")
-      .trim()
-      .toLowerCase();
-    const cleanUserId = userId ? Number(userId) : null;
-    if (isProfileUpload && !cleanUserId && !cleanEmail) {
-      return res
-        .status(401)
-        .json({ error: "Login is required before uploading a profile image" });
-    }
-
-    const uploadFolder = isProfileUpload
-      ? `profiles/${cleanUserId ? `user-${cleanUserId}` : cleanPathSegment(cleanEmail, "email-user")}`
-      : folder || "misc";
-    const asset = await saveAsset({
-      fileName,
-      folder: uploadFolder,
-      dataUrl,
-      requireR2: isProfileUpload,
-    });
-
-    if (isProfileUpload) {
-      let updateResult;
-      if (cleanUserId) {
-        updateResult = await pool.query(
-          `UPDATE users
-           SET profile_image_url=$1, profile_image_key=$2, profile_image_storage=$3
-           WHERE id=$4`,
-          [asset.mediaUrl, asset.key, asset.storage, cleanUserId],
-        );
-      } else {
-        updateResult = await pool.query(
-          `UPDATE users
-           SET profile_image_url=$1, profile_image_key=$2, profile_image_storage=$3
-           WHERE email=$4`,
-          [asset.mediaUrl, asset.key, asset.storage, cleanEmail],
-        );
-      }
-
-      if (!updateResult || updateResult.rowCount < 1) {
-        return res
-          .status(404)
-          .json({ error: "Profile user was not found for this upload" });
-      }
-    }
-
-    res.json(asset);
-  } catch (err) {
-    console.error("Asset upload failed:", err);
-    res.status(500).json({ error: err.message || "Asset upload failed" });
-  }
-});
-
 app.post("/creator/applications", async (req, res) => {
   const client = await pool.connect();
   try {
@@ -1343,7 +1271,9 @@ app.post("/creator/applications", async (req, res) => {
     }
 
     const allowedTypes = new Set(["pan", "aadhaar", "gst", "bank"]);
-    const uploaded = [];
+    const seenTypes = new Set();
+    // Validate every document first, so a bad file never leaves the earlier
+    // ones orphaned in storage.
     for (const file of files) {
       const documentType = String(file.documentType || "")
         .trim()
@@ -1354,10 +1284,20 @@ app.post("/creator/applications", async (req, res) => {
             "Each KYC document must include a valid type, file name, and file data",
         });
       }
+      if (seenTypes.has(documentType)) {
+        return res.status(400).json({ error: "Upload each KYC document type only once" });
+      }
+      seenTypes.add(documentType);
+      validateUpload(file.dataUrl, KYC_UPLOAD_TYPES);
+    }
+    const uploaded = [];
+    for (const file of files) {
+      const documentType = String(file.documentType).trim().toLowerCase();
       const asset = await saveAsset({
         fileName: file.fileName,
         folder: `kyc-documents/${cleanPathSegment(cleanEmail, "creator")}/${documentType}`,
         dataUrl: file.dataUrl,
+        allowedTypes: KYC_UPLOAD_TYPES,
         requireR2: true,
       });
       uploaded.push({ documentType, fileName: file.fileName, ...asset });
@@ -1408,9 +1348,8 @@ app.post("/creator/applications", async (req, res) => {
         .status(409)
         .json({ error: "A creator account with this email already exists" });
     }
-    res
-      .status(500)
-      .json({ error: err.message || "Creator application failed" });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    res.status(500).json({ error: "Creator application failed" });
   } finally {
     client.release();
   }
@@ -1575,16 +1514,19 @@ app.post("/creator/events/banner", requireCreator, async (req, res) => {
         .status(400)
         .json({ error: "Banner file name and data are required" });
     }
+    // Banners are public images, so the local-disk fallback is allowed when R2
+    // is not configured (e.g. local development).
     const asset = await saveAsset({
       fileName,
       folder: `event-banners/creator-${req.creator.sub}`,
       dataUrl,
-      requireR2: true,
+      allowedTypes: IMAGE_UPLOAD_TYPES,
     });
     res.status(201).json(asset);
   } catch (err) {
     console.error("Creator banner upload failed:", err);
-    res.status(500).json({ error: err.message || "Banner upload failed" });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    res.status(500).json({ error: "Banner upload failed" });
   }
 });
 
@@ -3265,30 +3207,6 @@ app.get("/r2/media/*key", (req, res) => {
   }
 });
 
-app.post("/r2/ticket-record", async (req, res) => {
-  try {
-    const booking = req.body || {};
-    if (!booking.id) {
-      return res.status(400).json({ error: "booking.id is required" });
-    }
-    const ticketJson = `data:application/json;base64,${Buffer.from(
-      JSON.stringify({
-        booking,
-        storedAt: new Date().toISOString(),
-      }),
-    ).toString("base64")}`;
-    const saved = await saveAsset({
-      fileName: `${booking.id}.json`,
-      folder: "tickets",
-      dataUrl: ticketJson,
-    });
-    res.json(saved);
-  } catch (err) {
-    console.error("Ticket record upload failed:", err);
-    res.status(500).json({ error: err.message || "Ticket record upload failed" });
-  }
-});
-
 const payuConfig = {
   key: process.env.PAYU_KEY,
   salt: process.env.PAYU_SALT,
@@ -3561,6 +3479,7 @@ app.post("/bookings", async (req, res) => {
       fileName: `${booking.id}.json`,
       folder: "tickets",
       dataUrl: ticketJson,
+      allowedTypes: ["application/json"],
     });
     let userId = booking.userId || null;
     const buyerEmail = String(booking.buyerEmail || "").trim();
