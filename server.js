@@ -1,5 +1,8 @@
-const express = require("express");
+// L10: load .env before requiring anything else. Some modules read their
+// settings (fee %, token lifetimes, ...) at load time.
 const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+const express = require("express");
 const fs = require("fs");
 const { Pool } = require("pg");
 const bodyParser = require("body-parser");
@@ -43,7 +46,6 @@ const {
   withAvailability,
   expireStaleOrders,
 } = require("./src/services/orders");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled async error:", err);
