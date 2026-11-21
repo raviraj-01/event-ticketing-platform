@@ -235,7 +235,6 @@ const publicUser = (user) => ({
 
 const EVENT_NOT_FOUND_ERROR = "Event does not exist";
 const USER_NOT_FOUND_ERROR = "User account not found";
-const STAFF_NOT_FOUND_ERROR = "Staff account not found";
 
 
 

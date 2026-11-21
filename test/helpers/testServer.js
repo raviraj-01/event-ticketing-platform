@@ -2,7 +2,6 @@
 // server.js against it, for integration tests. Nothing here touches .env or
 // any real account: all secrets below are test-only values.
 const { spawn } = require("child_process");
-const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
