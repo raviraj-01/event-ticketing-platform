@@ -12,6 +12,7 @@ const {
   verifyLocalOtpEntry,
   makeSignupOtpToken,
   verifySignupOtpToken,
+  claimSignupToken,
 } = require("../services/signupOtp");
 const { verifyToken, AUDIENCE } = require("../utils/tokens");
 const { rateLimit } = require("../middleware/rateLimit");
@@ -178,7 +179,7 @@ router.post("/signup", async (req, res) => {
     if (!otpAccessToken) {
       return res.status(400).json({ error: "Please verify your phone number with OTP before creating an account" });
     }
-    await verifySignupOtpToken(otpAccessToken, cleanCountryCode, cleanPhone);
+    const otpPayload = await verifySignupOtpToken(otpAccessToken, cleanCountryCode, cleanPhone);
     // Q12 / D23: one buyer account per verified phone. phone_key() (migration
     // 0012) treats "98765 43210" and "+919876543210" as the same number.
     const phoneTaken = await pool.query(
@@ -190,13 +191,30 @@ router.post("/signup", async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     const displayName = [cleanFirstName, cleanLastName].filter(Boolean).join(" ");
-    // The OTP above proved this phone, so it is stored as verified.
-    const result = await pool.query(
-      `INSERT INTO users (username, first_name, last_name, email, phone, country_code, city, password, phone_verified)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE)
-      RETURNING id, username, first_name, last_name, email, phone, country_code, city, created_at`,
-      [displayName || cleanFirstName, cleanFirstName, cleanLastName, cleanEmail, cleanPhone, cleanCountryCode, cleanCity, hashedPassword],
-    );
+    // One transaction: use up the verification token (M17) and create the
+    // account. If the insert fails, the token is not used up.
+    const client = await pool.connect();
+    let result;
+    try {
+      await client.query("BEGIN");
+      if (!(await claimSignupToken(client, otpPayload))) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "This phone verification was already used. Please verify your number again." });
+      }
+      // The OTP above proved this phone, so it is stored as verified.
+      result = await client.query(
+        `INSERT INTO users (username, first_name, last_name, email, phone, country_code, city, password, phone_verified)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE)
+        RETURNING id, username, first_name, last_name, email, phone, country_code, city, created_at`,
+        [displayName || cleanFirstName, cleanFirstName, cleanLastName, cleanEmail, cleanPhone, cleanCountryCode, cleanCity, hashedPassword],
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
     res.json({ message: "Signup successful", user: result.rows[0] });
   } catch (err) {
     if (err.code === "23505") {

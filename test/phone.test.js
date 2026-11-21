@@ -22,15 +22,16 @@ after(async () => {
   if (server) await server.stop();
 });
 
-const otpToken = (identifier) => signTestToken({ identifier }, 600, tokens.AUDIENCE.signupOtp);
+// Same shape the server issues after a correct OTP (jti = single use, M17).
+const otpToken = (identifier) => signTestToken({ identifier, jti: require("crypto").randomUUID() }, 600, tokens.AUDIENCE.signupOtp);
 
-async function signup({ phone, countryCode = "+91", identifier }) {
+async function signup({ phone, countryCode = "+91", identifier, token, email }) {
   n += 1;
-  const otpAccessToken = await otpToken(identifier);
+  const otpAccessToken = token || await otpToken(identifier);
   return api(server.baseUrl, "POST", "/signup", {
     json: {
       firstName: "Phone",
-      email: `phone${n}-${Date.now()}@test.local`,
+      email: email || `phone${n}-${Date.now()}@test.local`,
       phone,
       countryCode,
       password: "Buyer-pass-123",
@@ -117,6 +118,34 @@ test("Q12 + M22: the migration leaves existing rows untouched; their phones stil
   assert.ok(group, JSON.stringify(groups));
   assert.deepEqual(group.accounts.map((a) => a.id).sort(), [dupOne, dupTwo].sort());
   assert.ok(!groups.some((g) => g.phone === "919812345604"));
+});
+
+// ── M17: a verification token works for one signup only ──
+
+test("M17: five parallel signups with one verification token create exactly one account", async () => {
+  // Sequential reuse is already stopped by the verified-phone check (Q12);
+  // the race below is what single-use tokens add: all five can pass that
+  // check before any of them has inserted the account.
+  const token = await otpToken("919812345610");
+  const results = await Promise.all(Array.from({ length: 5 }, () =>
+    signup({ phone: "9812345610", identifier: "919812345610", token })));
+  const statuses = results.map((r) => r.status).sort();
+  assert.equal(statuses.filter((s) => s === 200).length, 1, JSON.stringify(statuses));
+  const accounts = await server.db.query("SELECT COUNT(*)::int AS n FROM users WHERE phone='9812345610'");
+  assert.equal(accounts.rows[0].n, 1);
+});
+
+test("M17: a failed signup does not use up the token; tokens without an id are refused", async () => {
+  const taken = await signup({ phone: "9812345611", identifier: "919812345611" });
+  assert.equal(taken.status, 200);
+  const token = await otpToken("919812345612");
+  const duplicateEmail = await signup({ phone: "9812345612", identifier: "919812345612", token, email: taken.body.user.email });
+  assert.equal(duplicateEmail.status, 409);
+  const retry = await signup({ phone: "9812345612", identifier: "919812345612", token });
+  assert.equal(retry.status, 200, "the rolled-back attempt left the token usable");
+
+  const oldStyle = await signTestToken({ identifier: "919812345613" }, 600, tokens.AUDIENCE.signupOtp);
+  assert.equal((await signup({ phone: "9812345613", identifier: "919812345613", token: oldStyle })).status, 400);
 });
 
 // ── Q14 / D24: phone before the first paid checkout ──

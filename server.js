@@ -12,6 +12,7 @@ const { initDb } = require("./src/db/initDb");
 const { pruneRateLimitHits } = require("./src/middleware/rateLimit");
 const { expireStaleOrders } = require("./src/services/orders");
 const app = require("./src/app");
+const { pruneUsedSignupTokens } = require("./src/services/signupOtp");
 
 // A stray rejected promise is logged; request handlers' own errors go to the
 // error handler in src/app.js.
@@ -36,6 +37,7 @@ async function start() {
   setInterval(() => {
     expireStaleOrders(pool).catch((err) => console.error("Order expiry failed:", err.message));
     pruneRateLimitHits(pool).catch((err) => console.error("Rate-limit prune failed:", err.message));
+    pruneUsedSignupTokens(pool).catch((err) => console.error("Signup token prune failed:", err.message));
   }, 5 * 60 * 1000).unref();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

@@ -2,6 +2,7 @@
 // (M7), and the short-lived token that proves a phone was verified.
 const { signToken, AUDIENCE, verifyToken } = require("../utils/tokens");
 const { HttpError } = require("../utils/httpError");
+const crypto = require("crypto");
 
 const hasTwilioVerifyConfig = () =>
   process.env.TWILIO_ACCOUNT_SID &&
@@ -96,8 +97,26 @@ const verifyLocalOtpEntry = (identifier, otp) => {
   return true;
 };
 
+// jti: unique id so the token can be used for one signup only (M17).
 const makeSignupOtpToken = (identifier) =>
-  signToken({ identifier }, { audience: AUDIENCE.signupOtp, expiresInSeconds: 10 * 60 });
+  signToken({ identifier, jti: crypto.randomUUID() }, { audience: AUDIENCE.signupOtp, expiresInSeconds: 10 * 60 });
+
+// M17: mark the token used, inside the caller's signup transaction. Returns
+// false when it was already used. Rolling back the transaction (e.g. the email
+// already exists) leaves the token usable.
+async function claimSignupToken(client, payload) {
+  if (!payload || !payload.jti) throw new HttpError(400, "Phone verification expired. Please verify your number again.");
+  const claimed = await client.query(
+    "INSERT INTO used_signup_tokens (jti) VALUES ($1) ON CONFLICT (jti) DO NOTHING RETURNING jti",
+    [String(payload.jti)],
+  );
+  return claimed.rows.length === 1;
+}
+
+// Housekeeping: used ids are only needed while the token could still be valid.
+async function pruneUsedSignupTokens(pool) {
+  await pool.query("DELETE FROM used_signup_tokens WHERE used_at < NOW() - INTERVAL '1 day'");
+}
 
 // A bad, expired or mismatched token is the user's problem (400), not a
 // server error (M5; it used to answer 500).
@@ -126,4 +145,6 @@ module.exports = {
   verifyLocalOtpEntry,
   makeSignupOtpToken,
   verifySignupOtpToken,
+  pruneUsedSignupTokens,
+  claimSignupToken,
 };
