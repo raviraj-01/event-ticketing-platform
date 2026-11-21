@@ -318,7 +318,7 @@ Frontend consolidation (M14) happens before the first frontend-touching fix (C2)
 | D24 | Phone for PayU (Q14) | Ask for the phone once before the first paid checkout, save it to the profile; stop sending `9999999999`. |
 | D25 | Share-link regeneration (Q15) | Both the staff member and their organizer can regenerate; the old link stops crediting commission immediately. |
 
-Decided but **not built yet**: D20, D22, D23, D24, D25 (D21 needs only the admin "mark refunded" action). Planned slot: after Phase 3, before the Mediums.
+Build status: **D23 step 1 built** (2026-11-22: `phone_verified`, backfill, signup check, duplicate report); **step 2, the partial unique index, waits for Ravi to run `npm run report-duplicate-phones` on his DB and resolve any duplicates.** D20, D24 being built next. D21, D22, D25: feature freeze → README Future work.
 
 ## Change log
 | Date | Change | Why |
@@ -358,6 +358,7 @@ Decided but **not built yet**: D20, D22, D23, D24, D25 (D21 needs only the admin
 | 2026-11-21 | Recorded Ravi's answers to Q6/Q8/Q10/Q12/Q14/Q15 as D20-D25 (not built yet). | Decisions confirmed; implementation scheduled after Phase 3. |
 | 2026-11-21 | Phase 3 prep: ESLint (`no-undef`, `no-unused-vars`) in `npm test`; L10 fixed (.env loaded before modules that read settings). | Lint catches missing imports while splitting server.js; L10 found while mapping the file. |
 | 2026-11-22 | Phase 3: split `server.js` (3,892 → 41 lines) into `src/app.js`, `src/config.js`, `src/db/`, `src/middleware/`, `src/routes/` (9 routers), `src/services/`, `src/utils/`. One commit per area, all tests green after each; no behaviour change except removing the `staffWalletFor` wrapper. Architecture and Study guide paths updated. | Ravi's Phase 3 plan: one 3,900-line file was hard to read, review and test. |
+| 2026-11-22 | Q12 step 1: migration `0012_users_phone_verified.sql` (`phone_key()` SQL function, `users.phone_verified`, backfill = every account with a phone, since only OTP signup writes `users.phone`); signup refuses a phone another account verified (409) and stores `phone_verified=TRUE`; `npm run report-duplicate-phones` (read-only). Tests: `test/phone.test.js` (backfill tested by migrating down past 0012, inserting old-style rows, migrating up). | D23. The unique index is a separate later migration, after Ravi reviews the report. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).
@@ -466,3 +467,4 @@ _(One entry per fixed issue: a 2-line explanation to say out loud.)_
 - **M1 bootstrap overwrite:** "On every restart the server wrote the super admin password from an environment variable, which silently undid password changes. I made the bootstrap insert-only, and tested it by booting a second server against the same database."
 - **L10 .env load order:** "Some modules read settings like the platform fee when they load, but the server loaded the .env file after requiring them, so local overrides were ignored. I moved the .env load to the first line and added a test that keeps it there."
 - **Phase 3 split:** "I split a 3,900-line server file into routes, services, middleware and db modules, one area per commit, with the full integration suite green after every step. I added ESLint's undefined-variable rule first so a forgotten import fails the build instead of crashing one route in production; it caught a real one, because Node's global `crypto` is WebCrypto, not the crypto module."
+- **Q12 unique verified phone:** "One buyer account per verified phone, but Google users without a phone must still work, so the rule only covers verified, non-empty phones. Phones were stored in different formats, so I defined 'same phone' once in a SQL function used by the signup check, the duplicate report and the future partial unique index, and I report existing duplicates before adding the index instead of letting the migration fail or silently pick a winner."

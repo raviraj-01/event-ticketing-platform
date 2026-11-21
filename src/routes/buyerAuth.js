@@ -178,11 +178,21 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ error: "Please verify your phone number with OTP before creating an account" });
     }
     await verifySignupOtpToken(otpAccessToken, cleanCountryCode, cleanPhone);
+    // Q12 / D23: one buyer account per verified phone. phone_key() (migration
+    // 0012) treats "98765 43210" and "+919876543210" as the same number.
+    const phoneTaken = await pool.query(
+      "SELECT 1 FROM users WHERE phone_verified AND phone_key(country_code, phone) = phone_key($1, $2) LIMIT 1",
+      [cleanCountryCode, cleanPhone],
+    );
+    if (phoneTaken.rows.length) {
+      return res.status(409).json({ error: "An account with this phone number already exists" });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
     const displayName = [cleanFirstName, cleanLastName].filter(Boolean).join(" ");
+    // The OTP above proved this phone, so it is stored as verified.
     const result = await pool.query(
-      `INSERT INTO users (username, first_name, last_name, email, phone, country_code, city, password)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO users (username, first_name, last_name, email, phone, country_code, city, password, phone_verified)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE)
       RETURNING id, username, first_name, last_name, email, phone, country_code, city, created_at`,
       [displayName || cleanFirstName, cleanFirstName, cleanLastName, cleanEmail, cleanPhone, cleanCountryCode, cleanCity, hashedPassword],
     );
