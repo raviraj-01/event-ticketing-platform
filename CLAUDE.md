@@ -336,20 +336,21 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 | 2026-11-21 | Deleted `VYBERA.html`, `prev`, `vybera-cordova/www/server.js`; untracked generated `vybera-cordova/www/` and git-ignored it. | D6; stops backend source shipping in the APK (H15) and stops copies drifting (M14). |
 | 2026-11-21 | M14: Cordova-only features merged into `public/index.html`; `scripts/build-cordova.js` generates `vybera-cordova/www/`. | One frontend source, so every fix is made once (D6). |
 | 2026-11-21 | `.env.example` rewritten as a checklist of Ravi's own test accounts (dropped the unused `R2_ACCOUNT_ID`); CLAUDE.md records decisions D1-D8. | C1 / D1. |
+| 2026-11-21 | Added `docs/PAYU-TEST.md`, `docs/ANDROID-DEVICE-CHECKLIST.md`, the Study guide section and recommended answers for Q6/Q8/Q10/Q12/Q14/Q15. | Ravi runs the two acceptance tests himself; study guide for interview prep; questions ready to confirm. |
 
 ## Before calling the project done (Ravi's acceptance list)
-- [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt).
-- [ ] Android build installed and tested on a real device (`npm run build:cordova` → `cordova build android`).
+- [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).
+- [ ] Android build installed and tested on a real device (`npm run build:cordova` → `cordova build android`). Checklist: [docs/ANDROID-DEVICE-CHECKLIST.md](docs/ANDROID-DEVICE-CHECKLIST.md).
 - [ ] Rename/rebrand (Ravi gives the name; see "Branding/cleanup to do").
 
 ## Open questions for Ravi
-(Answered ones moved to "Decisions from Ravi".)
-- Q14. PayU requires a phone number. Google-only buyers may have none; we send the placeholder `9999999999`. Collect a phone before checkout instead?
-- Q15. Share-token regeneration (D12) needs a UI button and an endpoint. Should staff do it, the creator, or both?
-- Q6. Should creator events need **admin approval** before going live?
-- Q8. Are **refunds** needed for v1? Who triggers them, and should they go through the PayU refund API?
-- Q10. Should admin-created staff with no event be able to scan **any** event (M18)?
-- Q12. Phone number unique per buyer account?
+(Answered ones moved to "Decisions from Ravi". Each has my recommended answer; **not decided until Ravi confirms**.)
+- Q6. Admin approval for events? **Recommend yes:** new events start `pending`, an admin approves before they are listed or bookable; edits to price/date of a live event go back to pending.
+- Q8. Refunds in v1? **Recommend no (feature freeze):** refunds are README future work; `paid_needs_refund` orders are refunded by hand in the PayU dashboard and then marked refunded by an admin.
+- Q10. Admin-created staff with no event scanning any event (M18)? **Recommend no:** every scanner must be assigned to the event; no global scanner.
+- Q12. Phone unique per buyer? **Recommend yes:** one buyer account per verified phone (unique index, after checking existing duplicates; migration).
+- Q14. Phone for PayU when a Google buyer has none? **Recommend:** ask for the phone once before the first paid checkout and save it to the profile, instead of sending `9999999999`.
+- Q15. Who regenerates a staff share link (D12)? **Recommend both** the staff member and their organizer; the old link stops crediting commission immediately.
 
 ## Branding/cleanup to do (don't rename until Ravi picks a name)
 - **Names:** "BLAK Tickets" (server.js ×13, vybera_26.html ×51, Cordova index ×49, VYBERA.html ×14, config.xml ×3, Cordova package.json). "VYBERA"/"Vybera" (≈170-250 per HTML file, package name, repo name, README, `localStorage` keys `VYBERA_*`, `window.VYBERA_API_BASE`).
@@ -360,6 +361,62 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 - **Logos:** `assets/blak-ticket-logo.{svg,jpeg}`, `blak-ticket-name.{svg,jpeg}`, `balk-ticket-logo-2.jpeg` (typo), Cordova `resources/` icons + splash, `www/assets/` copies. Hardcoded HTML pages in `server.js:1111` (Google success) and `3392` (PayU return), and the reset email template `4404-4436`.
 - **Documents:** no privacy/T&C/press/blog PDFs exist in the repo. The signup "Terms" and "Privacy" are non-clickable text (`vybera_26.html:825`), so there is nothing to link yet.
 - **Dead files:** deleted 2026-11-21 (`prev`, `VYBERA.html`, `vybera-cordova/www/server.js`).
+
+## Study guide (read in this order)
+Function names, not line numbers, so this survives the Phase 3 split. Each area: files → what to look for → 3 likely interview questions.
+
+### 1. Orders and seat holds (C4, H9, H11)
+1. `migrations/0002_orders.sql`: order statuses, `bookings.order_id` unique index.
+2. `src/services/orders.js`: `createOrder` → `lockEvent` (`SELECT … FOR UPDATE`) → `seatUsage` → `hasRoom` → `priceOrder` → insert; `resolveReferral`; `applyPayuResult` (late-payment rule, idempotency); `issueBooking`; `recordReferralCommission`.
+3. `src/services/payu.js`: `makeRequestHash`, `makeResponseHash`, `isValidResponseHash` (constant time).
+4. `server.js`: `POST /orders`, `handlePayuCallback` (303 redirect), `GET /orders/:orderId`.
+5. `test/orders.test.js`: race tests, forged/mismatched callbacks, late payment.
+- *Q: How do you stop two buyers getting the last seat?* — Both requests lock the same event row with `SELECT … FOR UPDATE` in a transaction; the second waits, then counts the first one's hold and gets 409. I proved the test is real by removing the lock: it fails every time.
+- *Q: PayU confirms after the 15-minute hold expired. What happens?* — I re-check seats under the lock: if there's room the order is paid and the ticket issued; if not it becomes `paid_needs_refund` and shows up for admins to refund.
+- *Q: Gateways retry callbacks. How do you avoid two tickets?* — Already-paid orders return success without issuing again, and a unique index on `bookings.order_id` guarantees it at the database level.
+
+### 2. Ticket scan lock (keep-as-is design)
+1. `server.js` `POST /bookings/scan`: transaction → `SELECT b.* … FOR UPDATE OF b` → refunded/duplicate checks → `UPDATE bookings SET scanned_at`.
+2. `requireScanIdentity` (creator or staff) and the staff-assignment condition in the scan query.
+- *Q: Two gates scan the same ticket at the same moment?* — The row lock makes the second scan wait; when it continues it sees `scanned_at` set and answers 409 duplicate. Only one entry.
+- *Q: Why `FOR UPDATE OF b` and not just `FOR UPDATE`?* — The query joins events and assignments; `OF b` locks only the booking row, so we don't block unrelated work on the event.
+- *Q: Why 403 vs 409?* — 403: the ticket is valid but this staff member is not assigned to its event. 409: the ticket was already used or refunded.
+
+### 3. Sessions, refresh tokens, CSRF (H5, H16, L4)
+1. `src/utils/tokens.js`: `jose`, issuer + audience per purpose.
+2. `migrations/0004_sessions.sql`: `token_version`, `refresh_tokens`.
+3. `src/services/sessions.js`: `authenticateRequest` (Bearer or cookie, DB status + `tv`), `startSession`, `rotateSession` (reuse detection + grace), `endSession`, `revokeAllSessions`.
+4. `server.js`: `requireRole`, CORS allowlist + CSRF origin middleware, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`.
+5. `public/index.html` first script: `authHeaders`, `saveSession`, `refreshSession`, the `window.fetch` wrapper.
+6. `test/sessions.test.js`.
+- *Q: JWTs are stateless. How do you revoke one instantly?* — Every access token carries `tv` (token_version). Each request already loads the account to check its status, and compares `tv`; bumping the column kills all old tokens immediately.
+- *Q: How does refresh-token reuse detection work?* — Refresh tokens rotate on every use and only their SHA-256 is stored. If an already-used token comes back (after a 30 s grace for parallel tabs), it must have been copied, so the whole login family is revoked.
+- *Q: Why cookies on the web but Bearer tokens in the app?* — httpOnly cookies can't be read by JavaScript, so XSS can't steal them; the Android WebView calls the API cross-site where third-party cookies are unreliable, so the app gets tokens and keeps the refresh token in secure storage. Cookies bring CSRF risk, handled by SameSite=Strict, an Origin check and a CORS allowlist.
+
+### 4. Staff withdrawals and cash (H10, D4)
+1. `migrations/0005_staff_cash_settlements.sql`.
+2. `src/services/staffWallet.js`: `staffWallet` (commission vs cash owed), `requestWithdrawal`, `recordCashSettlement`.
+3. `server.js` `POST /staff/withdrawals`, `POST /creator/staff/:staffId/cash-settlements`.
+4. `test/wallet.test.js`.
+- *Q: What was the double-spend bug?* — Balance check and insert were two separate queries, so parallel requests all saw the full balance. Now it's one transaction that locks the staff row first and recomputes the balance inside the lock.
+- *Q: Why recompute inside the transaction instead of passing the balance in?* — A balance read before taking the lock can be stale; only a read made while holding the lock is guaranteed current.
+- *Q: Why can't staff withdraw cash sales?* — That cash already sits with the staff member and belongs to the organizer; it's tracked as "cash owed" and settled by the organizer. Only commission is the staff member's money.
+
+### 5. Admin hardening (H6, Q4)
+1. `src/services/adminAudit.js`: `recordAdminAction`, `audited` middleware.
+2. `server.js` admin login section: `findAdminByEmail`, `registerFailedAdminLogin`, `startAdminOtpChallenge`, `POST /admin/login/verify`, `requireRecentReauth`, `POST /admin/reauth`.
+3. `migrations/0006`–`0009`, `0011`; `src/services/passwordReset.js` `setTemporaryPassword`; `scripts/reset-super-admin.js`.
+4. `test/admin.test.js`, `test/tempPassword.test.js`.
+- *Q: Why the same message for a locked account and an unknown email?* — Different answers would tell an attacker which emails are real admins; we even run a dummy bcrypt compare for unknown emails so timing doesn't leak it.
+- *Q: Why store the OTP hashed?* — If the database leaks, live codes can't be read. The code is also single use, expires in 5 minutes and dies after 5 wrong guesses.
+- *Q: What does step-up confirmation add on top of a login?* — A session left open or hijacked can't do destructive actions without the password from the last 5 minutes; one fetch wrapper handles the prompt so no button had to change.
+
+### 6. XSS output encoding (H7)
+1. `public/index.html` first `<script>`: `escapeHtml`, `jsStr`, `jsArg`, `safeUrl`, `cssUrl`.
+2. `scripts/check-html-escaping.js` (acorn-based check), `test/frontend.test.js`.
+- *Q: Why isn't `escapeHtml` enough inside `onclick="…"`?* — The browser HTML-decodes the attribute before running it, so `&#39;` turns back into a quote and breaks out of the JS string; `jsStr` escapes for JavaScript first, then for HTML.
+- *Q: What was wrong with `style="background-image:url(` + JSON.stringify(url) + `)"`?* — JSON.stringify adds double quotes, which close the `style` attribute and let a crafted URL inject new attributes. `cssUrl` uses single quotes and percent-encodes quotes and brackets.
+- *Q: How do you stop this coming back?* — A parser-based check runs in `npm test` and fails the build when any value is put into an HTML string without the escaper for its context; it found 315 problems in the old file and finds 0 now.
 
 ## Interview notes
 _(One entry per fixed issue: a 2-line explanation to say out loud.)_
