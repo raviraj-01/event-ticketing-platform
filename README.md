@@ -53,7 +53,9 @@ http://localhost:3003
 1. Create a PostgreSQL database and set every variable from `.env.example` in the host's environment (never commit `.env`).
 2. Set `APP_BASE_URL` to the public https URL (used for PayU return URLs and email links).
 3. **Set `TRUST_PROXY_HOPS=1` on Render** (or the number of reverse proxies in front of the app). Without it every visitor appears to have the proxy's IP, so all per-IP rate limits (OTP, login, orders) would be shared by everyone. Locally keep it `0`, otherwise clients could fake their IP with an `X-Forwarded-For` header.
-4. Start command: `npm start`. Pending database migrations in `migrations/` run automatically before the server accepts requests.
+4. Serve the app over **https** (Render does). Session cookies are `Secure` when `APP_BASE_URL` starts with `https://`, and browsers drop them on plain http in production.
+5. If the frontend is served from another origin, list it in `CORS_ORIGINS`. The Android app's WebView origin `https://localhost` is allowed by default.
+6. Start command: `npm start`. Pending database migrations in `migrations/` run automatically before the server accepts requests.
 
 ## Tests
 

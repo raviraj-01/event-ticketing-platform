@@ -17,7 +17,8 @@
     "cordova-plugin-android-permissions": "^1.1.5",
     "cordova-plugin-customurlscheme": "^5.0.2",
     "cordova-plugin-googleplus": "^8.5.2",
-    "cordova-plugin-inappbrowser": "^6.0.1"
+    "cordova-plugin-inappbrowser": "^6.0.1",
+    "cordova-plugin-secure-storage-echo": "^5.1.1"
   },
   "cordova": {
     "platforms": [
@@ -34,7 +35,8 @@
       "cordova-plugin-googleplus": {
         "PLAY_SERVICES_VERSION": "15.0.1"
       },
-      "cordova-plugin-android-permissions": {}
+      "cordova-plugin-android-permissions": {},
+      "cordova-plugin-secure-storage-echo": {}
     }
   }
 }

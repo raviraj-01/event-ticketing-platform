@@ -848,6 +848,123 @@ function safeUrl(value){
 function cssUrl(value){
   return "url('"+safeUrl(value)+"')";
 }
+
+// ── Sessions (H5) ──────────────────────────────────────────────────────────
+// Web: the server keeps the session in httpOnly cookies (JavaScript never sees
+// the tokens). localStorage only holds a marker such as "cookie:buyer" so the
+// page knows which roles are signed in.
+// Android app (APK build sets window.VYBERA_API_BASE): the server returns
+// tokens; the 15-minute access token is kept in localStorage and sent as
+// "Authorization: Bearer", the refresh token goes to secure storage.
+var SESSION_KEYS={buyer:'VYBERA_BUYER_TOKEN',creator:'VYBERA_CREATOR_TOKEN',staff:'VYBERA_STAFF_TOKEN',admin:'VYBERA_ADMIN_TOKEN'};
+function isNativeApp(){return !!window.VYBERA_API_BASE;}
+function apiBase(){return window.VYBERA_API_BASE?String(window.VYBERA_API_BASE).replace(/\/$/,''):'';}
+function clientHeaders(extra){
+  var headers=Object.assign({},extra||{});
+  if(isNativeApp())headers['X-Client']='app';
+  return headers;
+}
+function sessionMarker(role){return localStorage.getItem(SESSION_KEYS[role])||'';}
+function hasSession(role){return !!sessionMarker(role);}
+// Headers for an API call made as `role`.
+function authHeaders(role,extra){
+  var headers=clientHeaders(extra);
+  headers['X-Session-Role']=role;
+  var token=sessionMarker(role);
+  if(token&&token.indexOf('cookie:')!==0)headers.Authorization='Bearer '+token;
+  return headers;
+}
+
+// Refresh token storage for the app: cordova-plugin-secure-storage-echo when
+// available (Android keystore), otherwise localStorage as a fallback.
+var _secureStore=null;
+function secureStore(){
+  if(_secureStore)return _secureStore;
+  _secureStore=new Promise(function(resolve){
+    var SS=window.cordova&&window.cordova.plugins&&window.cordova.plugins.SecureStorage;
+    if(!SS){resolve(null);return;}
+    var store=new SS(function(){resolve(store);},function(){resolve(null);},'ticketing');
+  });
+  return _secureStore;
+}
+async function setRefreshToken(role,token){
+  var key='VYBERA_'+role.toUpperCase()+'_REFRESH';
+  var store=await secureStore();
+  if(store){
+    await new Promise(function(done){
+      if(token)store.set(done,done,key,token);else store.remove(done,done,key);
+    });
+    return;
+  }
+  if(token)localStorage.setItem(key,token);else localStorage.removeItem(key);
+}
+async function getRefreshToken(role){
+  var key='VYBERA_'+role.toUpperCase()+'_REFRESH';
+  var store=await secureStore();
+  if(store)return new Promise(function(done){store.get(function(v){done(v||'');},function(){done('');},key);});
+  return localStorage.getItem(key)||'';
+}
+
+// After a successful login response.
+async function saveSession(role,data){
+  data=data||{};
+  if(isNativeApp()&&data.accessToken){
+    localStorage.setItem(SESSION_KEYS[role],data.accessToken);
+    await setRefreshToken(role,data.refreshToken||'');
+  }else{
+    localStorage.setItem(SESSION_KEYS[role],'cookie:'+role);
+  }
+}
+function clearLocalSession(role){
+  localStorage.removeItem(SESSION_KEYS[role]);
+  if(isNativeApp())setRefreshToken(role,'');
+}
+
+var _nativeFetch=window.fetch.bind(window);
+var _refreshing={};
+// Swap the refresh token for a new access token. Concurrent callers share one request.
+function refreshSession(role){
+  if(_refreshing[role])return _refreshing[role];
+  _refreshing[role]=(async function(){
+    try{
+      var body={role:role};
+      if(isNativeApp())body.refreshToken=await getRefreshToken(role);
+      var resp=await _nativeFetch(apiBase()+'/auth/refresh',{method:'POST',headers:clientHeaders({'Content-Type':'application/json'}),body:JSON.stringify(body)});
+      if(!resp.ok)return false;
+      var data=await resp.json().catch(function(){return {};});
+      if(isNativeApp()){
+        if(!data.accessToken)return false;
+        localStorage.setItem(SESSION_KEYS[role],data.accessToken);
+        if(data.refreshToken)await setRefreshToken(role,data.refreshToken);
+      }
+      return true;
+    }catch(err){return false;}
+    finally{delete _refreshing[role];}
+  })();
+  return _refreshing[role];
+}
+// Tell the server to end this login, then forget it locally.
+async function logoutSession(role){
+  if(!hasSession(role))return;
+  try{
+    var body={role:role};
+    if(isNativeApp())body.refreshToken=await getRefreshToken(role);
+    await _nativeFetch(apiBase()+'/auth/logout',{method:'POST',headers:clientHeaders({'Content-Type':'application/json'}),body:JSON.stringify(body)});
+  }catch(err){}
+  clearLocalSession(role);
+}
+// Access tokens live 15 minutes. If an API call made as a role gets 401,
+// refresh that role's session once and retry the call.
+window.fetch=async function(input,init){
+  var resp=await _nativeFetch(input,init);
+  if(resp.status!==401||!init||!init.headers)return resp;
+  var role=init.headers['X-Session-Role'];
+  var url=String((input&&input.url)||input);
+  if(!role||!SESSION_KEYS[role]||!hasSession(role)||/\/auth\/(refresh|logout)/.test(url))return resp;
+  if(!(await refreshSession(role)))return resp;
+  var retryHeaders=Object.assign({},init.headers,authHeaders(role));
+  return _nativeFetch(input,Object.assign({},init,{headers:retryHeaders}));
+};
 </script>
 <script>
 window.VYBERA_DEBUG=false;
@@ -2913,7 +3030,7 @@ async function loginAsCreator(){
     setCreatorVerificationMessage('');
     var resp = await fetch(apiUrl('/creator/login'), {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:clientHeaders({'Content-Type':'application/json'}),
       body:JSON.stringify({email:email, user:email, password:pwd})
     });
     var data = await readAuthResponse(resp);
@@ -2926,7 +3043,7 @@ async function loginAsCreator(){
     var account = data.creator || {};
     STORE.creatorProfile = account;
     STORE.currentUser = account.email;
-    localStorage.setItem('VYBERA_CREATOR_TOKEN', data.token || '');
+    await saveSession('creator',data);
     cacheIdentity('VYBERA_CREATOR_PROFILE',account);
     sessionStorage.removeItem('VYBERA_GUEST_MODE');
     document.body.classList.remove('guest-mode');
@@ -2968,7 +3085,7 @@ async function loginAsCreator(){
 async function loadCreatorEvents(){
   var token=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
   if(!token) return [];
-  var resp=await fetch(apiUrl('/creator/events'), {headers:{Authorization:'Bearer '+token}});
+  var resp=await fetch(apiUrl('/creator/events'), {headers:authHeaders('creator')});
   var data=await readAuthResponse(resp);
   if(!resp.ok) throw new Error(data.error||'Could not load creator events');
   var creatorId=STORE.creatorProfile && STORE.creatorProfile.id;
@@ -2979,7 +3096,7 @@ async function loadCreatorEvents(){
 async function loadCreatorStaff(){
   var token=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
   if(!token) return [];
-  var resp=await fetch(apiUrl('/creator/staff'), {headers:{Authorization:'Bearer '+token}});
+  var resp=await fetch(apiUrl('/creator/staff'), {headers:authHeaders('creator')});
   var data=await readAuthResponse(resp);
   if(!resp.ok) throw new Error(data.error||'Could not load creator staff');
   STORE.staff=data.staff||[];
@@ -2992,7 +3109,7 @@ async function loadCreatorStaff(){
 async function loginStaffFromApi(staffId,password){
   var resp=await fetch(apiUrl('/staff/login'),{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:clientHeaders({'Content-Type':'application/json'}),
     body:JSON.stringify({staffId:staffId,password:password})
   });
   var data=await readAuthResponse(resp);
@@ -3003,7 +3120,7 @@ async function loginStaffFromApi(staffId,password){
     throw err;
   }
   applyStaffPayload(data);
-  localStorage.setItem('VYBERA_STAFF_TOKEN',data.token||'');
+  await saveSession('staff',data);
   return STORE.currentStaff;
 }
 function applyStaffPayload(data){
@@ -3025,7 +3142,7 @@ function applyStaffPayload(data){
 async function refreshStaffData(){
   var token=localStorage.getItem('VYBERA_STAFF_TOKEN')||'';
   if(!token) return null;
-  var resp=await fetch(apiUrl('/staff/dashboard'),{headers:{Authorization:'Bearer '+token}});
+  var resp=await fetch(apiUrl('/staff/dashboard'),{headers:authHeaders('staff')});
   var data=await readAuthResponse(resp);
   if(!resp.ok){
     var err=new Error(data.error||'Could not load staff dashboard');
@@ -3166,7 +3283,7 @@ async function applyCreateStaffAllocation(event,allocation){
     if(token){
       var resp=await fetch(apiUrl('/creator/staff/'+encodeURIComponent(allocation.staffId)+'/assignments'),{
         method:'POST',
-        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        headers:authHeaders('creator',{'Content-Type':'application/json'}),
         body:JSON.stringify({eventId:event.id,tierName:allocation.tierName,qty:allocation.qty,allocationMode:allocation.allocationMode,mode:allocation.mode,commissionRate:allocation.commissionRate,purchasePrice:allocation.purchasePrice,resalePrice:allocation.resalePrice})
       });
       var data=await readAuthResponse(resp);
@@ -3224,7 +3341,7 @@ var creatorAnalyticsRequest=null;
 async function loadCreatorAnalytics(){
   var token=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
   if(!token) return null;
-  var resp=await fetch(apiUrl('/creator/analytics'), {headers:{Authorization:'Bearer '+token}});
+  var resp=await fetch(apiUrl('/creator/analytics'), {headers:authHeaders('creator')});
   var data=await readAuthResponse(resp);
   if(!resp.ok) throw new Error(data.error||'Could not load creator analytics');
   creatorAnalytics=data;
@@ -3312,6 +3429,7 @@ function confirmSignOut(onConfirm){
 }
 
 function performSignOut(){
+  ['buyer','creator','admin','staff'].forEach(function(role){logoutSession(role);});
   localStorage.removeItem('VYBERA_BUYER_TOKEN');
   localStorage.removeItem('VYBERA_BUYER_PROFILE');
   localStorage.removeItem('VYBERA_CREATOR_TOKEN');
@@ -3447,7 +3565,7 @@ async function submitFinancePin(){
     if(!token) throw new Error('Sign in as a creator first');
     var resp=await fetch(apiUrl('/creator/finance/unlock'),{
       method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('creator',{'Content-Type':'application/json'}),
       body:JSON.stringify({pin:pin})
     });
     var data=await readAuthResponse(resp);
@@ -4170,7 +4288,7 @@ async function payWithPayU(){
   try{
     var resp=await fetch(apiUrl('/orders'),{
       method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+(localStorage.getItem('VYBERA_BUYER_TOKEN')||'')},
+      headers:authHeaders('buyer',{'Content-Type':'application/json'}),
       body:JSON.stringify({
         eventId:CURRENT_EVENT.id,
         tierName:selected.getAttribute('data-name'),
@@ -4245,6 +4363,9 @@ function renderTicket(booking){
 
 // A ticket is visible to its buyer, the event's creator or assigned staff,
 // so send whichever of those logins this device has.
+function ticketViewerRole(){
+  return hasSession('buyer')?'buyer':hasSession('creator')?'creator':'staff';
+}
 function ticketViewerToken(){
   return localStorage.getItem('VYBERA_BUYER_TOKEN')||localStorage.getItem('VYBERA_CREATOR_TOKEN')||localStorage.getItem('VYBERA_STAFF_TOKEN')||'';
 }
@@ -4253,7 +4374,7 @@ async function loadTicket(bookingId){
   if(!bookingId)return null;
   var token=ticketViewerToken();
   if(!token)throw new Error('Log in to view this ticket');
-  var resp=await fetch(apiUrl('/bookings/'+encodeURIComponent(bookingId)+'/ticket'),{headers:{Authorization:'Bearer '+token}});
+  var resp=await fetch(apiUrl('/bookings/'+encodeURIComponent(bookingId)+'/ticket'),{headers:authHeaders(ticketViewerRole())});
   var data=await readAuthResponse(resp);
   if(!resp.ok)throw new Error(data.error||'Could not load ticket');
   CURRENT_BOOKING=data.booking;
@@ -4279,7 +4400,7 @@ async function loadBuyerBookingHistory(){
   var token=isBuyerSignedIn()?(localStorage.getItem('VYBERA_BUYER_TOKEN')||''):'';
   if(!token)return STORE.bookings;
   try{
-    var resp=await fetch(apiUrl('/profile/tickets'),{headers:{Authorization:'Bearer '+token}});
+    var resp=await fetch(apiUrl('/profile/tickets'),{headers:authHeaders('buyer')});
     var data=await readAuthResponse(resp);
     if(resp.status===401){clearRejectedProfileToken(token);return STORE.bookings;}
     if(!resp.ok)throw new Error(data.error||'Could not load booking history');
@@ -4295,6 +4416,11 @@ async function loadBuyerBookingHistory(){
   }
 }
 
+// Which signed-in role the profile page acts as (buyer first, else creator).
+function profileIdentityRole(){
+  if(sessionStorage.getItem('VYBERA_GUEST_MODE')==='1')return 'creator';
+  return hasSession('buyer')?'buyer':'creator';
+}
 function getProfileIdentityToken(){
   if(sessionStorage.getItem('VYBERA_GUEST_MODE')==='1')return localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
   return localStorage.getItem('VYBERA_BUYER_TOKEN')||localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
@@ -4343,7 +4469,7 @@ async function restoreBuyerSession(){
   var cachedUser=readCachedIdentity('VYBERA_BUYER_PROFILE');
   var responseStatus=0;
   try{
-    var resp=await fetch(apiUrl('/session'),{headers:{Authorization:'Bearer '+token}});
+    var resp=await fetch(apiUrl('/session'),{headers:authHeaders('buyer')});
     responseStatus=resp.status;
     var data=await readAuthResponse(resp);
     if(isRejectedAuthStatus(responseStatus)){
@@ -4384,7 +4510,7 @@ async function restoreAdminSession(){
   var cachedAdmin=readCachedIdentity('VYBERA_ADMIN_PROFILE');
   var responseStatus=0;
   try{
-    var resp=await fetch(apiUrl('/admin/session'),{headers:{Authorization:'Bearer '+token}});
+    var resp=await fetch(apiUrl('/admin/session'),{headers:authHeaders('admin')});
     responseStatus=resp.status;
     var data=await readAuthResponse(resp);
     if(isRejectedAuthStatus(responseStatus)){
@@ -4444,7 +4570,7 @@ async function restoreCreatorSession(){
   var cachedCreator=readCachedIdentity('VYBERA_CREATOR_PROFILE');
   var responseStatus=0;
   try{
-    var resp=await fetch(apiUrl('/creator/session'),{headers:{Authorization:'Bearer '+token}});
+    var resp=await fetch(apiUrl('/creator/session'),{headers:authHeaders('creator')});
     responseStatus=resp.status;
     var data=await readAuthResponse(resp);
     if(isRejectedAuthStatus(responseStatus)){
@@ -4484,7 +4610,7 @@ async function loadProfileCreatorEvents(){
   var token=getProfileIdentityToken();
   if(!token){PROFILE_CREATOR_EVENTS=[];return PROFILE_CREATOR_EVENTS;}
   try{
-    var resp=await fetch(apiUrl('/profile/creator-events'),{headers:{Authorization:'Bearer '+token}});
+    var resp=await fetch(apiUrl('/profile/creator-events'),{headers:authHeaders(profileIdentityRole())});
     var data=await readAuthResponse(resp);
     if(resp.status===401){clearRejectedProfileToken(token);PROFILE_CREATOR_EVENTS=[];return PROFILE_CREATOR_EVENTS;}
     if(!resp.ok)throw new Error(data.error||'Could not load your created events');
@@ -4680,7 +4806,7 @@ async function completePayUReturn(orderIdFromApp){
   }
   try{
     var resp=await fetch(apiUrl('/orders/'+encodeURIComponent(orderId)),{
-      headers:{Authorization:'Bearer '+(localStorage.getItem('VYBERA_BUYER_TOKEN')||'')}
+      headers:authHeaders('buyer')
     });
     var data=await readAuthResponse(resp);
     if(!resp.ok)throw new Error(data.error||'Could not load your order');
@@ -5218,7 +5344,7 @@ async function handleBannerUpload(input) {
         if(!token) throw new Error('Sign in as a creator before uploading a banner');
         var resp=await fetch(apiUrl('/creator/events/banner'), {
           method:'POST',
-          headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+          headers:authHeaders('creator',{'Content-Type':'application/json'}),
           body:JSON.stringify({fileName:file.name,dataUrl:e.target.result})
         });
         var data=await readAuthResponse(resp);
@@ -6341,6 +6467,7 @@ function enterStaffPanel(){
 }
 
 function performStaffSignOut(){
+  logoutSession('staff');
   STORE.currentStaff=null;
   localStorage.removeItem('VYBERA_STAFF_TOKEN');
   localStorage.removeItem('VYBERA_STAFF_PROFILE');
@@ -6433,7 +6560,7 @@ async function sellStaffTicketApi(assignmentId,buyerInfo,qty,paymentMode){
   if(!token) throw new Error('Staff login required');
   var resp=await fetch(apiUrl('/staff/sales'),{
     method:'POST',
-    headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    headers:authHeaders('staff',{'Content-Type':'application/json'}),
     body:JSON.stringify({assignmentId:assignmentId,buyerName:buyerInfo.name,buyerPhone:buyerInfo.phone,buyerEmail:buyerInfo.email||'',qty:qty||1,paymentMode:paymentMode||'cash'})
   });
   var data=await readAuthResponse(resp);
@@ -6777,7 +6904,7 @@ function selectLoginRole(role){
 async function postLogin(path,body){
   var resp=await fetch(apiUrl(path),{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:clientHeaders({'Content-Type':'application/json'}),
     body:JSON.stringify(body)
   });
   var data=await readAuthResponse(resp);
@@ -6789,7 +6916,7 @@ async function loginAsAdmin(id,pwd){
   if(!r.resp.ok)throw new Error(r.data.error||'Invalid admin email or password');
   STORE.currentAdmin=r.data.admin;
   STORE.adminUsers=[r.data.admin];
-  localStorage.setItem('VYBERA_ADMIN_TOKEN',r.data.token||'');
+  await saveSession('admin',r.data);
   cacheIdentity('VYBERA_ADMIN_PROFILE',r.data.admin);
   sessionStorage.removeItem('VYBERA_GUEST_MODE');
   document.body.classList.remove('guest-mode');
@@ -6819,7 +6946,7 @@ async function loginAsCreator(id,pwd){
   var account=r.data.creator||{};
   STORE.creatorProfile=account;
   STORE.currentUser=account.email;
-  localStorage.setItem('VYBERA_CREATOR_TOKEN',r.data.token||'');
+  await saveSession('creator',r.data);
   cacheIdentity('VYBERA_CREATOR_PROFILE',account);
   sessionStorage.removeItem('VYBERA_GUEST_MODE');
   document.body.classList.remove('guest-mode');
@@ -6843,7 +6970,7 @@ async function loginAsBuyer(id,pwd){
   var cityEl=document.getElementById('userCity');if(cityEl&&user.city)cityEl.textContent=user.city;
   var av=document.querySelector('.profile-avatar');
   if(av)av.textContent=userName.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
-  localStorage.setItem('VYBERA_BUYER_TOKEN',r.data.token||'');
+  await saveSession('buyer',r.data);
   cacheIdentity('VYBERA_BUYER_PROFILE',user);
   sessionStorage.removeItem('VYBERA_GUEST_MODE');
   document.body.classList.remove('guest-mode');
@@ -6991,7 +7118,7 @@ window.addEventListener('load',function(){selectLoginRole(LOGIN_ROLE);});
 async function loadAdminSnapshot(){
   var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
   if(!token) throw new Error('Admin login required');
-  var resp=await fetch(apiUrl('/admin/snapshot'),{headers:{Authorization:'Bearer '+token}});
+  var resp=await fetch(apiUrl('/admin/snapshot'),{headers:authHeaders('admin')});
   var data=await readAuthResponse(resp);
   if(!resp.ok) throw new Error(data.error||'Could not load admin data');
   STORE.adminUsers=data.admins||STORE.adminUsers||[];
@@ -7030,7 +7157,7 @@ async function loadAdminSnapshot(){
 }
 
 function adminAuthHeaders(){
-  return {'Content-Type':'application/json',Authorization:'Bearer '+(localStorage.getItem('VYBERA_ADMIN_TOKEN')||'')};
+  return authHeaders('admin',{'Content-Type':'application/json'});
 }
 
 function creatorStatusLabel(status){
@@ -7169,12 +7296,12 @@ async function applySocialLogin(user,options){
   try{
     var resp=await fetch(apiUrl('/auth/google'),{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:clientHeaders({'Content-Type':'application/json'}),
       body:JSON.stringify({credential:credential})
     });
     var data=await readAuthResponse(resp);
     if(!resp.ok)throw new Error(data.error||'Google login failed');
-    localStorage.setItem('VYBERA_BUYER_TOKEN',data.token||'');
+    await saveSession('buyer',data);
     var socialUser=data.user;
     cacheIdentity('VYBERA_BUYER_PROFILE',socialUser);
     applyBuyerProfile(socialUser);
@@ -7225,19 +7352,6 @@ window.applySocialLogin=applySocialLogin;
 window.vyberaAppAuthReady=true;
 window.dispatchEvent(new Event('vybera-app-auth-ready'));
 
-// APK: the Google login happened inside an InAppBrowser tab, which stored a buyer
-// token. Before trusting that copied token, ask the server who it belongs to.
-async function applyCopiedBuyerToken(token){
-  var resp=await fetch(apiUrl('/session'),{headers:{Authorization:'Bearer '+token}});
-  var data=await readAuthResponse(resp);
-  if(!resp.ok||!data.user)throw new Error(data.error||'Google login could not be verified');
-  localStorage.setItem('VYBERA_BUYER_TOKEN',token);
-  cacheIdentity('VYBERA_BUYER_PROFILE',data.user);
-  applyBuyerProfile(data.user);
-  showToast('Signed in with Google');
-  if(continueAfterBuyerAuth())return;
-  navigateBuyerHome();
-}
 function safeSessionGet(key){try{return sessionStorage.getItem(key);}catch(_){return null;}}
 function safeSessionSet(key,value){try{sessionStorage.setItem(key,value);}catch(_){}}
 function safeSessionRemove(key){try{sessionStorage.removeItem(key);}catch(_){}}
@@ -7245,46 +7359,12 @@ function isBlockedGoogleWebView(){
   var ua=navigator.userAgent||'';
   return !!window.cordova || /\bwv\)/i.test(ua) || /; wv\)/i.test(ua);
 }
-function openGoogleInSystemBrowser(){
-  safeSessionRemove('VYBERA_GOOGLE_PENDING');
-  var apiBase = window.VYBERA_API_BASE || 'https://vybera.onrender.com';
-  if (window.location.origin && window.location.origin.indexOf('http') === 0 && window.location.origin.indexOf('localhost') === -1) {
-    apiBase = window.location.origin;
-  }
-  var url = apiBase + '?google=1';
-  if(window.cordova && window.cordova.InAppBrowser){
-    showToast('Opening secure Google sign-in...');
-    var ref = window.cordova.InAppBrowser.open(url, '_blank', 'location=yes,clearcache=yes,clearsessioncache=yes,userAgent=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36');
-    var pollInterval = setInterval(function() {
-      ref.executeScript({
-        code: "localStorage.getItem('VYBERA_BUYER_TOKEN')"
-      }, function(result) {
-        var token = result && result[0];
-        if (token) {
-          clearInterval(pollInterval);
-          ref.close();
-          applyCopiedBuyerToken(token).catch(function(err){
-            console.error('Google login from browser failed:', err);
-            showToast(err.message || 'Google login failed');
-          });
-        }
-      });
-    }, 1000);
-    ref.addEventListener('exit', function() {
-      clearInterval(pollInterval);
-    });
-    return true;
-  }
-  window.open(url, '_system');
-  return true;
-}
 async function signInWithGoogle(){
   if(isBlockedGoogleWebView()){
-    if(typeof window.openGoogleInSystemBrowser==='function'){
-      showToast('Opening secure Google sign-in...');
-      return window.openGoogleInSystemBrowser();
-    }
-    showToast('Opening Google sign-in in your browser is required here.');
+    // In the app, Google sign-in uses the native googleplus plugin
+    // (firebaseconfig.js), which returns a Google ID token for /auth/google.
+    if(window.vyberaFirebaseGoogleSignIn)return window.vyberaFirebaseGoogleSignIn();
+    showToast('Google sign-in is still loading. Please try again.');
     return;
   }
   safeSessionRemove('VYBERA_GUEST_MODE');
@@ -7553,6 +7633,7 @@ function enterAdminPanel(){
 }
 
 function admSignOut(){
+  logoutSession('admin');
   STORE.addAdminLog('Logout', 'Admin signed out');
   STORE.currentAdmin = null;
   localStorage.removeItem('VYBERA_ADMIN_TOKEN');
@@ -8039,7 +8120,7 @@ async function admSetBuyerStatus(id,status){
     var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
     var resp=await fetch(apiUrl('/admin/users/'+encodeURIComponent(id)+'/status'),{
       method:'PATCH',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('admin',{'Content-Type':'application/json'}),
       body:JSON.stringify({status:status})
     });
     var data=await readAuthResponse(resp);
@@ -8201,7 +8282,7 @@ async function admVerifyCreator(id){
     var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
     var resp=await fetch(apiUrl('/admin/creators/'+encodeURIComponent(id)+'/status'),{
       method:'PATCH',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('admin',{'Content-Type':'application/json'}),
       body:JSON.stringify({status:'Approved'})
     });
     var data=await readAuthResponse(resp);
@@ -8226,7 +8307,7 @@ async function admRejectCreator(id){
     var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
     var resp=await fetch(apiUrl('/admin/creators/'+encodeURIComponent(c.id)+'/status'),{
       method:'PATCH',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('admin',{'Content-Type':'application/json'}),
       body:JSON.stringify({status:'Rejected'})
     });
     var data=await readAuthResponse(resp);
@@ -8394,7 +8475,7 @@ async function admDisableStaff(id){
     var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
     var resp=await fetch(apiUrl('/admin/staff/'+encodeURIComponent(id)+'/status'),{
       method:'PATCH',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('admin',{'Content-Type':'application/json'}),
       body:JSON.stringify({status:newStatus})
     });
     var data=await readAuthResponse(resp);
@@ -9763,7 +9844,7 @@ async function publishEvent(){
     if(!token) throw new Error('Sign in as a creator before publishing');
     var resp=await fetch(apiUrl('/creator/events'),{
       method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('creator',{'Content-Type':'application/json'}),
       body:JSON.stringify(draftEvent)
     });
     var data=await readAuthResponse(resp);
@@ -9886,7 +9967,7 @@ async function admSetEventStatus(eventId,status,options){
     var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
     var resp=await fetch(apiUrl('/admin/events/'+encodeURIComponent(eventId)+'/status'),{
       method:'PATCH',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('admin',{'Content-Type':'application/json'}),
       body:JSON.stringify({status:status})
     });
     var data=await readAuthResponse(resp);
@@ -10310,7 +10391,7 @@ async function submitWithdrawal(){
     var token=localStorage.getItem('VYBERA_STAFF_TOKEN')||'';
     var resp=await fetch(apiUrl('/staff/withdrawals'),{
       method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('staff',{'Content-Type':'application/json'}),
       body:JSON.stringify(payload)
     });
     var data=await readAuthResponse(resp);
@@ -10906,7 +10987,7 @@ async function confirmAddStaff(){
     if(!token) throw new Error('Sign in as a creator first');
     var resp=await fetch(apiUrl('/creator/staff'),{
       method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('creator',{'Content-Type':'application/json'}),
       body:JSON.stringify({name:name,phone:phone,email:email,staffId:staffId,password:pwd,role:role,assignedGate:gate,eventId:evId,tierName:tierName,qty:qty,allocationMode:allocationMode,mode:allocationMode,commissionRate:commissionRate,purchasePrice:purchasePrice,resalePrice:resalePrice})
     });
     var data=await readAuthResponse(resp);
@@ -11070,7 +11151,7 @@ async function submitAssignMoreTickets(){
     var token=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
     var resp=await fetch(apiUrl('/creator/staff/'+encodeURIComponent(assignMoreStaffId)+'/assignments'),{
       method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      headers:authHeaders('creator',{'Content-Type':'application/json'}),
       body:JSON.stringify({eventId:event.id,tierName:tier.name,qty:qty,allocationMode:allocationMode,mode:allocationMode,commissionRate:commissionRate,purchasePrice:purchasePrice,resalePrice:resalePrice})
     });
     var data=await readAuthResponse(resp);
@@ -11160,11 +11241,11 @@ async function validateTicketQr(payload){
     var activeId=activePage&&activePage.id;
     var staffToken=localStorage.getItem('VYBERA_STAFF_TOKEN')||'';
     var creatorToken=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
-    var token=(activeId==='page-staff-dashboard'||activeId==='page-staff-qr'||staffToken)
-      ? (staffToken||creatorToken)
-      : (creatorToken||staffToken);
+    var preferStaff=(activeId==='page-staff-dashboard'||activeId==='page-staff-qr'||staffToken);
+    var scanRole=preferStaff?(staffToken?'staff':'creator'):(creatorToken?'creator':'staff');
+    var token=scanRole==='staff'?staffToken:creatorToken;
     if(!token)throw new Error('Sign in as creator or staff before scanning tickets');
-    var resp=await fetch(apiUrl('/bookings/scan'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({qrPayload:payload})});
+    var resp=await fetch(apiUrl('/bookings/scan'),{method:'POST',headers:authHeaders(scanRole,{'Content-Type':'application/json'}),body:JSON.stringify({qrPayload:payload})});
     var data=await readAuthResponse(resp);
     var booking=data.booking||{};
     if(data.result==='valid'){
@@ -11374,7 +11455,7 @@ async function admVerifyCreatorApp(idx){
       var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
       var resp=await fetch(apiUrl('/admin/creators/'+encodeURIComponent(creator.id)+'/status'),{
         method:'PATCH',
-        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        headers:authHeaders('admin',{'Content-Type':'application/json'}),
         body:JSON.stringify({status:'Approved'})
       });
       var data=await readAuthResponse(resp);
@@ -11385,7 +11466,7 @@ async function admVerifyCreatorApp(idx){
       var adminToken=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
       var approveResp=await fetch(apiUrl('/admin/creators/status-by-email'),{
         method:'PATCH',
-        headers:{'Content-Type':'application/json',Authorization:'Bearer '+adminToken},
+        headers:authHeaders('admin',{'Content-Type':'application/json'}),
         body:JSON.stringify({email:app.email,status:'Approved'})
       });
       var approveData=await readAuthResponse(approveResp);

@@ -15,13 +15,15 @@ const TEST_PAYU = { key: "testkey", salt: "testsalt" };
 // Signs tokens exactly like the server (same jose module, same test secret).
 const tokens = require("../../src/utils/tokens");
 tokens.configureTokens(TEST_JWT_SECRET);
+// Session tokens carry tv (token_version); new accounts start at 0.
 function signTestToken(payload, expiresInSeconds = 3600, audience = tokens.AUDIENCE.session) {
-  return tokens.signToken(payload, { audience, expiresInSeconds });
+  const claims = audience === tokens.AUDIENCE.session && payload.tv === undefined ? { ...payload, tv: 0 } : payload;
+  return tokens.signToken(claims, { audience, expiresInSeconds });
 }
 
 const freePort = () => 20000 + Math.floor(Math.random() * 20000);
 
-async function startTestServer() {
+async function startTestServer(extraEnv = {}) {
   const { default: EmbeddedPostgres } = await import("embedded-postgres");
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ticketing-test-pg-"));
   const pgPort = freePort();
@@ -56,6 +58,7 @@ async function startTestServer() {
       TWILIO_ACCOUNT_SID: "",
       SMTP_HOST: "",
       SMTP_SERVICE: "",
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

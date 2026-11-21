@@ -187,10 +187,7 @@ window.vyberaFirebaseGoogleSignIn = async function vyberaFirebaseGoogleSignIn() 
         return;
       }
 
-      if (typeof window.openGoogleInSystemBrowser === "function") {
-        return window.openGoogleInSystemBrowser();
-      }
-      alert("Google login is not available in this app version.");
+      alert("Google sign-in needs the Google Sign-In plugin in this app build.");
       clearGooglePending();
       return;
     }

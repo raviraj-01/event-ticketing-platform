@@ -11,6 +11,17 @@ const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const { runMigrations } = require("./src/db/migrate");
 const { AUDIENCE, configureTokens, signToken, verifyToken } = require("./src/utils/tokens");
+const { parseCookies } = require("./src/utils/cookies");
+const { USER_ACTIVE_STATUS, normalizeUserStatus, isUserActive } = require("./src/utils/accounts");
+const {
+  AuthError,
+  ROLES,
+  authenticateRequest,
+  startSession,
+  rotateSession,
+  endSession,
+  revokeAllSessions,
+} = require("./src/services/sessions");
 const { isEventBookable, eventSalesClosed } = require("./src/utils/events");
 const { createRateLimiter, pruneRateLimitHits } = require("./src/middleware/rateLimit");
 const {
@@ -51,33 +62,44 @@ const appHtmlPath = path.join(publicDir, "index.html");
 const uploadsDir = path.join(__dirname, "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
-const corsOptions = {
-  origin: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "ngrok-skip-browser-warning",
-    "X-Requested-With",
-  ],
-  exposedHeaders: ["Content-Length", "Content-Type"],
-  optionsSuccessStatus: 204,
-};
-
-app.use(cors(corsOptions));
+// H16: only these origins may call the API from a browser with credentials.
+// Default: the app's own origin + the Cordova WebView origin. Override with
+// CORS_ORIGINS="https://a.example,https://b.example".
+const allowedOrigins = new Set(
+  String(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean),
+);
+if (!allowedOrigins.size) {
+  allowedOrigins.add(new URL(APP_BASE_URL).origin);
+  allowedOrigins.add("https://localhost"); // Cordova Android WebView
+}
+app.use(
+  cors({
+    // Requests without an Origin header (same-origin GETs, curl, PayU's
+    // server-side posts) are not CORS requests and are allowed through.
+    origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Client", "X-Session-Role"],
+    optionsSuccessStatus: 204,
+  }),
+);
 app.use((req, res, next) => {
   res.header("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.header("Vary", "Origin");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, ngrok-skip-browser-warning, X-Requested-With",
-  );
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+// CSRF defence for cookie sessions (on top of SameSite=Strict): a
+// state-changing request that carries our session cookies must come from an
+// allowed origin. Bearer-token clients (the app) are not cookie based.
+app.use((req, res, next) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method) || req.headers.authorization) return next();
+  const hasSessionCookie = Object.keys(parseCookies(req)).some((name) => /^(at|rt)_/.test(name));
+  const origin = req.headers.origin;
+  if (hasSessionCookie && origin && !allowedOrigins.has(origin)) {
+    return res.status(403).json({ error: "Cross-site request blocked" });
+  }
   next();
 });
 app.use(bodyParser.json({ limit: "30mb" }));
@@ -186,12 +208,8 @@ if (!jwtSecret) {
   process.exit(1);
 }
 configureTokens(jwtSecret);
-// Login session tokens. Purpose tokens (password reset, signup OTP) use
-// signToken/verifyToken directly with their own audience.
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
-const signJwt = (payload, expiresInSeconds = SESSION_TTL_SECONDS) =>
-  signToken(payload, { audience: AUDIENCE.session, expiresInSeconds });
-const verifyJwt = (token) => verifyToken(token, { audience: AUDIENCE.session });
+// Login sessions live in src/services/sessions.js. Purpose tokens (password
+// reset, signup OTP) use signToken/verifyToken with their own audience.
 const publicUser = (user) => ({
   id: user.id,
   username: user.username,
@@ -207,17 +225,10 @@ const publicUser = (user) => ({
   status: user.status || "Active",
 });
 
-const USER_ACTIVE_STATUS = "Active";
-const USER_BLOCKED_STATUSES = new Set(["Suspended", "Blocked", "Inactive"]);
 const EVENT_NOT_FOUND_ERROR = "Event does not exist";
 const USER_NOT_FOUND_ERROR = "User account not found";
 const STAFF_NOT_FOUND_ERROR = "Staff account not found";
 
-const normalizeUserStatus = (status) =>
-  String(status || USER_ACTIVE_STATUS).trim();
-
-const isUserActive = (status) =>
-  !USER_BLOCKED_STATUSES.has(normalizeUserStatus(status));
 
 
 const publicCreator = (creator) => ({
@@ -395,61 +406,22 @@ const publicAdmin = (admin) => ({
   createdAt: admin.created_at,
 });
 
-// A valid token is not enough: the creator must still exist and be approved
-// right now, so suspending a creator takes effect on their next request (H4).
-const isCreatorApproved = async (creatorId) => {
-  const result = await pool.query("SELECT kyc_status FROM creator_accounts WHERE id=$1", [creatorId]);
-  return result.rows.length > 0 && result.rows[0].kyc_status === "Approved";
-};
-
-const requireCreator = async (req, res, next) => {
+// Authentication middleware. Every request re-checks the account in the DB
+// (exists, active, same token_version), so suspensions and "log out
+// everywhere" take effect immediately (H4, H5).
+const requireRole = (roles, attach) => async (req, res, next) => {
   try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = await verifyJwt(token);
-    if (payload.scope !== "creator") throw new Error("Creator login required");
-    if (!(await isCreatorApproved(payload.sub))) throw new Error("Creator account is not active");
-    req.creator = payload;
+    const session = await authenticateRequest(pool, req, roles);
+    attach(req, session);
     next();
   } catch (err) {
-    res.status(401).json({ error: err.message || "Creator login required" });
+    if (!(err instanceof AuthError)) console.error("Authentication failed:", err);
+    res.status(401).json({ error: "Login required" });
   }
 };
 
-const requireAdmin = async (req, res, next) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = await verifyJwt(token);
-    if (payload.scope !== "admin") throw new Error("Admin login required");
-    const isSuper = payload.adminType === "super";
-    let adminCheck = await pool.query(
-      isSuper
-        ? "SELECT id, status FROM super_admin_accounts WHERE id=$1"
-        : "SELECT id, status FROM admin_accounts WHERE id=$1",
-      [payload.sub],
-    );
-    if (
-      !isSuper &&
-      !adminCheck.rows.length &&
-      payload.email
-    ) {
-      adminCheck = await pool.query(
-        "SELECT id, status FROM super_admin_accounts WHERE LOWER(email)=LOWER($1)",
-        [payload.email],
-      );
-      if (adminCheck.rows.length) payload.adminType = "super";
-    }
-    if (!adminCheck.rows.length || adminCheck.rows[0].status !== "Active") {
-      throw new Error("Admin account not found");
-    }
-    req.admin = payload;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: err.message || "Admin login required" });
-  }
-};
-
+const requireCreator = requireRole(["creator"], (req, s) => { req.creator = s.payload; });
+const requireAdmin = requireRole(["admin"], (req, s) => { req.admin = s.payload; });
 const requireSuperAdmin = async (req, res, next) => {
   try {
     if (!req.admin) {
@@ -517,81 +489,15 @@ const requireSuperAdmin = async (req, res, next) => {
   }
 };
 
-const requireStaff = async (req, res, next) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = await verifyJwt(token);
-    if (payload.scope !== "staff") throw new Error("Staff login required");
-    const staffCheck = await pool.query(
-      "SELECT id, status FROM staff_accounts WHERE id=$1",
-      [payload.sub]
-    );
-    if (!staffCheck.rows.length || staffCheck.rows[0].status !== "active") {
-      throw new Error(STAFF_NOT_FOUND_ERROR);
-    }
-    req.staff = payload;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: err.message || "Staff login required" });
-  }
-};
-
-const requireScanIdentity = async (req, res, next) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = await verifyJwt(token);
-    if (payload.scope === "creator") {
-      if (!(await isCreatorApproved(payload.sub))) throw new Error("Creator account is not active");
-      req.scanIdentity = { type: "creator", payload };
-      return next();
-    }
-    if (payload.scope === "staff") {
-      req.scanIdentity = { type: "staff", payload };
-      return next();
-    }
-    throw new Error("Scanner login required");
-  } catch (err) {
-    res.status(401).json({ error: err.message || "Scanner login required" });
-  }
-};
-
-const requireBuyer = async (req, res, next) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = await verifyJwt(token);
-    if (!payload.sub || payload.scope) throw new Error("Buyer login required");
-    const userCheck = await pool.query(
-      "SELECT id, status FROM users WHERE id=$1",
-      [payload.sub],
-    );
-    if (!userCheck.rows.length || !isUserActive(userCheck.rows[0].status)) {
-      throw new Error(USER_NOT_FOUND_ERROR);
-    }
-    req.buyer = payload;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: err.message || "Buyer login required" });
-  }
-};
-
-const requireProfileIdentity = async (req, res, next) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = await verifyJwt(token);
-    const email = String(payload.email || "")
-      .trim()
-      .toLowerCase();
-    if (!email) throw new Error("Profile login required");
-    req.profileIdentity = { ...payload, email };
-    next();
-  } catch (err) {
-    res.status(401).json({ error: err.message || "Profile login required" });
-  }
-};
+const requireStaff = requireRole(["staff"], (req, s) => { req.staff = s.payload; });
+const requireBuyer = requireRole(["buyer"], (req, s) => { req.buyer = s.payload; });
+const requireScanIdentity = requireRole(["creator", "staff"], (req, s) => {
+  req.scanIdentity = { type: s.role, payload: s.payload };
+});
+// Buyer or creator, identified by email (used by /profile/creator-events; see H12).
+const requireProfileIdentity = requireRole(["buyer", "creator"], (req, s) => {
+  req.profileIdentity = { ...s.payload, email: String(s.payload.email || "").trim().toLowerCase() };
+});
 
 const getSigningKey = (secret, dateStamp) => {
   const kDate = hmac(`AWS4${secret}`, dateStamp);
@@ -1133,8 +1039,7 @@ app.post(
       res.json({
         message: "Creator login successful",
         creator: publicCreator(creator),
-        token: await signJwt({ sub: creator.id, email: creator.email, scope: "creator" }),
-        expiresInDays: 30,
+        ...(await startSession(pool, req, res, { role: "creator", accountId: creator.id })),
       });
     } catch (err) {
       console.error("Creator login failed:", err);
@@ -1765,12 +1670,7 @@ app.post("/staff/login", async (req, res) => {
       sales: sales.rows.map(publicStaffSale),
       withdrawals: withdrawals.rows.map(publicStaffWithdrawal),
       wallet,
-      token: await signJwt({
-        sub: member.id,
-        staffId: member.staff_id,
-        creatorId: member.creator_id,
-        scope: "staff",
-      }),
+      ...(await startSession(pool, req, res, { role: "staff", accountId: member.id })),
     });
   } catch (err) {
     console.error("Staff login failed:", err);
@@ -2168,12 +2068,7 @@ app.post("/admin/login", async (req, res) => {
           role: "Super Admin",
           is_super_admin: true,
         }),
-        token: await signJwt({
-          sub: superAdmin.id,
-          email: superAdmin.email,
-          scope: "admin",
-          adminType: "super",
-        }),
+        ...(await startSession(pool, req, res, { role: "admin", accountId: superAdmin.id, adminType: "super" })),
       });
       return;
     }
@@ -2215,12 +2110,7 @@ app.post("/admin/login", async (req, res) => {
           role: "Super Admin",
           is_super_admin: true,
         }),
-        token: await signJwt({
-          sub: migrated.rows[0].id,
-          email: migrated.rows[0].email,
-          scope: "admin",
-          adminType: "super",
-        }),
+        ...(await startSession(pool, req, res, { role: "admin", accountId: migrated.rows[0].id, adminType: "super" })),
       });
       return;
     }
@@ -2231,12 +2121,7 @@ app.post("/admin/login", async (req, res) => {
     res.json({
       message: "Admin login successful",
       admin: publicAdmin(updated.rows[0]),
-      token: await signJwt({
-        sub: admin.id,
-        email: admin.email,
-        scope: "admin",
-        adminType: "admin",
-      }),
+      ...(await startSession(pool, req, res, { role: "admin", accountId: admin.id, adminType: "admin" })),
     });
   } catch (err) {
     console.error("Admin login failed:", err);
@@ -3116,30 +3001,9 @@ app.get("/profile/creator-events", requireProfileIdentity, async (req, res) => {
 // Who may see a ticket (and its QR payload): the buyer who owns it, the
 // creator of its event, or staff assigned to its event. Anyone else gets 404
 // (never 403), so booking IDs cannot be probed.
-const requireTicketViewer = async (req, res, next) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const payload = await verifyJwt(auth.startsWith("Bearer ") ? auth.slice(7) : "");
-    if (!payload.scope && payload.sub) {
-      const user = await pool.query("SELECT status FROM users WHERE id=$1", [payload.sub]);
-      if (!user.rows.length || !isUserActive(user.rows[0].status)) throw new Error("inactive");
-      req.ticketViewer = { type: "buyer", id: payload.sub };
-    } else if (payload.scope === "creator") {
-      const creator = await pool.query("SELECT kyc_status FROM creator_accounts WHERE id=$1", [payload.sub]);
-      if (!creator.rows.length || creator.rows[0].kyc_status !== "Approved") throw new Error("inactive");
-      req.ticketViewer = { type: "creator", id: payload.sub };
-    } else if (payload.scope === "staff") {
-      const staff = await pool.query("SELECT status FROM staff_accounts WHERE id=$1", [payload.sub]);
-      if (!staff.rows.length || staff.rows[0].status !== "active") throw new Error("inactive");
-      req.ticketViewer = { type: "staff", id: payload.sub };
-    } else {
-      throw new Error("wrong token type");
-    }
-    next();
-  } catch (err) {
-    res.status(401).json({ error: "Login required" });
-  }
-};
+const requireTicketViewer = requireRole(["buyer", "creator", "staff"], (req, s) => {
+  req.ticketViewer = { type: s.role, id: s.payload.sub };
+});
 
 app.get("/bookings/:bookingId/ticket", requireTicketViewer, async (req, res) => {
   try {
@@ -3588,8 +3452,7 @@ app.post("/auth/google", async (req, res) => {
     res.json({
       message: "Login successful",
       user: publicUser(user),
-      token: await signJwt({ sub: user.id, email: user.email }),
-      expiresInDays: 30,
+      ...(await startSession(pool, req, res, { role: "buyer", accountId: user.id })),
     });
   } catch (err) {
     console.error("Google login failed:", err);
@@ -3641,8 +3504,7 @@ app.post("/login", async (req, res) => {
     res.json({
       message: "Login successful",
       user: publicUser(user),
-      token: await signJwt({ sub: user.id, email: user.email }),
-      expiresInDays: 30,
+      ...(await startSession(pool, req, res, { role: "buyer", accountId: user.id })),
     });
   } catch (err) {
     console.error(err);
@@ -3770,6 +3632,8 @@ app.post("/auth/reset-password-by-token", async (req, res) => {
     if (!result.rows.length) {
       return res.status(400).json({ error: "Reset link is invalid or has already been used. Please request a new one." });
     }
+    // New password = end every existing session for this buyer (H5).
+    await revokeAllSessions(pool, { role: "buyer", accountId: result.rows[0].id });
 
     res.json({ success: true, message: "Password updated successfully. You can now sign in with your new password." });
   } catch (err) {
@@ -3778,26 +3642,74 @@ app.post("/auth/reset-password-by-token", async (req, res) => {
   }
 });
 
-app.get("/session", async (req, res) => {
+// The logged-in buyer's profile. Only buyer sessions are accepted, so a
+// creator/admin token with the same numeric id can no longer read a buyer (H12).
+app.get("/session", requireBuyer, async (req, res) => {
   try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = await verifyJwt(token);
     const result = await pool.query(
       `SELECT id, username, first_name, last_name, email, phone, country_code, city,
         profile_image_url, profile_image_key, profile_image_storage, status
-       FROM users
-       WHERE id=$1`,
-      [payload.sub],
+       FROM users WHERE id=$1`,
+      [req.buyer.sub],
     );
-    if (!result.rows.length || !isUserActive(result.rows[0].status)) {
-      return res.status(401).json({ error: "Session user not found" });
-    }
     res.json({ user: publicUser(result.rows[0]) });
   } catch (err) {
-    res.status(401).json({ error: err.message || "Invalid session" });
+    console.error("Session load failed:", err);
+    res.status(500).json({ error: "Could not load session" });
   }
 });
+
+// ── Session lifecycle (H5) ─────────────────────────────────────────────────
+const sessionRole = (req) => {
+  const role = String((req.body && req.body.role) || "");
+  return ROLES.includes(role) ? role : null;
+};
+
+// New access token (and a rotated refresh token) for a valid refresh token.
+app.post(
+  "/auth/refresh",
+  rateLimit({ name: "refresh-ip", windowSeconds: 600, max: 120, key: (req) => req.ip }),
+  async (req, res) => {
+    const role = sessionRole(req);
+    if (!role) return res.status(400).json({ error: "Valid role is required" });
+    try {
+      res.json(await rotateSession(pool, req, res, role));
+    } catch (err) {
+      if (!(err instanceof AuthError)) console.error("Session refresh failed:", err);
+      res.status(401).json({ error: "Session expired. Please log in again." });
+    }
+  },
+);
+
+// End this login (revokes its refresh token family, clears cookies).
+app.post("/auth/logout", async (req, res) => {
+  const role = sessionRole(req);
+  if (!role) return res.status(400).json({ error: "Valid role is required" });
+  try {
+    await endSession(pool, req, res, role);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Logout failed:", err);
+    res.status(500).json({ error: "Logout failed" });
+  }
+});
+
+// Log this account out on every device.
+app.post(
+  "/auth/logout-all",
+  requireRole(ROLES, (req, s) => { req.session = s; }),
+  async (req, res) => {
+    try {
+      const { role, payload } = req.session;
+      await revokeAllSessions(pool, { role, accountId: payload.sub, adminType: payload.adminType });
+      await endSession(pool, req, res, role);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Logout everywhere failed:", err);
+      res.status(500).json({ error: "Could not log out everywhere" });
+    }
+  },
+);
 
 // Startup order: schema migrations → data fix-ups → accept requests.
 // Listening only after migrations means no request can hit a missing table.
