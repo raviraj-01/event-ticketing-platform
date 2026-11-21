@@ -12,12 +12,11 @@ const ROOT = path.join(__dirname, "..", "..");
 const TEST_JWT_SECRET = "test-only-jwt-secret-for-integration-tests-0123456789";
 const TEST_PAYU = { key: "testkey", salt: "testsalt" };
 
-function signTestToken(payload, expiresInSeconds = 3600) {
-  const b64 = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
-  const now = Math.floor(Date.now() / 1000);
-  const unsigned = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ ...payload, iat: now, exp: now + expiresInSeconds })}`;
-  const signature = crypto.createHmac("sha256", TEST_JWT_SECRET).update(unsigned).digest("base64url");
-  return `${unsigned}.${signature}`;
+// Signs tokens exactly like the server (same jose module, same test secret).
+const tokens = require("../../src/utils/tokens");
+tokens.configureTokens(TEST_JWT_SECRET);
+function signTestToken(payload, expiresInSeconds = 3600, audience = tokens.AUDIENCE.session) {
+  return tokens.signToken(payload, { audience, expiresInSeconds });
 }
 
 const freePort = () => 20000 + Math.floor(Math.random() * 20000);

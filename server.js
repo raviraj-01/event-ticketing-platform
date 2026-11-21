@@ -10,6 +10,7 @@ const QRCode = require("qrcode");
 const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const { runMigrations } = require("./src/db/migrate");
+const { AUDIENCE, configureTokens, signToken, verifyToken } = require("./src/utils/tokens");
 const { isEventBookable, eventSalesClosed } = require("./src/utils/events");
 const { createRateLimiter, pruneRateLimitHits } = require("./src/middleware/rateLimit");
 const {
@@ -184,48 +185,13 @@ if (!jwtSecret) {
   );
   process.exit(1);
 }
-const base64Url = (value) =>
-  Buffer.from(value)
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
-const base64UrlJson = (value) => base64Url(JSON.stringify(value));
-const signJwt = (payload, expiresInSeconds = 60 * 60 * 24 * 30) => {
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: "HS256", typ: "JWT" };
-  const body = { ...payload, iat: now, exp: now + expiresInSeconds };
-  const unsigned = `${base64UrlJson(header)}.${base64UrlJson(body)}`;
-  const signature = crypto
-    .createHmac("sha256", jwtSecret)
-    .update(unsigned)
-    .digest("base64url");
-  return `${unsigned}.${signature}`;
-};
-const verifyJwt = (token) => {
-  const parts = String(token || "").split(".");
-  if (parts.length !== 3) throw new Error("Invalid token");
-  const unsigned = `${parts[0]}.${parts[1]}`;
-  const expected = crypto
-    .createHmac("sha256", jwtSecret)
-    .update(unsigned)
-    .digest("base64url");
-  const actual = Buffer.from(parts[2]);
-  const wanted = Buffer.from(expected);
-  if (
-    actual.length !== wanted.length ||
-    !crypto.timingSafeEqual(actual, wanted)
-  ) {
-    throw new Error("Invalid token signature");
-  }
-  const payload = JSON.parse(
-    Buffer.from(parts[1], "base64url").toString("utf8"),
-  );
-  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) {
-    throw new Error("Token expired");
-  }
-  return payload;
-};
+configureTokens(jwtSecret);
+// Login session tokens. Purpose tokens (password reset, signup OTP) use
+// signToken/verifyToken directly with their own audience.
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+const signJwt = (payload, expiresInSeconds = SESSION_TTL_SECONDS) =>
+  signToken(payload, { audience: AUDIENCE.session, expiresInSeconds });
+const verifyJwt = (token) => verifyToken(token, { audience: AUDIENCE.session });
 const publicUser = (user) => ({
   id: user.id,
   username: user.username,
@@ -440,7 +406,7 @@ const requireCreator = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = verifyJwt(token);
+    const payload = await verifyJwt(token);
     if (payload.scope !== "creator") throw new Error("Creator login required");
     if (!(await isCreatorApproved(payload.sub))) throw new Error("Creator account is not active");
     req.creator = payload;
@@ -454,7 +420,7 @@ const requireAdmin = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = verifyJwt(token);
+    const payload = await verifyJwt(token);
     if (payload.scope !== "admin") throw new Error("Admin login required");
     const isSuper = payload.adminType === "super";
     let adminCheck = await pool.query(
@@ -555,7 +521,7 @@ const requireStaff = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = verifyJwt(token);
+    const payload = await verifyJwt(token);
     if (payload.scope !== "staff") throw new Error("Staff login required");
     const staffCheck = await pool.query(
       "SELECT id, status FROM staff_accounts WHERE id=$1",
@@ -575,7 +541,7 @@ const requireScanIdentity = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = verifyJwt(token);
+    const payload = await verifyJwt(token);
     if (payload.scope === "creator") {
       if (!(await isCreatorApproved(payload.sub))) throw new Error("Creator account is not active");
       req.scanIdentity = { type: "creator", payload };
@@ -595,7 +561,7 @@ const requireBuyer = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = verifyJwt(token);
+    const payload = await verifyJwt(token);
     if (!payload.sub || payload.scope) throw new Error("Buyer login required");
     const userCheck = await pool.query(
       "SELECT id, status FROM users WHERE id=$1",
@@ -611,11 +577,11 @@ const requireBuyer = async (req, res, next) => {
   }
 };
 
-const requireProfileIdentity = (req, res, next) => {
+const requireProfileIdentity = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = verifyJwt(token);
+    const payload = await verifyJwt(token);
     const email = String(payload.email || "")
       .trim()
       .toLowerCase();
@@ -1167,7 +1133,7 @@ app.post(
       res.json({
         message: "Creator login successful",
         creator: publicCreator(creator),
-        token: signJwt({ sub: creator.id, email: creator.email, scope: "creator" }),
+        token: await signJwt({ sub: creator.id, email: creator.email, scope: "creator" }),
         expiresInDays: 30,
       });
     } catch (err) {
@@ -1799,7 +1765,7 @@ app.post("/staff/login", async (req, res) => {
       sales: sales.rows.map(publicStaffSale),
       withdrawals: withdrawals.rows.map(publicStaffWithdrawal),
       wallet,
-      token: signJwt({
+      token: await signJwt({
         sub: member.id,
         staffId: member.staff_id,
         creatorId: member.creator_id,
@@ -2202,7 +2168,7 @@ app.post("/admin/login", async (req, res) => {
           role: "Super Admin",
           is_super_admin: true,
         }),
-        token: signJwt({
+        token: await signJwt({
           sub: superAdmin.id,
           email: superAdmin.email,
           scope: "admin",
@@ -2249,7 +2215,7 @@ app.post("/admin/login", async (req, res) => {
           role: "Super Admin",
           is_super_admin: true,
         }),
-        token: signJwt({
+        token: await signJwt({
           sub: migrated.rows[0].id,
           email: migrated.rows[0].email,
           scope: "admin",
@@ -2265,7 +2231,7 @@ app.post("/admin/login", async (req, res) => {
     res.json({
       message: "Admin login successful",
       admin: publicAdmin(updated.rows[0]),
-      token: signJwt({
+      token: await signJwt({
         sub: admin.id,
         email: admin.email,
         scope: "admin",
@@ -3153,7 +3119,7 @@ app.get("/profile/creator-events", requireProfileIdentity, async (req, res) => {
 const requireTicketViewer = async (req, res, next) => {
   try {
     const auth = req.headers.authorization || "";
-    const payload = verifyJwt(auth.startsWith("Bearer ") ? auth.slice(7) : "");
+    const payload = await verifyJwt(auth.startsWith("Bearer ") ? auth.slice(7) : "");
     if (!payload.scope && payload.sub) {
       const user = await pool.query("SELECT status FROM users WHERE id=$1", [payload.sub]);
       if (!user.rows.length || !isUserActive(user.rows[0].status)) throw new Error("inactive");
@@ -3364,13 +3330,13 @@ const verifyLocalOtpEntry = (identifier, otp) => {
 };
 
 const makeSignupOtpToken = (identifier) =>
-  signJwt({ scope: "signup-phone-otp", identifier }, 10 * 60);
+  signToken({ identifier }, { audience: AUDIENCE.signupOtp, expiresInSeconds: 10 * 60 });
 
 const verifySignupOtpToken = async (token, countryCode, phone) => {
   const identifier = `${String(countryCode || "+91").replace(/\D/g, "")}${String(phone || "").replace(/\D/g, "")}`;
   try {
-    const payload = verifyJwt(token);
-    if (payload.scope !== "signup-phone-otp" || payload.identifier !== identifier) {
+    const payload = await verifyToken(token, { audience: AUDIENCE.signupOtp });
+    if (payload.identifier !== identifier) {
       throw new Error("OTP verification does not match this phone number");
     }
     return payload;
@@ -3445,7 +3411,7 @@ const verifySignupOtp = async (req, res) => {
     if (verifyLocalOtpEntry(identifier, otp)) {
       return res.json({
         verified: true,
-        accessToken: makeSignupOtpToken(identifier),
+        accessToken: await makeSignupOtpToken(identifier),
         data: { status: "approved", channel: "local-dev" },
       });
     }
@@ -3464,7 +3430,7 @@ const verifySignupOtp = async (req, res) => {
     if (data.status !== "approved" && !data.valid) {
       return res.status(400).json({ verified: false, error: "Invalid OTP. Try again.", data });
     }
-    res.json({ verified: true, accessToken: makeSignupOtpToken(identifier), data });
+    res.json({ verified: true, accessToken: await makeSignupOtpToken(identifier), data });
   } catch (err) {
     console.error("Twilio OTP verification failed:", err);
     res.status(err.status || 500).json({ verified: false, error: err.message || "Twilio OTP verification failed" });
@@ -3479,8 +3445,10 @@ const verifySignupOtpAccessToken = async (req, res) => {
     if (!accessToken) {
       return res.status(400).json({ verified: false, error: "OTP access token is required" });
     }
-    const payload = verifyJwt(accessToken);
-    if (payload.scope !== "signup-phone-otp") {
+    let payload;
+    try {
+      payload = await verifyToken(accessToken, { audience: AUDIENCE.signupOtp });
+    } catch (verifyErr) {
       return res.status(400).json({ verified: false, error: "Invalid OTP token" });
     }
     res.json({ verified: true, data: payload });
@@ -3620,7 +3588,7 @@ app.post("/auth/google", async (req, res) => {
     res.json({
       message: "Login successful",
       user: publicUser(user),
-      token: signJwt({ sub: user.id, email: user.email }),
+      token: await signJwt({ sub: user.id, email: user.email }),
       expiresInDays: 30,
     });
   } catch (err) {
@@ -3673,7 +3641,7 @@ app.post("/login", async (req, res) => {
     res.json({
       message: "Login successful",
       user: publicUser(user),
-      token: signJwt({ sub: user.id, email: user.email }),
+      token: await signJwt({ sub: user.id, email: user.email }),
       expiresInDays: 30,
     });
   } catch (err) {
@@ -3707,9 +3675,9 @@ app.post("/auth/forgot-password", ...forgotPasswordLimits, async (req, res) => {
     if (result.rows.length) {
       const ttlMinutes = Number(process.env.PASSWORD_RESET_TTL_MINUTES || 10);
       // pv = password_version: the link stops working once the password changes (H2).
-      const token = signJwt(
-        { scope: "password-reset", email, pv: result.rows[0].password_version },
-        ttlMinutes * 60,
+      const token = await signToken(
+        { email, pv: result.rows[0].password_version },
+        { audience: AUDIENCE.passwordReset, expiresInSeconds: ttlMinutes * 60 },
       );
       const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3003}`).replace(/\/$/, "");
       const resetLink = `${baseUrl}/?reset_token=${encodeURIComponent(token)}`;
@@ -3778,12 +3746,12 @@ app.post("/auth/reset-password-by-token", async (req, res) => {
 
     let payload;
     try {
-      payload = verifyJwt(token);
+      payload = await verifyToken(token, { audience: AUDIENCE.passwordReset });
     } catch (err) {
       return res.status(400).json({ error: "Reset link is invalid or has expired. Please request a new one." });
     }
 
-    if (payload.scope !== "password-reset" || !payload.email || !Number.isInteger(payload.pv)) {
+    if (!payload.email || !Number.isInteger(payload.pv)) {
       return res.status(400).json({ error: "Invalid reset link" });
     }
 
@@ -3814,7 +3782,7 @@ app.get("/session", async (req, res) => {
   try {
     const auth = req.headers.authorization || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const payload = verifyJwt(token);
+    const payload = await verifyJwt(token);
     const result = await pool.query(
       `SELECT id, username, first_name, last_name, email, phone, country_code, city,
         profile_image_url, profile_image_key, profile_image_storage, status

@@ -44,7 +44,7 @@ async function createBuyer({ email, phone } = {}) {
     [email || `buyer${uid()}@test.local`, phone || null],
   );
   const user = result.rows[0];
-  return { ...user, token: signTestToken({ sub: user.id, email: user.email }) };
+  return { ...user, token: await signTestToken({ sub: user.id, email: user.email }) };
 }
 
 async function createEvent({ capacity = 100, tiers = [{ name: "General", price: 500, qty: 100 }] } = {}) {

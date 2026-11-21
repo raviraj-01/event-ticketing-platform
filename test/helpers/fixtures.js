@@ -14,7 +14,7 @@ function makeFixtures(db) {
       [`creator${uid()}@test.local`, kycStatus],
     );
     const creator = result.rows[0];
-    return { ...creator, token: signTestToken({ sub: creator.id, email: creator.email, scope: "creator" }) };
+    return { ...creator, token: await signTestToken({ sub: creator.id, email: creator.email, scope: "creator" }) };
   }
 
   async function createBuyer({ email, phone } = {}) {
@@ -24,7 +24,7 @@ function makeFixtures(db) {
       [email || `buyer${uid()}@test.local`, phone || null],
     );
     const user = result.rows[0];
-    return { ...user, token: signTestToken({ sub: user.id, email: user.email }) };
+    return { ...user, token: await signTestToken({ sub: user.id, email: user.email }) };
   }
 
   async function createEvent({ creatorId, capacity = 100, tiers = [{ name: "General", price: 500, qty: 100 }] } = {}) {
@@ -54,7 +54,7 @@ function makeFixtures(db) {
         [`ASN-test-${uid()}`, creatorId, id, eventId, assignedTier],
       );
     }
-    return { id, shareToken, token: signTestToken({ sub: id, scope: "staff", creatorId }) };
+    return { id, shareToken, token: await signTestToken({ sub: id, scope: "staff", creatorId }) };
   }
 
   // A booking row as old code (or a staff walk-in sale) would have left it.

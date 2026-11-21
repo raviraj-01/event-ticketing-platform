@@ -87,7 +87,7 @@ const resetWith = (token, password = "New-password-1") =>
 
 test("H2: a reset link works once", async () => {
   const buyer = await fx.createBuyer();
-  const token = signTestToken({ scope: "password-reset", email: buyer.email, pv: 0 }, 600);
+  const token = await signTestToken({ email: buyer.email, pv: 0 }, 600, "password-reset");
   assert.equal((await resetWith(token, "First-new-pass-1")).status, 200);
   const reuse = await resetWith(token, "Second-new-pass-1");
   assert.equal(reuse.status, 400);
@@ -96,15 +96,15 @@ test("H2: a reset link works once", async () => {
   assert.equal(login.status, 200, "the first new password is the one that stuck");
 });
 
-test("H2: links without a password version (old format) are rejected", async () => {
+test("H2: links without a password version are rejected", async () => {
   const buyer = await fx.createBuyer();
-  const token = signTestToken({ scope: "password-reset", email: buyer.email }, 600);
+  const token = await signTestToken({ email: buyer.email }, 600, "password-reset");
   assert.equal((await resetWith(token)).status, 400);
 });
 
 test("H2: two simultaneous uses of one link: exactly one succeeds", async () => {
   const buyer = await fx.createBuyer();
-  const token = signTestToken({ scope: "password-reset", email: buyer.email, pv: 0 }, 600);
+  const token = await signTestToken({ email: buyer.email, pv: 0 }, 600, "password-reset");
   const results = await Promise.all(Array.from({ length: 5 }, (_, i) => resetWith(token, `Parallel-pass-${i}`)));
   assert.equal(results.filter((r) => r.status === 200).length, 1);
 });
@@ -189,4 +189,27 @@ test("D12: staff share links resolve by share token only", async () => {
   const ok = await api(server.baseUrl, "GET", `/staff/share/${token}`);
   assert.equal(ok.status, 200);
   assert.equal(ok.body.staff.email, undefined, "no email in the public share response");
+});
+
+// ── L4: tokens are only accepted for their own purpose (audience) ──
+test("L4: a password-reset token cannot be used as a login session", async () => {
+  const buyer = await fx.createBuyer();
+  const resetToken = await signTestToken({ sub: buyer.id, email: buyer.email, pv: 0 }, 600, "password-reset");
+  assert.equal((await api(server.baseUrl, "GET", "/bookings/mine", { token: resetToken })).status, 401);
+  assert.equal((await api(server.baseUrl, "GET", "/bookings/mine", { token: buyer.token })).status, 200);
+});
+
+test("L4: a session token cannot be used as a reset link", async () => {
+  const buyer = await fx.createBuyer();
+  const sessionToken = await signTestToken({ email: buyer.email, pv: 0 });
+  assert.equal((await resetWith(sessionToken)).status, 400);
+});
+
+test("L4: tokens from the old hand-written format are rejected", async () => {
+  const crypto = require("crypto");
+  const b64 = (v) => Buffer.from(JSON.stringify(v)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const unsigned = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: 1, iat: now, exp: now + 600 })}`;
+  const legacy = `${unsigned}.${crypto.createHmac("sha256", "test-only-jwt-secret-for-integration-tests-0123456789").update(unsigned).digest("base64url")}`;
+  assert.equal((await api(server.baseUrl, "GET", "/bookings/mine", { token: legacy })).status, 401);
 });
