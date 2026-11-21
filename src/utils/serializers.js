@@ -59,7 +59,6 @@ const publicAdminCreator = (creator) => ({
   status: creator.kyc_status,
   events: Number(creator.events || 0),
   revenue: Number(creator.revenue || 0),
-  fee: 8,
   documents: (creator.documents || []).map(publicCreatorKycDocument),
   createdAt: creator.created_at,
 });

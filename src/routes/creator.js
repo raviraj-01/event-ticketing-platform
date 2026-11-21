@@ -21,7 +21,7 @@ const { rateLimit } = require("../middleware/rateLimit");
 const { startSession } = require("../services/sessions");
 const { requireCreator } = require("../middleware/auth");
 const { creatorEventSalesQuery } = require("../db/queries");
-const { withAvailability } = require("../services/orders");
+const { withAvailability, organizerEarnings } = require("../services/orders");
 const crypto = require("crypto");
 const { staffWallet, recordCashSettlement, WalletError } = require("../services/staffWallet");
 const { setTemporaryPassword } = require("../services/passwordReset");
@@ -520,14 +520,13 @@ router.get("/creator/analytics", requireCreator, async (req, res) => {
         [req.creator.sub],
       ),
     ]);
-    const gross = Number(summary.rows[0].gross || 0);
+    const { gross, fee, net, feePercent } = organizerEarnings(summary.rows[0].gross);
     const tickets = Number(summary.rows[0].tickets || 0);
-    const fee = Math.round(gross * 0.08);
-    const net = gross - fee;
     res.json({
       summary: {
         gross,
         fee,
+        feePercent,
         net,
         tickets,
         averageTicketPrice: tickets ? Math.round(gross / tickets) : 0,
@@ -708,11 +707,12 @@ router.post("/creator/finance/unlock", requireCreator, async (req, res) => {
        WHERE e.creator_id=$1`,
       [req.creator.sub],
     );
-    const gross = Number(result.rows[0].gross || 0);
+    // M8: was 94% here and 92% in analytics; now the same function everywhere.
+    const { gross, net } = organizerEarnings(result.rows[0].gross);
     res.json({
       initialized,
       gross,
-      net: Math.round(gross * 0.94),
+      net,
       tickets: Number(result.rows[0].tickets || 0),
     });
   } catch (err) {

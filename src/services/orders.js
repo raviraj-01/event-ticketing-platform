@@ -47,6 +47,17 @@ const payablePhone = (phone) => {
 const roundMoney = (value) => Math.round(value * 100) / 100;
 const randomId = (prefix, bytes) => `${prefix}${crypto.randomBytes(bytes).toString("hex")}`;
 
+// M8: the organizer's side of their ticket sales. The ONE place that turns
+// PLATFORM_FEE_PERCENT into fee/net for organizers (analytics, finance, admin).
+// gross = ticket subtotals (bookings.total); the buyer already paid the fee and
+// GST on top at checkout, so whether the organizer should ALSO be charged is
+// open question Q16. If not, change this function only.
+function organizerEarnings(gross) {
+  const cleanGross = roundMoney(Number(gross) || 0);
+  const fee = roundMoney((cleanGross * ORDER_SETTINGS.platformFeePercent) / 100);
+  return { gross: cleanGross, feePercent: ORDER_SETTINGS.platformFeePercent, fee, net: roundMoney(cleanGross - fee) };
+}
+
 // Same formula the checkout page shows: tickets + platform fee + GST on the fee.
 function priceOrder(unitPrice, qty) {
   const subtotal = roundMoney(unitPrice * qty);
@@ -414,4 +425,5 @@ module.exports = {
   withAvailability,
   expireStaleOrders,
   payablePhone,
+  organizerEarnings,
 };

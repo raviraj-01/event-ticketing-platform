@@ -21,6 +21,7 @@ const { setTemporaryPassword, ResetError } = require("../services/passwordReset"
 const { listAdminActions } = require("../services/adminAudit");
 const { normalizeUserStatus, USER_ACTIVE_STATUS } = require("../utils/accounts");
 const { sendError } = require("../utils/httpError");
+const { ORDER_SETTINGS } = require("../services/orders");
 
 const router = express.Router();
 
@@ -377,7 +378,7 @@ router.get("/admin/snapshot", requireAdmin, async (req, res) => {
       // KYC documents are for super admins only (H14).
       creators: creators.rows
         .map((creator) => (req.admin.adminType === "super" ? creator : { ...creator, documents: [] }))
-        .map(publicAdminCreator),
+        .map(adminCreatorView),
       events: events.rows.map(publicCreatorEvent),
       bookings: bookings.rows.map((booking) => ({
         id: booking.id,
@@ -458,6 +459,9 @@ router.patch("/admin/events/:eventId/status", requireAdmin, confirmed, audit("ev
     res.status(500).json({ error: "Could not update event status" });
   }
 });
+
+// Admin creator rows show the platform fee from the one setting (M8).
+const adminCreatorView = (creator) => ({ ...publicAdminCreator(creator), fee: ORDER_SETTINGS.platformFeePercent });
 
 // Q6 / D20: approve or reject an event waiting for review. Only a pending
 // event can be reviewed, so two admins clicking at once can't both act on it.
@@ -584,7 +588,7 @@ router.get("/admin/creators/:creatorId", requireAdmin, requireSuperAdmin, async 
     if (!result.rows.length) {
       return res.status(404).json({ error: "Creator account not found" });
     }
-    res.json({ creator: publicAdminCreator(result.rows[0]) });
+    res.json({ creator: adminCreatorView(result.rows[0]) });
   } catch (err) {
     console.error("Creator detail load failed:", err);
     res.status(500).json({ error: "Could not load creator documents" });

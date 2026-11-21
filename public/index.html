@@ -2396,7 +2396,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
         <span id="revPayoutStatus" style="font-size:12px;font-weight:700;color:#eab308;">No payout due</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
-        <span style="font-size:13px;color:#fff;">Convenience Fee (8%)</span>
+        <span id="revFeeLabel" style="font-size:13px;color:#fff;">Platform fee</span>
         <span id="revFee" style="font-size:14px;font-weight:700;color:#ef4444;font-family:'Space Mono',monospace;">₹0</span>
       </div>
     </div>
@@ -3809,6 +3809,8 @@ var STORE = {
   adminUsers: [],
   currentAdmin: null,
   adminAuditLog: [],
+  // baseFee/gst: placeholders until GET /config/public loads the server's
+  // PLATFORM_FEE_PERCENT / GST_PERCENT (the only real setting, M8).
   platformConfig: {
     baseFee:8, gst:18, referralEnabled:true, aiRecommendations:true,
     groupBooking:false, waitlist:false, maintenanceMode:false, minAppVersion:'1.0.0',
@@ -3831,7 +3833,7 @@ var STORE = {
   },
   getPlatformStats: function() {
     var evs = STORE.events||[];
-    var cfg = STORE.platformConfig||{baseFee:8};
+    var cfg = STORE.platformConfig;
     var totalGMV = evs.reduce(function(s,e){ return s+(e.revenue||0); },0);
     var totalBookings = evs.reduce(function(s,e){ return s+(e.bookingCount||0); },0);
     var liveEvents = evs.filter(function(e){ return e.status==='live'; }).length;
@@ -4085,7 +4087,7 @@ function getCurrentBookingTotals(){
   var subtotal = price*q;
   var discount = calculateCouponDiscount(subtotal);
   var taxableSubtotal=Math.max(0,subtotal-discount);
-  var cfg=STORE.platformConfig||{baseFee:8,gst:18};
+  var cfg=STORE.platformConfig;
   var feeRate=Math.max(0,Number(cfg.baseFee)||0);
   var gstRate=Math.max(0,Number(cfg.gst)||0);
   var fee = taxableSubtotal>0 ? Math.round(taxableSubtotal*(feeRate/100)*100)/100 : 0;
@@ -5609,7 +5611,8 @@ function refreshCreatorDashboard() {
 
   var revCards = document.querySelectorAll('.rev-value');
   if(revCards[0]) revCards[0].textContent = '₹'+totalRev.toLocaleString('en-IN');
-  var net = Math.round(totalRev * 0.94);
+  // M8: same fee setting as the server (loaded from /config/public).
+  var net = Math.round(totalRev * (1 - (Number(STORE.platformConfig.baseFee) || 0) / 100));
   if(revCards[3]) revCards[3].textContent = '₹'+net.toLocaleString('en-IN');
 
   // Update staff badge
@@ -8998,7 +9001,7 @@ async function admRefreshAudit(){
 
 
 VyberaEventBus.on('config_updated', function(cfg){
-  cfg = cfg || STORE.platformConfig || {baseFee:8,gst:18};
+  cfg = cfg || STORE.platformConfig;
   if(typeof updateOrderSummary==='function') updateOrderSummary();
   var fl=document.getElementById('feePctLabel'); if(fl) fl.textContent='Convenience fee ('+cfg.baseFee+'%)';
   var gl=document.getElementById('gstPctLabel'); if(gl) gl.textContent='GST on convenience fee ('+cfg.gst+'%)';
@@ -9061,7 +9064,7 @@ var VyberaEventBus = (function(){
 })();
 
 VyberaEventBus.on('config_updated', function(cfg){
-  cfg = cfg || STORE.platformConfig || {baseFee:8,gst:18};
+  cfg = cfg || STORE.platformConfig;
   if(typeof updateOrderSummary==='function') updateOrderSummary();
   var fl=document.getElementById('feePctLabel'); if(fl) fl.textContent='Convenience fee ('+cfg.baseFee+'%)';
   var gl=document.getElementById('gstPctLabel'); if(gl) gl.textContent='GST on convenience fee ('+cfg.gst+'%)';
@@ -9138,7 +9141,7 @@ function admOpenAdminModal(){
 function admRefreshPayFilter(){
   var status=(document.getElementById('payFilterStatus')||{}).value||'all';
   var stats=STORE.getPlatformStats();
-  var cfg=STORE.platformConfig||{baseFee:8,gst:18};
+  var cfg=STORE.platformConfig;
   function se(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
   se('payStatGMV','\u20b9'+stats.gmv.toLocaleString('en-IN'));
   se('payStatRev','\u20b9'+stats.revenue.toLocaleString('en-IN'));
@@ -9181,7 +9184,7 @@ function admDrawPayRevenueChart(){
 
 function admRenderLedgerFiltered(period, status){
   var tbody=document.getElementById('ledgerBody'); if(!tbody) return;
-  var cfg=STORE.platformConfig||{baseFee:8,gst:18};
+  var cfg=STORE.platformConfig;
   var fee=cfg.baseFee; var gstRate=cfg.gst;
   var liveB=(STORE.bookings||[]).map(function(b){
     return {
@@ -10337,7 +10340,7 @@ function admRenderEvents(tab){
 var _origAdmRenderPayouts = typeof admRenderPayouts !== 'undefined' ? admRenderPayouts : null;
 function admRenderPayouts(){
   var tbody = document.getElementById('payoutsBody'); if(!tbody) return;
-  var cfg = STORE.platformConfig || {baseFee:8, gst:18};
+  var cfg = STORE.platformConfig;
   var creators = admCreatorsList || [];
   tbody.innerHTML = creators.map(function(c){
     var platFee = Math.round(c.revenue*(cfg.baseFee/100));
@@ -11406,7 +11409,7 @@ async function submitAssignMoreTickets(){
 function refreshRevenuePage(){
   var creatorId=STORE.creatorProfile&&STORE.creatorProfile.id;
   var myEvents=(STORE.events||[]).filter(function(event){return event.creatorId===creatorId;});
-  var cfg=STORE.platformConfig||{baseFee:8};
+  var cfg=STORE.platformConfig;
   var summary=creatorAnalytics&&creatorAnalytics.summary;
   var gross=summary?Number(summary.gross||0):myEvents.reduce(function(s,e){return s+(e.revenue||0);},0);
   var fee=summary?Number(summary.fee||0):Math.round(gross*(cfg.baseFee/100));
@@ -11414,6 +11417,7 @@ function refreshRevenuePage(){
   var tickets=summary?Number(summary.tickets||0):myEvents.reduce(function(s,e){return s+(e.bookingCount||0);},0);
   var avg=summary?Number(summary.averageTicketPrice||0):(tickets>0?Math.round(gross/tickets):0);
   function setEl(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+  setEl('revFeeLabel','Platform fee ('+(summary&&summary.feePercent!=null?summary.feePercent:cfg.baseFee)+'%)');
   setEl('revGross','\u20b9'+gross.toLocaleString('en-IN'));
   setEl('revNet','\u20b9'+net.toLocaleString('en-IN'));
   setEl('revTickets',formatTicketCount(tickets));
@@ -11715,7 +11719,7 @@ async function admVerifyCreatorApp(idx){
         status:'Approved',
         events:0,
         revenue:0,
-        fee:8
+        fee:STORE.platformConfig.baseFee
       });
       if(typeof admRenderCreators==='function') admRenderCreators();
     }
