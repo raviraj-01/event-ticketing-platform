@@ -87,7 +87,7 @@ const resetWith = (token, password = "New-password-1") =>
 
 test("H2: a reset link works once", async () => {
   const buyer = await fx.createBuyer();
-  const token = await signTestToken({ email: buyer.email, pv: 0 }, 600, "password-reset");
+  const token = await signTestToken({ role: "buyer", sub: buyer.id, pv: 0 }, 600, "password-reset");
   assert.equal((await resetWith(token, "First-new-pass-1")).status, 200);
   const reuse = await resetWith(token, "Second-new-pass-1");
   assert.equal(reuse.status, 400);
@@ -98,13 +98,13 @@ test("H2: a reset link works once", async () => {
 
 test("H2: links without a password version are rejected", async () => {
   const buyer = await fx.createBuyer();
-  const token = await signTestToken({ email: buyer.email }, 600, "password-reset");
+  const token = await signTestToken({ role: "buyer", sub: buyer.id }, 600, "password-reset");
   assert.equal((await resetWith(token)).status, 400);
 });
 
 test("H2: two simultaneous uses of one link: exactly one succeeds", async () => {
   const buyer = await fx.createBuyer();
-  const token = await signTestToken({ email: buyer.email, pv: 0 }, 600, "password-reset");
+  const token = await signTestToken({ role: "buyer", sub: buyer.id, pv: 0 }, 600, "password-reset");
   const results = await Promise.all(Array.from({ length: 5 }, (_, i) => resetWith(token, `Parallel-pass-${i}`)));
   assert.equal(results.filter((r) => r.status === 200).length, 1);
 });
@@ -223,4 +223,38 @@ test("H12: a buyer with a creator's email cannot see that creator's events or re
   const own = await api(server.baseUrl, "GET", "/profile/creator-events", { token: creator.token });
   assert.equal(own.status, 200);
   assert.equal(own.body.events.length, 1);
+});
+
+// ── Q4: emailed reset links for organizers and staff ──
+test("Q4: an organizer resets their password with a single-use link", async () => {
+  const unique = fx.uid();
+  const email = `org${unique}@a.test`;
+  await creatorWithPassword({ name: "Org", email, password: "Old-pass-123" });
+  const id = (await server.db.query("SELECT id FROM creator_accounts WHERE email=$1", [email])).rows[0].id;
+  const token = await signTestToken({ role: "creator", sub: id, pv: 0 }, 600, "password-reset");
+  const ok = await resetWith(token, "New-org-pass-1");
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.role, "creator");
+  assert.equal((await resetWith(token, "Again-pass-1")).status, 400, "single use");
+  assert.equal((await creatorLogin({ email, password: "New-org-pass-1" })).status, 200);
+});
+
+test("Q4: a staff reset link changes only that staff account", async () => {
+  const id = await staffWithPassword({ staffId: `resetme${fx.uid()}`, email: `st${fx.uid()}@a.test`, password: "Old-staff-1" });
+  const loginId = (await server.db.query("SELECT staff_id FROM staff_accounts WHERE id=$1", [id])).rows[0].staff_id;
+  const token = await signTestToken({ role: "staff", sub: id, pv: 0 }, 600, "password-reset");
+  assert.equal((await resetWith(token, "New-staff-pass-1")).status, 200);
+  await server.db.query("DELETE FROM rate_limit_hits");
+  assert.equal((await staffLogin(loginId, "New-staff-pass-1")).status, 200);
+});
+
+test("Q4: the role in the link decides the table (no cross-role reset)", async () => {
+  const creator = await fx.createCreator();
+  const token = await signTestToken({ role: "admin", sub: 1, pv: 0 }, 600, "password-reset");
+  assert.equal((await resetWith(token)).status, 400, "admins have no email reset");
+  const asBuyerToken = await signTestToken({ role: "buyer", sub: creator.id, pv: 0 }, 600, "password-reset");
+  const before = (await server.db.query("SELECT password FROM creator_accounts WHERE id=$1", [creator.id])).rows[0].password;
+  await resetWith(asBuyerToken);
+  const after = (await server.db.query("SELECT password FROM creator_accounts WHERE id=$1", [creator.id])).rows[0].password;
+  assert.equal(after, before, "a buyer-role link never touches the creator table");
 });

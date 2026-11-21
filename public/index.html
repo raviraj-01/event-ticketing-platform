@@ -6901,8 +6901,8 @@ function selectLoginRole(role){
     btn.setAttribute('aria-pressed',active?'true':'false');
   });
   var label=document.getElementById('siEmailLabel');if(label)label.textContent=LOGIN_ROLE_LABELS[role];
-  // The email reset flow exists for buyer accounts only (see CLAUDE.md Q4).
-  var forgot=document.getElementById('siForgotWrap');if(forgot)forgot.style.visibility=role==='buyer'?'visible':'hidden';
+  // Email reset links exist for buyers, organizers and staff; admins are reset by a super admin (Q4).
+  var forgot=document.getElementById('siForgotWrap');if(forgot)forgot.style.visibility=role==='admin'?'hidden':'visible';
 }
 
 async function postLogin(path,body){
@@ -7093,12 +7093,18 @@ function showPasswordModal(id,title,intro,fieldsHtml,submitLabel,onSubmit){
   return modal;
 }
 
+var FORGOT_PASSWORD_INTRO={
+  buyer:'Enter the email of your buyer account. We will send you a link to set a new password.',
+  creator:'Enter the email of your organizer account. We will send you a link to set a new password.',
+  staff:'Enter the email on your staff account. No email on your account? Ask your organizer to reset your password.'
+};
 function openForgotPasswordModal(){
   var current=(document.getElementById('siEmail')||{}).value||'';
+  if(current.indexOf('@')<0)current='';
   showPasswordModal(
     'forgotPasswordModal',
     'Reset password',
-    'Enter the email of your buyer account. We will send you a link to set a new password.',
+    FORGOT_PASSWORD_INTRO[LOGIN_ROLE]||FORGOT_PASSWORD_INTRO.buyer,
     '<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Email</label>'
       +'<input id="forgotEmail" type="email" autocomplete="email" value="'+escapeHtml(current)+'" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>',
     'Send link',
@@ -7114,7 +7120,7 @@ async function submitForgotPassword(modal){
     var resp=await fetch(apiUrl('/auth/forgot-password'),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email:email})
+      body:JSON.stringify({email:email,role:LOGIN_ROLE==='admin'?'buyer':LOGIN_ROLE})
     });
     var data=await readAuthResponse(resp);
     if(!resp.ok)throw new Error(data.error||'Could not send reset link');

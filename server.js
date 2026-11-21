@@ -13,6 +13,7 @@ const { runMigrations } = require("./src/db/migrate");
 const { AUDIENCE, configureTokens, signToken, verifyToken } = require("./src/utils/tokens");
 const { WalletError, staffWallet, requestWithdrawal, recordCashSettlement } = require("./src/services/staffWallet");
 const { recordAdminAction, audited, listAdminActions } = require("./src/services/adminAudit");
+const { RESET_ROLES, ResetError, findResetTargets, createResetToken, resetPasswordWithToken } = require("./src/services/passwordReset");
 const { parseCookies } = require("./src/utils/cookies");
 const { USER_ACTIVE_STATUS, normalizeUserStatus, isUserActive } = require("./src/utils/accounts");
 const {
@@ -3649,77 +3650,52 @@ const forgotPasswordLimits = [
     key: (req) => String((req.body && req.body.email) || "").trim().toLowerCase() || null }),
   rateLimit({ name: "forgot-ip", windowSeconds: 3600, max: 10, key: (req) => req.ip }),
 ];
+
+const escapeEmailHtml = (value) =>
+  String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+
+// One email; for staff there can be several accounts with the same address,
+// so each gets its own link labelled with its login ID.
+function resetEmailHtml(links, ttlMinutes, accountLabel) {
+  const buttons = links
+    .map((link) => `<p style="margin:16px 0;"><a href="${escapeEmailHtml(link.url)}" style="display:inline-block;padding:12px 24px;background:#ffffff;color:#000000;font-weight:700;text-decoration:none;border-radius:8px;">Reset password${link.loginId ? ` for ${escapeEmailHtml(link.loginId)}` : ""}</a></p>`)
+    .join("");
+  return `<!doctype html><html><body style="margin:0;padding:24px;background:#0a0a0a;font-family:Arial,sans-serif;color:#ffffff;">
+    <div style="max-width:520px;margin:0 auto;background:#141414;border-radius:12px;padding:32px;">
+      <h1 style="margin:0 0 16px;font-size:20px;">BLAK Tickets</h1>
+      <p style="color:#aaaaaa;line-height:1.6;">We received a request to reset the password of your ${escapeEmailHtml(accountLabel)}. The link expires in <strong style="color:#fff;">${ttlMinutes} minutes</strong> and works once.</p>
+      ${buttons}
+      <p style="color:#666666;font-size:12px;line-height:1.6;">If you didn't ask for this, ignore this email; your password stays the same.</p>
+    </div></body></html>`;
+}
+
+// Step 1: email a single-use reset link (buyers, organizers, staff with email).
+// The answer is the same whether or not the email exists.
 app.post("/auth/forgot-password", ...forgotPasswordLimits, async (req, res) => {
   try {
     if (!hasSmtpConfig()) {
       return res.status(500).json({ error: "Email service is not configured on this server" });
     }
-
     const email = String((req.body && req.body.email) || "").trim().toLowerCase();
+    const role = String((req.body && req.body.role) || "buyer");
     if (!email) return res.status(400).json({ error: "Email is required" });
+    if (!RESET_ROLES[role]) return res.status(400).json({ error: "Password reset by email is not available for this account type" });
 
-    // Look up user (but don't reveal whether email exists — security best practice)
-    const result = await pool.query(
-      "SELECT id, password_version FROM users WHERE LOWER(email)=LOWER($1) AND COALESCE(status,'Active') NOT IN ('Suspended','Blocked','Inactive') LIMIT 1",
-      [email],
-    );
-
-    if (result.rows.length) {
+    const accounts = await findResetTargets(pool, role, email);
+    if (accounts.length) {
       const ttlMinutes = Number(process.env.PASSWORD_RESET_TTL_MINUTES || 10);
-      // pv = password_version: the link stops working once the password changes (H2).
-      const token = await signToken(
-        { email, pv: result.rows[0].password_version },
-        { audience: AUDIENCE.passwordReset, expiresInSeconds: ttlMinutes * 60 },
-      );
-      const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3003}`).replace(/\/$/, "");
-      const resetLink = `${baseUrl}/?reset_token=${encodeURIComponent(token)}`;
-
-      const transporter = createMailTransporter();
-      await transporter.sendMail({
+      const links = [];
+      for (const account of accounts) {
+        const token = await createResetToken(role, account, ttlMinutes);
+        links.push({ url: `${APP_BASE_URL}/?reset_token=${encodeURIComponent(token)}`, loginId: account.login_id || "" });
+      }
+      await createMailTransporter().sendMail({
         from: process.env.SMTP_FROM || process.env.SMTP_USER,
         to: email,
-        subject: "Reset your BLAK Tickets password",
-        html: `
-          <!doctype html>
-          <html>
-          <body style="margin:0;padding:0;background:#0a0a0a;font-family:Arial,sans-serif;color:#ffffff;">
-            <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:40px auto;background:#141414;border-radius:12px;overflow:hidden;">
-              <tr>
-                <td style="padding:32px 40px 24px;text-align:center;background:#1a1a1a;">
-                  <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:1px;">BLAK Tickets</h1>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:32px 40px;">
-                  <h2 style="margin:0 0 16px;font-size:18px;color:#ffffff;">Reset Your Password</h2>
-                  <p style="margin:0 0 24px;color:#aaaaaa;font-size:14px;line-height:1.6;">
-                    We received a request to reset the password for your account. Click the button below to set a new password. This link expires in <strong style="color:#ffffff;">${ttlMinutes} minutes</strong>.
-                  </p>
-                  <div style="text-align:center;margin:28px 0;">
-                    <a href="${resetLink}" style="display:inline-block;padding:14px 32px;background:#ffffff;color:#000000;font-weight:700;font-size:15px;text-decoration:none;border-radius:8px;letter-spacing:0.5px;">
-                      Reset Password
-                    </a>
-                  </div>
-                  <p style="margin:24px 0 0;color:#666666;font-size:12px;line-height:1.6;">
-                    If you didn't request a password reset, you can safely ignore this email — your password won't be changed.<br><br>
-                    Or copy this link into your browser:<br>
-                    <span style="color:#888888;word-break:break-all;">${resetLink}</span>
-                  </p>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:16px 40px;background:#0f0f0f;text-align:center;">
-                  <p style="margin:0;color:#444444;font-size:11px;">© BLAK Tickets. All rights reserved.</p>
-                </td>
-              </tr>
-            </table>
-          </body>
-          </html>
-        `,
+        subject: "Reset your password",
+        html: resetEmailHtml(links, ttlMinutes, RESET_ROLES[role].label),
       });
     }
-
-    // Always return success regardless of whether email was found
     res.json({ success: true, message: "If that email is registered, a reset link has been sent." });
   } catch (err) {
     console.error("Forgot password failed:", err);
@@ -3727,46 +3703,17 @@ app.post("/auth/forgot-password", ...forgotPasswordLimits, async (req, res) => {
   }
 });
 
-// ── Forgot Password: Verify token then update password ─────────────────────
+// Step 2: the link's token + a new password. Works once (password_version).
 app.post("/auth/reset-password-by-token", async (req, res) => {
   try {
     const token = String((req.body && req.body.token) || "").trim();
     const newPassword = String((req.body && req.body.password) || "");
-
     if (!token) return res.status(400).json({ error: "Reset token is required" });
     if (newPassword.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
-
-    let payload;
-    try {
-      payload = await verifyToken(token, { audience: AUDIENCE.passwordReset });
-    } catch (err) {
-      return res.status(400).json({ error: "Reset link is invalid or has expired. Please request a new one." });
-    }
-
-    if (!payload.email || !Number.isInteger(payload.pv)) {
-      return res.status(400).json({ error: "Invalid reset link" });
-    }
-
-    // One atomic statement: it only matches while password_version still
-    // equals the version in the token, and it bumps the version. So the first
-    // use wins and every later (or concurrent) use of the same link fails.
-    const hash = await bcrypt.hash(newPassword, 10);
-    const result = await pool.query(
-      `UPDATE users SET password=$1, password_version = password_version + 1
-       WHERE LOWER(email)=LOWER($2) AND password_version = $3
-         AND COALESCE(status,'Active') NOT IN ('Suspended','Blocked','Inactive')
-       RETURNING id`,
-      [hash, payload.email, payload.pv],
-    );
-
-    if (!result.rows.length) {
-      return res.status(400).json({ error: "Reset link is invalid or has already been used. Please request a new one." });
-    }
-    // New password = end every existing session for this buyer (H5).
-    await revokeAllSessions(pool, { role: "buyer", accountId: result.rows[0].id });
-
-    res.json({ success: true, message: "Password updated successfully. You can now sign in with your new password." });
+    const role = await resetPasswordWithToken(pool, token, await bcrypt.hash(newPassword, 10));
+    res.json({ success: true, role, message: "Password updated successfully. You can now sign in with your new password." });
   } catch (err) {
+    if (err instanceof ResetError) return res.status(err.status).json({ error: err.message });
     console.error("Token password reset failed:", err);
     res.status(500).json({ error: "Could not reset password" });
   }
