@@ -3,16 +3,14 @@
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
-const fs = require("fs");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
-const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const { runMigrations } = require("./src/db/migrate");
-const { AUDIENCE, configureTokens, signToken, verifyToken } = require("./src/utils/tokens");
+const { AUDIENCE, signToken, verifyToken } = require("./src/utils/tokens");
 const { WalletError, staffWallet, requestWithdrawal, recordCashSettlement } = require("./src/services/staffWallet");
 const { recordAdminAction, audited, listAdminActions } = require("./src/services/adminAudit");
 const { RESET_ROLES, ResetError, findResetTargets, createResetToken, resetPasswordWithToken, setTemporaryPassword } = require("./src/services/passwordReset");
@@ -47,6 +45,32 @@ const {
 } = require("./src/services/orders");
 const { pool, dbSsl } = require("./src/db/pool");
 const { initDb } = require("./src/db/initDb");
+const { APP_BASE_URL, publicDir, uploadsDir, appHtmlPath } = require("./src/config");
+const {
+  hasR2Config,
+  validateUpload,
+  KYC_UPLOAD_TYPES,
+  saveAsset,
+  cleanPathSegment,
+  IMAGE_UPLOAD_TYPES,
+  presignR2,
+} = require("./src/services/storage");
+const {
+  publicCreator,
+  publicCreatorEvent,
+  publicStaff,
+  publicStaffShareUrl,
+  publicStaffAssignment,
+  publicStaffSale,
+  publicStaffWithdrawal,
+  EVENT_NOT_FOUND_ERROR,
+  publicAdmin,
+  publicAdminCreator,
+  USER_NOT_FOUND_ERROR,
+  publicUser,
+  publicCreatorKycDocument,
+} = require("./src/utils/serializers");
+const { hasSmtpConfig, createMailTransporter } = require("./src/services/mail");
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled async error:", err);
@@ -60,13 +84,6 @@ const app = express();
 // Number of reverse proxies in front of the app (Render: 1). Needed so req.ip is
 // the real client IP for rate limiting; 0 = trust nobody (local development).
 app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 0));
-const APP_BASE_URL = String(process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3003}`).replace(/\/+$/, "");
-// Only files inside public/ are reachable from the browser. Never point
-// express.static at __dirname: that would publish server.js, CLAUDE.md, etc.
-const publicDir = path.join(__dirname, "public");
-const appHtmlPath = path.join(publicDir, "index.html");
-const uploadsDir = path.join(__dirname, "uploads");
-fs.mkdirSync(uploadsDir, { recursive: true });
 
 // H16: only these origins may call the API from a browser with credentials.
 // Default: the app's own origin + the Cordova WebView origin. Override with
@@ -128,18 +145,6 @@ const audit = (action, describe) => audited(pool, action, describe);
 // (requireRecentReauth is defined next to the admin login code).
 const confirmed = (req, res, next) => requireRecentReauth(req, res, next);
 
-const r2Config = {
-  endpoint: process.env.R2_ENDPOINT,
-  bucket: process.env.R2_BUCKET,
-  accessKeyId: process.env.R2_ACCESS_KEY_ID,
-  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-};
-
-const hasR2Config = () =>
-  r2Config.endpoint &&
-  r2Config.bucket &&
-  r2Config.accessKeyId &&
-  r2Config.secretAccessKey;
 
 const hasTwilioVerifyConfig = () =>
   process.env.TWILIO_ACCOUNT_SID &&
@@ -156,146 +161,7 @@ if (!hasTwilioVerifyConfig()) {
   );
 }
 
-// ── Email transporter ───────────────────────────────────────────────────────
-const createMailTransporter = () => {
-  if (process.env.SMTP_SERVICE) {
-    return nodemailer.createTransport({
-      service: process.env.SMTP_SERVICE,
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: process.env.SMTP_SECURE === "true",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-  }
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === "true",
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-};
 
-const hasSmtpConfig = () =>
-  (process.env.SMTP_SERVICE || process.env.SMTP_HOST) &&
-  process.env.SMTP_USER &&
-  process.env.SMTP_PASS;
-
-if (!hasSmtpConfig()) {
-  console.warn(
-    "Email (forgot password) is disabled until SMTP_SERVICE/SMTP_HOST, SMTP_USER, and SMTP_PASS are added to .env.",
-  );
-}
-
-const hmac = (key, value, encoding) =>
-  crypto.createHmac("sha256", key).update(value).digest(encoding);
-
-const sha256 = (value) =>
-  crypto.createHash("sha256").update(value).digest("hex");
-
-const jwtSecret = process.env.JWT_SECRET;
-if (!jwtSecret) {
-  console.error(
-    "JWT_SECRET is missing. Add it to VYBERA/.env before starting the server.",
-  );
-  process.exit(1);
-}
-configureTokens(jwtSecret);
-// Login sessions live in src/services/sessions.js. Purpose tokens (password
-// reset, signup OTP) use signToken/verifyToken with their own audience.
-const publicUser = (user) => ({
-  id: user.id,
-  username: user.username,
-  firstName: user.first_name,
-  lastName: user.last_name,
-  email: user.email,
-  phone: user.phone,
-  countryCode: user.country_code,
-  city: user.city,
-  profileImage: user.profile_image_url,
-  profileImageKey: user.profile_image_key,
-  profileImageStorage: user.profile_image_storage,
-  status: user.status || "Active",
-});
-
-const EVENT_NOT_FOUND_ERROR = "Event does not exist";
-const USER_NOT_FOUND_ERROR = "User account not found";
-
-
-
-const publicCreator = (creator) => ({
-  id: creator.id,
-  name: creator.name,
-  email: creator.email,
-  phone: creator.phone,
-  category: creator.category,
-  about: creator.about,
-  kycStatus: creator.kyc_status,
-  joinedAt: creator.created_at,
-});
-
-// KYC scans (Aadhaar, PAN, bank) are never public: they are opened through
-// an authenticated, audited super-admin route (H14).
-const creatorKycDocumentUrl = (document) =>
-  document && document.id ? `/admin/kyc-documents/${encodeURIComponent(document.id)}/file` : "";
-
-const publicCreatorKycDocument = (document) => ({
-  id: document.id,
-  documentType: document.document_type,
-  fileName: document.file_name,
-  contentType: document.content_type,
-  storage: document.storage,
-  url: creatorKycDocumentUrl(document),
-  verificationStatus: document.verification_status || "Pending",
-  verifiedAt: document.verified_at,
-  verifiedBy: document.verified_by,
-  createdAt: document.created_at,
-});
-
-const publicAdminCreator = (creator) => ({
-  id: `CRT-${creator.id}`,
-  creatorId: creator.id,
-  name: creator.name,
-  email: creator.email,
-  phone: creator.phone,
-  category: creator.category,
-  status: creator.kyc_status,
-  events: Number(creator.events || 0),
-  revenue: Number(creator.revenue || 0),
-  fee: 8,
-  documents: (creator.documents || []).map(publicCreatorKycDocument),
-  createdAt: creator.created_at,
-});
-
-const publicCreatorEvent = (event) => ({
-  id: event.id,
-  creatorId: event.creator_id,
-  creatorName: event.creator_name,
-  name: event.name,
-  category: event.category,
-  description: event.description,
-  date: event.event_date,
-  time: event.start_time,
-  endTime: event.end_time,
-  venue: event.venue,
-  city: event.city,
-  capacity: event.capacity,
-  latitude: event.latitude,
-  longitude: event.longitude,
-  banner: event.banner_url,
-  bannerKey: event.banner_key,
-  visibility: event.visibility,
-  status: event.status,
-  tickets: event.tickets || [],
-  bookingCount: Number(event.booking_count || 0),
-  revenue: Number(event.revenue || 0),
-  checkins: Number(event.checkins || 0),
-  createdAt: event.created_at,
-});
 
 const creatorEventSalesQuery = `
   SELECT e.*,
@@ -304,100 +170,6 @@ const creatorEventSalesQuery = `
   FROM creator_events e
   LEFT JOIN bookings b ON b.event_id=e.id
 `;
-
-const publicStaffAssignment = (assignment) => ({
-  id: assignment.id,
-  staffPk: assignment.staff_id,
-  staffId: assignment.staff_id,
-  eventId: assignment.event_id,
-  eventName: assignment.event_name,
-  tierName: assignment.tier_name,
-  qty: Number(assignment.qty || 0),
-  soldCount: Number(assignment.sold_count || 0),
-  price: Number(assignment.price || 0),
-  mode: assignment.allocation_mode || "creator_quota",
-  allocationMode: assignment.allocation_mode || "creator_quota",
-  commissionRate: Number(assignment.commission_rate || 0),
-  purchasePrice: Number(assignment.purchase_price || assignment.price || 0),
-  resalePrice: Number(assignment.resale_price || assignment.price || 0),
-  assignedAt: assignment.created_at,
-});
-
-const publicStaffShareUrl = (req, member) => {
-  if (!member || !member.share_token) return "";
-  const origin = req ? `${req.protocol}://${req.get("host")}` : "";
-  const eventId = member.primary_event_id
-    ? `&event=${encodeURIComponent(member.primary_event_id)}`
-    : "";
-  return `${origin}/?staff=${encodeURIComponent(member.share_token)}${eventId}`;
-};
-
-const publicStaffSale = (sale) => ({
-  id: sale.id,
-  staffPk: sale.staff_id,
-  assignmentId: sale.assignment_id,
-  eventId: sale.event_id,
-  eventName: sale.event_name,
-  tierName: sale.tier_name,
-  buyerName: sale.buyer_name,
-  buyerPhone: sale.buyer_phone,
-  buyerEmail: sale.buyer_email,
-  qty: Number(sale.qty || 0),
-  price: Number(sale.price || 0),
-  total: Number(sale.total || 0),
-  commission: Number(sale.commission || 0),
-  revenueOwner: sale.revenue_owner || "staff",
-  allocationMode: sale.allocation_mode || "creator_quota",
-  paymentMode: sale.payment_mode,
-  bookingId: sale.booking_id,
-  soldAt: sale.created_at,
-});
-
-const publicStaffWithdrawal = (withdrawal) => ({
-  id: withdrawal.id,
-  staffPk: withdrawal.staff_id,
-  amount: Number(withdrawal.amount || 0),
-  method: withdrawal.method,
-  bankAccountName: withdrawal.bank_account_name,
-  bankAccountNumber: withdrawal.bank_account_number,
-  bankIfsc: withdrawal.bank_ifsc,
-  upiId: withdrawal.upi_id,
-  status: withdrawal.status,
-  requestedAt: withdrawal.created_at,
-});
-
-const publicStaff = (member) => ({
-  id: member.id,
-  creatorId: member.creator_id,
-  name: member.name,
-  staffId: member.staff_id,
-  email: member.email,
-  phone: member.phone,
-  role: member.role,
-  assignedGate: member.assigned_gate,
-  gates: member.assigned_gate ? [member.assigned_gate] : [],
-  primaryEventId: member.primary_event_id,
-  shareToken: member.share_token,
-  shareUrl: member.share_url || "",
-  status: member.status,
-  assignedTickets: Number(member.assigned_tickets || 0),
-  soldTickets: Number(member.sold_tickets || 0),
-  earnings: Number(member.earnings || 0),
-  cashOwed: Number(member.cash_owed || 0),
-  createdByAdminEmail: member.created_by_admin_email || null,
-  createdAt: member.created_at,
-});
-
-const publicAdmin = (admin) => ({
-  id: admin.id,
-  name: admin.name,
-  email: admin.email,
-  role: admin.role,
-  isSuperAdmin: Boolean(admin.is_super_admin),
-  status: admin.status,
-  lastLogin: admin.last_login,
-  createdAt: admin.created_at,
-});
 
 // Authentication middleware. Every request re-checks the account in the DB
 // (exists, active, same token_version), so suspensions and "log out
@@ -493,196 +265,6 @@ const requireScanIdentity = requireRole(["creator", "staff"], (req, s) => {
   req.scanIdentity = { type: s.role, payload: s.payload };
 });
 
-const getSigningKey = (secret, dateStamp) => {
-  const kDate = hmac(`AWS4${secret}`, dateStamp);
-  const kRegion = hmac(kDate, "auto");
-  const kService = hmac(kRegion, "s3");
-  return hmac(kService, "aws4_request");
-};
-
-const encodeR2Key = (key) =>
-  key
-    .split("/")
-    .map((part) => encodeURIComponent(part))
-    .join("/");
-
-const cleanFileName = (name) =>
-  String(name || "upload")
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "upload";
-
-const makeObjectKey = (folder, fileName) => {
-  const safeFolder = String(folder || "misc").replace(/[^a-zA-Z0-9/_-]+/g, "-");
-  const safeName = cleanFileName(fileName);
-  return `${safeFolder}/${Date.now()}-${crypto.randomBytes(6).toString("hex")}-${safeName}`;
-};
-
-const presignR2 = ({ method, key, expires = 900 }) => {
-  if (!hasR2Config()) {
-    throw new Error("Cloudflare R2 is not configured");
-  }
-
-  const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
-  const dateStamp = amzDate.slice(0, 8);
-  const scope = `${dateStamp}/auto/s3/aws4_request`;
-  const endpoint = new URL(r2Config.endpoint);
-  const canonicalUri = `/${r2Config.bucket}/${encodeR2Key(key)}`;
-  const credential = `${r2Config.accessKeyId}/${scope}`;
-  const query = {
-    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
-    "X-Amz-Credential": credential,
-    "X-Amz-Date": amzDate,
-    "X-Amz-Expires": String(expires),
-    "X-Amz-SignedHeaders": "host",
-  };
-  const canonicalQuery = Object.keys(query)
-    .sort()
-    .map(
-      (name) =>
-        `${encodeURIComponent(name)}=${encodeURIComponent(query[name])}`,
-    )
-    .join("&");
-  const canonicalHeaders = `host:${endpoint.host}\n`;
-  const canonicalRequest = [
-    method,
-    canonicalUri,
-    canonicalQuery,
-    canonicalHeaders,
-    "host",
-    "UNSIGNED-PAYLOAD",
-  ].join("\n");
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    scope,
-    sha256(canonicalRequest),
-  ].join("\n");
-  const signature = hmac(
-    getSigningKey(r2Config.secretAccessKey, dateStamp),
-    stringToSign,
-    "hex",
-  );
-
-  return `${endpoint.origin}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
-};
-
-const parseDataUrl = (dataUrl) => {
-  const match = String(dataUrl || "").match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) {
-    throw uploadError("Invalid file data");
-  }
-  return { contentType: match[1], buffer: Buffer.from(match[2], "base64") };
-};
-
-// ── Upload validation ──────────────────────────────────────────────────────
-// A file is accepted only if its real first bytes ("magic number") match an
-// allowed type. The browser-supplied name and MIME type are never trusted, and
-// the stored extension comes from the detected type, so nobody can upload an
-// .html/.svg file that would run as a page on our domain.
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const UPLOAD_TYPES = {
-  "image/jpeg": { ext: "jpg", matches: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
-  "image/png": {
-    ext: "png",
-    matches: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
-  },
-  "image/webp": {
-    ext: "webp",
-    matches: (b) => b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP",
-  },
-  "application/pdf": { ext: "pdf", matches: (b) => b.subarray(0, 5).toString("latin1") === "%PDF-" },
-  // Server-generated ticket records only (never accepted from a user upload).
-  "application/json": { ext: "json", matches: (b) => b[0] === 0x7b },
-};
-const IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const KYC_UPLOAD_TYPES = [...IMAGE_UPLOAD_TYPES, "application/pdf"];
-
-function uploadError(message, status = 400) {
-  const err = new Error(message);
-  err.status = status;
-  return err;
-}
-
-const detectUploadType = (buffer, allowedTypes) =>
-  allowedTypes.find((type) => UPLOAD_TYPES[type] && UPLOAD_TYPES[type].matches(buffer));
-
-const validateUpload = (dataUrl, allowedTypes) => {
-  const { buffer } = parseDataUrl(dataUrl);
-  if (!buffer.length) throw uploadError("The file is empty");
-  if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw uploadError(`Each file must be ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB or smaller`, 413);
-  }
-  const contentType = detectUploadType(buffer, allowedTypes);
-  if (!contentType) {
-    const names = allowedTypes.map((type) => UPLOAD_TYPES[type].ext.toUpperCase()).join(", ");
-    throw uploadError(`Unsupported file type. Allowed: ${names}`);
-  }
-  return { buffer, contentType, ext: UPLOAD_TYPES[contentType].ext };
-};
-
-const saveLocalBuffer = ({ key, buffer, contentType }) => {
-  const localKey = key.replace(/^\/+/, "");
-  const filePath = path.join(uploadsDir, localKey);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, buffer);
-  return {
-    key: `local/${localKey}`,
-    mediaUrl: `/uploads/${localKey}`,
-    contentType,
-    storage: "local",
-  };
-};
-
-const uploadBufferToR2 = async ({ key, buffer, contentType }) => {
-  const uploadUrl = presignR2({ method: "PUT", key });
-  const response = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType || "application/octet-stream" },
-    body: buffer,
-  });
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(
-      `R2 upload failed (${response.status}): ${body || response.statusText}`,
-    );
-  }
-  return {
-    key,
-    mediaUrl: `/r2/media/${encodeR2Key(key)}`,
-    contentType,
-    storage: "r2",
-  };
-};
-
-// allowedTypes is required: every caller must say which file types it accepts.
-// requireR2: true for private documents (KYC) that must never land in the
-// public /uploads folder.
-const saveAsset = async ({ fileName, folder, dataUrl, allowedTypes, requireR2 = false }) => {
-  const file = validateUpload(dataUrl, allowedTypes);
-  const baseName = cleanFileName(fileName).replace(/\.[^.]*$/, "") || "file";
-  const key = makeObjectKey(folder, `${baseName}.${file.ext}`);
-  try {
-    return await uploadBufferToR2({ key, buffer: file.buffer, contentType: file.contentType });
-  } catch (err) {
-    console.error("R2 asset upload failed:", err.message);
-    if (requireR2) {
-      throw uploadError("File storage is unavailable. Please try again later.", 503);
-    }
-    return saveLocalBuffer({ key, buffer: file.buffer, contentType: file.contentType });
-  }
-};
-
-const cleanPathSegment = (value, fallback) =>
-  String(value || fallback || "user")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) ||
-  fallback ||
-  "user";
 
 
 

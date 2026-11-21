@@ -9,7 +9,8 @@ module.exports = [
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: "commonjs",
-      globals: { ...globals.node },
+      // crypto: the global is WebCrypto (no createHmac etc.); always require("crypto").
+      globals: { ...globals.node, crypto: "off" },
     },
     rules: {
       "no-undef": "error",
