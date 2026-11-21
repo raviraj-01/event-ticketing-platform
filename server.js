@@ -1125,107 +1125,57 @@ app.post("/creator/applications", async (req, res) => {
   }
 });
 
-app.post("/creator/login", async (req, res) => {
-  try {
-    const readLoginValue = (value) => {
-      if (!value) return "";
-      if (typeof value === "object") {
-        return (
-          value.email ||
-          value.user ||
-          value.username ||
-          value.loginId ||
-          value.identifier ||
-          value.name ||
-          ""
-        );
+// Creator login: exact email match, bcrypt only, one generic error (H13).
+const CREATOR_LOGIN_ERROR = "Invalid email or password";
+app.post(
+  "/creator/login",
+  rateLimit({ name: "creator-login-ip", windowSeconds: 600, max: 20, key: (req) => req.ip }),
+  rateLimit({
+    name: "creator-login-email",
+    windowSeconds: 600,
+    max: 10,
+    key: (req) => String((req.body && req.body.email) || "").trim().toLowerCase() || null,
+  }),
+  async (req, res) => {
+    try {
+      const email = String((req.body && req.body.email) || "").trim().toLowerCase();
+      const password = String((req.body && req.body.password) || "");
+      if (!email || !password) {
+        return res.status(400).json({ error: "Creator email and password are required" });
       }
-      return value;
-    };
-    const loginIdentifier = String(
-      readLoginValue(
-        req.body &&
-          (req.body.email ||
-            req.body.user ||
-            req.body.username ||
-            req.body.loginId ||
-            req.body.identifier ||
-            req.body.login),
-      ),
-    ).trim();
-    const cleanEmail = loginIdentifier.trim().toLowerCase();
-    const password = String((req.body && req.body.password) || "");
-    if (!cleanEmail || !password) {
-      return res
-        .status(400)
-        .json({ error: "Creator email and password are required" });
-    }
-    const result = await pool.query(
-      `SELECT id, name, email, phone, category, about, password, kyc_status, created_at
-       FROM creator_accounts
-       WHERE LOWER(email)=LOWER($1)
-          OR LOWER(name)=LOWER($1)
-          OR LOWER(split_part(email, '@', 1))=LOWER(split_part($1, '@', 1))
-       ORDER BY CASE
-          WHEN LOWER(email)=LOWER($1) THEN 0
-          WHEN LOWER(name)=LOWER($1) THEN 1
-          ELSE 2
-        END
-       LIMIT 1`,
-      [cleanEmail],
-    );
-    const creator = result.rows[0];
-    let validPassword = false;
-    if (creator) {
-      const storedPassword = String(creator.password || "");
-      if (storedPassword.startsWith("$2")) {
-        validPassword = await bcrypt.compare(password, storedPassword);
-      } else {
-        validPassword = password === storedPassword;
-        if (validPassword) {
-          const upgradedPassword = await bcrypt.hash(password, 10);
-          await pool.query(
-            "UPDATE creator_accounts SET password=$1 WHERE id=$2",
-            [upgradedPassword, creator.id],
-          );
-        }
+      const result = await pool.query(
+        `SELECT id, name, email, phone, category, about, password, kyc_status, created_at
+         FROM creator_accounts
+         WHERE LOWER(email) = $1`,
+        [email],
+      );
+      const creator = result.rows[0];
+      const storedHash = String((creator && creator.password) || "");
+      // Only bcrypt hashes are accepted; a missing account and a wrong password
+      // get the same answer so the response does not reveal which emails exist.
+      const validPassword = storedHash.startsWith("$2") && (await bcrypt.compare(password, storedHash));
+      if (!creator || !validPassword) {
+        return res.status(401).json({ error: CREATOR_LOGIN_ERROR });
       }
-    }
-    if (!creator || !validPassword) {
-      return res
-        .status(401)
-        .json({
-          error: "Invalid creator email or password",
-          reason: creator ? "password_mismatch" : "creator_not_found",
-          loginReceived: loginIdentifier,
-        });
-    }
-    if (creator.kyc_status !== "Approved") {
-      const message =
-        creator.kyc_status === "Rejected"
-          ? "Your creator application was rejected. Please contact support."
-          : "Your creator account is pending super admin verification.";
-      return res.status(403).json({
-        error: message,
-        reason: "creator_not_verified",
-        kycStatus: creator.kyc_status,
+      if (creator.kyc_status !== "Approved") {
+        const message =
+          creator.kyc_status === "Rejected"
+            ? "Your creator application was rejected. Please contact support."
+            : "Your creator account is pending super admin verification.";
+        return res.status(403).json({ error: message, reason: "creator_not_verified", kycStatus: creator.kyc_status });
+      }
+      res.json({
+        message: "Creator login successful",
+        creator: publicCreator(creator),
+        token: signJwt({ sub: creator.id, email: creator.email, scope: "creator" }),
+        expiresInDays: 30,
       });
+    } catch (err) {
+      console.error("Creator login failed:", err);
+      res.status(500).json({ error: "Creator login failed" });
     }
-    res.json({
-      message: "Creator login successful",
-      creator: publicCreator(creator),
-      token: signJwt({
-        sub: creator.id,
-        email: creator.email,
-        scope: "creator",
-      }),
-      expiresInDays: 30,
-    });
-  } catch (err) {
-    console.error("Creator login failed:", err);
-    res.status(500).json({ error: "Creator login failed" });
-  }
-});
+  },
+);
 
 app.get("/creator/session", requireCreator, async (req, res) => {
   try {
