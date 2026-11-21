@@ -13,7 +13,7 @@ const { runMigrations } = require("./src/db/migrate");
 const { AUDIENCE, configureTokens, signToken, verifyToken } = require("./src/utils/tokens");
 const { WalletError, staffWallet, requestWithdrawal, recordCashSettlement } = require("./src/services/staffWallet");
 const { recordAdminAction, audited, listAdminActions } = require("./src/services/adminAudit");
-const { RESET_ROLES, ResetError, findResetTargets, createResetToken, resetPasswordWithToken } = require("./src/services/passwordReset");
+const { RESET_ROLES, ResetError, findResetTargets, createResetToken, resetPasswordWithToken, setTemporaryPassword } = require("./src/services/passwordReset");
 const { parseCookies } = require("./src/utils/cookies");
 const { USER_ACTIVE_STATUS, normalizeUserStatus, isUserActive } = require("./src/utils/accounts");
 const {
@@ -414,9 +414,14 @@ const publicAdmin = (admin) => ({
 // Authentication middleware. Every request re-checks the account in the DB
 // (exists, active, same token_version), so suspensions and "log out
 // everywhere" take effect immediately (H4, H5).
-const requireRole = (roles, attach) => async (req, res, next) => {
+// { allowPasswordChange: true } only for the change-password and logout-all routes.
+const requireRole = (roles, attach, { allowPasswordChange = false } = {}) => async (req, res, next) => {
   try {
     const session = await authenticateRequest(pool, req, roles);
+    // Q4: after a reset by someone else, the only thing allowed is choosing a new password.
+    if (session.account.must_change_password && !allowPasswordChange) {
+      return res.status(403).json({ error: "Please choose a new password to continue", passwordChangeRequired: true });
+    }
     attach(req, session);
     next();
   } catch (err) {
@@ -1281,6 +1286,21 @@ app.get("/creator/staff", requireCreator, async (req, res) => {
   } catch (err) {
     console.error("Creator staff list failed:", err);
     res.status(500).json({ error: "Could not load staff" });
+  }
+});
+
+// Q4: an organizer resets the password of one of their staff (e.g. staff
+// without email). Returns a temporary password, shown once.
+app.post("/creator/staff/:staffId/reset-password", requireCreator, async (req, res) => {
+  try {
+    const staffId = String(req.params.staffId || "");
+    const owned = await pool.query("SELECT id FROM staff_accounts WHERE id=$1 AND creator_id=$2", [staffId, req.creator.sub]);
+    if (!owned.rows.length) return res.status(404).json({ error: "Staff member not found" });
+    const temporaryPassword = await setTemporaryPassword(pool, { role: "staff", accountId: staffId });
+    res.json({ temporaryPassword, mustChangePassword: true });
+  } catch (err) {
+    console.error("Staff password reset failed:", err);
+    res.status(500).json({ error: "Could not reset password" });
   }
 });
 
@@ -2444,6 +2464,46 @@ app.delete("/admin/staff/:staffId", requireAdmin, confirmed, audit("staff.delete
     res.status(500).json({ error: "Could not delete staff account" });
   }
 });
+
+// Q4: an admin resets a staff member's password (temporary password).
+app.post(
+  "/admin/staff/:staffId/reset-password",
+  requireAdmin,
+  confirmed,
+  audit("staff.password_reset", (req) => ({ targetType: "staff", targetId: req.params.staffId })),
+  async (req, res) => {
+    try {
+      const temporaryPassword = await setTemporaryPassword(pool, { role: "staff", accountId: String(req.params.staffId || "") });
+      res.json({ temporaryPassword, mustChangePassword: true });
+    } catch (err) {
+      if (err instanceof ResetError) return res.status(404).json({ error: "Staff member not found" });
+      console.error("Admin staff password reset failed:", err);
+      res.status(500).json({ error: "Could not reset password" });
+    }
+  },
+);
+
+// Q4: only a super admin can reset an admin's password. The admin's next
+// login still needs the emailed code, then a forced password change.
+app.post(
+  "/admin/accounts/:adminId/reset-password",
+  requireAdmin,
+  requireSuperAdmin,
+  confirmed,
+  audit("admin.password_reset", (req) => ({ targetType: "admin", targetId: req.params.adminId })),
+  async (req, res) => {
+    try {
+      const adminId = Number(req.params.adminId);
+      if (!Number.isInteger(adminId) || adminId < 1) return res.status(404).json({ error: "Admin account not found" });
+      const temporaryPassword = await setTemporaryPassword(pool, { role: "admin", accountId: adminId, adminType: "admin" });
+      res.json({ temporaryPassword, mustChangePassword: true });
+    } catch (err) {
+      if (err instanceof ResetError) return res.status(404).json({ error: "Admin account not found" });
+      console.error("Admin password reset failed:", err);
+      res.status(500).json({ error: "Could not reset password" });
+    }
+  },
+);
 
 // The admin audit log, newest first. ?limit=50&before=<id> for older pages.
 app.get("/admin/audit-log", requireAdmin, requireSuperAdmin, async (req, res) => {
@@ -3719,6 +3779,46 @@ app.post("/auth/reset-password-by-token", async (req, res) => {
   }
 });
 
+// Change your own password (also the forced change after a temporary
+// password). Ends all sessions and starts a fresh one for this client.
+const PASSWORD_TABLES = {
+  buyer: "users", creator: "creator_accounts", staff: "staff_accounts",
+  admin: "admin_accounts", super: "super_admin_accounts",
+};
+app.post(
+  "/auth/change-password",
+  requireRole(ROLES, (req, s) => { req.session = s; }, { allowPasswordChange: true }),
+  rateLimit({ name: "change-password", windowSeconds: 600, max: 10, key: (req) => `${req.session.role}:${req.session.payload.sub}` }),
+  async (req, res) => {
+    try {
+      const { role, payload, account } = req.session;
+      const currentPassword = String((req.body && req.body.currentPassword) || "");
+      const newPassword = String((req.body && req.body.newPassword) || "");
+      if (newPassword.length < 8) return res.status(400).json({ error: "New password must be at least 8 characters" });
+      if (newPassword === currentPassword) return res.status(400).json({ error: "Choose a password different from the current one" });
+      if (!String(account.password || "").startsWith("$2") || !(await bcrypt.compare(currentPassword, account.password))) {
+        return res.status(401).json({ error: "Current password is wrong" });
+      }
+      const table = PASSWORD_TABLES[role === "admin" && payload.adminType === "super" ? "super" : role];
+      const hasForcedFlag = ["staff_accounts", "admin_accounts", "super_admin_accounts"].includes(table);
+      const hasVersion = ["users", "creator_accounts", "staff_accounts"].includes(table);
+      await pool.query(
+        `UPDATE ${table} SET password = $1${hasForcedFlag ? ", must_change_password = FALSE" : ""}${hasVersion ? ", password_version = password_version + 1" : ""} WHERE id = $2`,
+        [await bcrypt.hash(newPassword, 10), payload.sub],
+      );
+      await revokeAllSessions(pool, { role, accountId: payload.sub, adminType: payload.adminType });
+      if (role === "admin") await recordAdminAction(pool, req, { action: "password.change" });
+      res.json({
+        success: true,
+        ...(await startSession(pool, req, res, { role, accountId: payload.sub, adminType: payload.adminType })),
+      });
+    } catch (err) {
+      console.error("Password change failed:", err);
+      res.status(500).json({ error: "Could not change password" });
+    }
+  },
+);
+
 // The logged-in buyer's profile. Only buyer sessions are accepted, so a
 // creator/admin token with the same numeric id can no longer read a buyer (H12).
 app.get("/session", requireBuyer, async (req, res) => {
@@ -3774,7 +3874,7 @@ app.post("/auth/logout", async (req, res) => {
 // Log this account out on every device.
 app.post(
   "/auth/logout-all",
-  requireRole(ROLES, (req, s) => { req.session = s; }),
+  requireRole(ROLES, (req, s) => { req.session = s; }, { allowPasswordChange: true }),
   async (req, res) => {
     try {
       const { role, payload } = req.session;

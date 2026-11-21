@@ -914,6 +914,10 @@ async function saveSession(role,data){
   }else{
     localStorage.setItem(SESSION_KEYS[role],'cookie:'+role);
   }
+  // Q4: logged in with a temporary password -> choose a new one right away.
+  if(data.mustChangePassword&&typeof window.forcePasswordChange==='function'){
+    await window.forcePasswordChange(role);
+  }
 }
 function clearLocalSession(role){
   localStorage.removeItem(SESSION_KEYS[role]);
@@ -957,6 +961,15 @@ async function logoutSession(role){
 // refresh that role's session once and retry the call.
 window.fetch=async function(input,init){
   var resp=await _nativeFetch(input,init);
+  // Q4: account was reset with a temporary password -> choose a new one first.
+  if(resp.status===403&&init&&init.headers&&init.headers['X-Session-Role']){
+    var forced=await resp.clone().json().catch(function(){return {};});
+    var forcedRole=init.headers['X-Session-Role'];
+    if(forced.passwordChangeRequired&&typeof window.forcePasswordChange==='function'&&(await window.forcePasswordChange(forcedRole))){
+      return _nativeFetch(input,Object.assign({},init,{headers:Object.assign({},init.headers,authHeaders(forcedRole))}));
+    }
+    if(forced.passwordChangeRequired)return resp;
+  }
   // H6: destructive admin actions need the password confirmed again.
   if(resp.status===403&&init&&init.headers&&init.headers['X-Session-Role']==='admin'){
     var info=await resp.clone().json().catch(function(){return {};});
@@ -6915,6 +6928,70 @@ async function postLogin(path,body){
   return {resp:resp,data:data};
 }
 
+// Q4: forced password change after a temporary password. Several API calls
+// may hit this at once, so they share one prompt.
+var _passwordChangePrompt={};
+window.forcePasswordChange=function(role){
+  if(_passwordChangePrompt[role])return _passwordChangePrompt[role];
+  _passwordChangePrompt[role]=new Promise(function(resolve){
+    var done=false;
+    var modal=showPasswordModal('forcePasswordModal','Choose a new password',
+      'Your password was reset. Enter the temporary password, then choose your own (at least 8 characters).',
+      '<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Temporary password</label>'
+        +'<input id="forceCurrentPwd" type="password" autocomplete="current-password" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>'
+        +'<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">New password</label>'
+        +'<input id="forceNewPwd" type="password" autocomplete="new-password" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>'
+        +'<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Confirm new password</label>'
+        +'<input id="forceNewPwd2" type="password" autocomplete="new-password" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>',
+      'Save password',
+      async function(m){
+        var current=(document.getElementById('forceCurrentPwd')||{}).value||'';
+        var next=(document.getElementById('forceNewPwd')||{}).value||'';
+        var next2=(document.getElementById('forceNewPwd2')||{}).value||'';
+        if(next.length<8){showToast('New password must be at least 8 characters');return;}
+        if(next!==next2){showToast('Passwords do not match');return;}
+        var resp=await _nativeFetch(apiUrl('/auth/change-password'),{method:'POST',headers:authHeaders(role,{'Content-Type':'application/json'}),body:JSON.stringify({currentPassword:current,newPassword:next})});
+        var data=await readAuthResponse(resp);
+        if(!resp.ok){showToast(data.error||'Could not change password');return;}
+        await saveSession(role,data);
+        done=true; m.remove(); showToast('Password changed'); resolve(true);
+      });
+    modal.addEventListener('click',function(e){
+      if((e.target===modal||e.target.closest('[data-cancel]'))&&!done){done=true;resolve(false);}
+    });
+  }).finally(function(){delete _passwordChangePrompt[role];});
+  return _passwordChangePrompt[role];
+};
+
+// Show a temporary password once, after resetting someone else's account.
+function showTemporaryPassword(name,password){
+  showPasswordModal('tempPasswordModal','Temporary password for '+name,
+    'Give this to them privately. They must choose a new password when they next log in. It will not be shown again.',
+    '<input readonly value="'+escapeHtml(password)+'" onclick="this.select()" style="'+escapeHtml(RESET_INPUT_STYLE)+'font-family:monospace;font-size:16px;letter-spacing:1px;"/>',
+    'Done',
+    async function(m){m.remove();});
+}
+
+async function resetPasswordFor(path,role,name){
+  if(!confirm('Reset the password of '+name+'? Their current sessions will end.'))return;
+  try{
+    var resp=await fetch(apiUrl(path),{method:'POST',headers:authHeaders(role,{'Content-Type':'application/json'})});
+    var data=await readAuthResponse(resp);
+    if(!resp.ok)throw new Error(data.error||'Could not reset password');
+    showTemporaryPassword(name,data.temporaryPassword);
+  }catch(err){showToast(err.message||'Could not reset password');}
+}
+function creatorResetStaffPassword(staffPk){
+  var st=STORE.getStaffByPk(staffPk);if(!st)return;
+  resetPasswordFor('/creator/staff/'+encodeURIComponent(staffPk)+'/reset-password','creator',st.name);
+}
+function admResetStaffPassword(staffPk,name){
+  resetPasswordFor('/admin/staff/'+encodeURIComponent(staffPk)+'/reset-password','admin',name);
+}
+function admResetAdminPassword(adminId,name){
+  resetPasswordFor('/admin/accounts/'+encodeURIComponent(adminId)+'/reset-password','admin',name);
+}
+
 // H6: ask the admin for their password before a destructive action.
 // Resolves true once the server accepted it (valid for 5 minutes).
 window.confirmAdminPassword=function(){
@@ -8735,6 +8812,7 @@ function admRenderAdmins(){
       +'<td>'+(isSuperAdmin() && a.role!=='Super Admin'
         ? (a.status==='Active'
           ? '<button onclick="admRevokeAdmin(\''+jsStr(a.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Revoke</button>'
+            +' <button onclick="admResetAdminPassword(\''+jsStr(a.id)+'\',\''+jsStr(a.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Reset password</button>'
           : '<span style="font-size:10px;color:var(--adm-text2);">Revoked</span>')
         : '<span style="font-size:10px;color:var(--adm-text2);">—</span>')+'</td></tr>';
   }).join('');
@@ -10780,6 +10858,7 @@ function admRefreshStaff(){
       +'<td><span class="adm-badge '+(s.status==='active'?'green':'red')+'">'+(s.status==='active'?'Active':'Suspended')+'</span></td>'
       +'<td><div style="display:flex;gap:3px;flex-wrap:wrap;">'
       +'<button onclick="admDisableStaff(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':'Enable')+'</button>'
+      +'<button onclick="admResetStaffPassword(\''+jsStr(s.id)+'\',\''+jsStr(s.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost" style="font-size:9px;">Reset pwd</button>'
       +(frozen?'':'<button onclick="admFreezeInventory(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:9px;">Freeze Inv</button>')
       +(locked?'':'<button onclick="admLockWallet(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(234,179,8,.1);color:#eab308;border:1px solid rgba(234,179,8,.3);font-size:9px;">Lock Wallet</button>')
       +'</div></td></tr>';
@@ -11158,6 +11237,7 @@ function refreshStaffManagePage(){
           +'<button onclick="recordCashReceived(\''+jsStr(s.id)+'\')" style="padding:6px 10px;background:transparent;border:1px solid rgba(232,116,97,0.5);color:#e87461;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;">Record cash received</button></div>'
         :'')
       +'<div style="display:flex;gap:8px;"><button onclick="shareStaffInventoryLink(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(0,212,212,0.1);border:1px solid rgba(0,212,212,0.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:600;cursor:pointer;">Share Link</button>'
+      +'<button onclick="creatorResetStaffPassword(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:11px;cursor:pointer;">Reset password</button>'
       +'<button onclick="assignMoreTickets(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;cursor:pointer;">Assign More</button></div>';
     list.appendChild(card);
   });

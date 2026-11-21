@@ -159,7 +159,9 @@ async function startSession(db, req, res, { role, accountId, adminType }) {
   const refreshToken = await insertRefreshToken(db, {
     role, accountId: account.id, adminType, familyId: crypto.randomUUID(),
   });
-  return deliver(req, res, role, accessToken, refreshToken);
+  const delivered = deliver(req, res, role, accessToken, refreshToken);
+  // Q4: tell the client straight away that a new password must be chosen.
+  return account.must_change_password ? { ...delivered, mustChangePassword: true } : delivered;
 }
 
 const readRefreshToken = (req, role) =>

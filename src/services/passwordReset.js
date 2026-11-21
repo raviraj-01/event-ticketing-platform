@@ -54,9 +54,10 @@ async function resetPasswordWithToken(db, token, passwordHash) {
   }
   const config = RESET_ROLES[payload.role];
   if (!config || !payload.sub || !Number.isInteger(payload.pv)) throw new ResetError("Invalid reset link");
+  const clearForcedChange = payload.role === "staff" ? ", must_change_password = FALSE" : "";
   const result = await db.query(
     `UPDATE ${config.table}
-     SET password = $1, password_version = password_version + 1
+     SET password = $1, password_version = password_version + 1${clearForcedChange}
      WHERE id = $2 AND password_version = $3 AND ${config.activeSql}
      RETURNING id`,
     [passwordHash, payload.sub, payload.pv],
@@ -69,4 +70,47 @@ async function resetPasswordWithToken(db, token, passwordHash) {
   return payload.role;
 }
 
-module.exports = { RESET_ROLES, ResetError, findResetTargets, createResetToken, resetPasswordWithToken };
+// ── Temporary passwords (Q4) ──────────────────────────────────────────────
+// Staff without email are reset by their organizer or an admin; admins by a
+// super admin. The account gets a random temporary password and must choose
+// a new one at its next login (must_change_password).
+const crypto = require("crypto");
+const bcrypt = require("bcrypt");
+
+const TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"; // no 0/O/1/l/I
+function generateTemporaryPassword(length = 12) {
+  let out = "";
+  for (let i = 0; i < length; i += 1) out += TEMP_PASSWORD_ALPHABET[crypto.randomInt(TEMP_PASSWORD_ALPHABET.length)];
+  return out;
+}
+
+const TEMP_PASSWORD_TABLES = {
+  staff: { table: "staff_accounts", extra: ", password_version = password_version + 1" }, // also kills emailed links
+  admin: { table: "admin_accounts", extra: ", failed_login_count = 0, locked_until = NULL" },
+  super: { table: "super_admin_accounts", extra: ", failed_login_count = 0, locked_until = NULL" },
+};
+
+// Returns the temporary password (shown once to the person who reset it).
+async function setTemporaryPassword(db, { role, accountId, adminType }) {
+  const key = role === "admin" ? (adminType === "super" ? "super" : "admin") : role;
+  const config = TEMP_PASSWORD_TABLES[key];
+  if (!config) throw new ResetError("This account type cannot get a temporary password");
+  const temporaryPassword = generateTemporaryPassword();
+  const result = await db.query(
+    `UPDATE ${config.table} SET password = $1, must_change_password = TRUE${config.extra} WHERE id = $2 RETURNING id`,
+    [await bcrypt.hash(temporaryPassword, 10), accountId],
+  );
+  if (!result.rows.length) throw new ResetError("Account not found");
+  await revokeAllSessions(db, { role, accountId, adminType });
+  return temporaryPassword;
+}
+
+module.exports = {
+  RESET_ROLES,
+  ResetError,
+  findResetTargets,
+  createResetToken,
+  resetPasswordWithToken,
+  generateTemporaryPassword,
+  setTemporaryPassword,
+};
