@@ -1808,31 +1808,6 @@ app.post("/staff/login", async (req, res) => {
   }
 });
 
-app.get("/staff/lookup", async (req, res) => {
-  try {
-    res.setHeader("Cache-Control", "no-store");
-    const identifier = String((req.query && req.query.identifier) || "").trim();
-    const digits = identifier.replace(/\D/g, "");
-    if (!identifier) return res.json({ exists: false });
-    const result = await pool.query(
-      `SELECT 1
-       FROM staff_accounts
-       WHERE status='active'
-         AND (
-           LOWER(staff_id)=LOWER($1)
-           OR LOWER(COALESCE(email,''))=LOWER($1)
-           OR regexp_replace(COALESCE(phone,''), '[^0-9]', '', 'g')=$2
-         )
-       LIMIT 1`,
-      [identifier.toLowerCase(), digits],
-    );
-    res.json({ exists: Boolean(result.rows.length) });
-  } catch (err) {
-    console.error("Staff lookup failed:", err);
-    res.status(500).json({ error: "Could not check staff account" });
-  }
-});
-
 app.get("/staff/share/:token", async (req, res) => {
   try {
     const token = decodeURIComponent(String(req.params.token || ""))

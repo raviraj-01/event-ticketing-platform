@@ -924,8 +924,11 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
     <!-- ── SIGN IN ── -->
     <div id="panel-signin">
 
+      <!-- M20: the password goes only to the selected role's login endpoint -->
+      <div role="group" aria-label="Sign in as" style="display:flex;gap:6px;margin-bottom:16px;padding:4px;border-radius:12px;background:rgba(255,255,255,0.04);"><button type="button" data-login-role="buyer" onclick="selectLoginRole('buyer')" aria-pressed="true" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--red);color:#fff;">Buyer</button><button type="button" data-login-role="creator" onclick="selectLoginRole('creator')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Organizer</button><button type="button" data-login-role="staff" onclick="selectLoginRole('staff')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Staff</button><button type="button" data-login-role="admin" onclick="selectLoginRole('admin')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Admin</button></div>
+
       <div style="margin-bottom:16px;">
-        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Email or Phone</label>
+        <label id="siEmailLabel" style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Email or Phone</label>
         <input id="siEmail" type="text" placeholder="you@email.com" class="form-input"
           style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 16px;font-size:14px;"/>
       </div>
@@ -939,7 +942,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
         </div>
       </div>
 
-      <div style="text-align:right;margin-bottom:24px;">
+      <div id="siForgotWrap" style="text-align:right;margin-bottom:24px;">
         <span onclick="openForgotPasswordModal()" style="font-size:12px;color:rgba(229,9,20,0.8);cursor:pointer;letter-spacing:.2px;">Forgot password?</span>
       </div>
 
@@ -2966,16 +2969,6 @@ async function loginStaffFromApi(staffId,password){
   applyStaffPayload(data);
   localStorage.setItem('VYBERA_STAFF_TOKEN',data.token||'');
   return STORE.currentStaff;
-}
-async function staffAccountExists(identifier){
-  try{
-    var resp=await fetch(apiUrl('/staff/lookup?identifier='+encodeURIComponent(identifier)+'&_='+Date.now()),{cache:'no-store'});
-    var data=await readAuthResponse(resp);
-    return Boolean(resp.ok&&data.exists);
-  }catch(err){
-    console.error('Staff lookup failed:',err);
-    return false;
-  }
 }
 function applyStaffPayload(data){
   STORE.currentStaff=data.staff||null;
@@ -6287,11 +6280,16 @@ function switchStaffTab(tab){
   if(tab==='wallet')refreshWalletTab();
 }
 
-function doStaffLogin(){
+async function doStaffLogin(){
   var id=document.getElementById('stLoginId'),pw=document.getElementById('stLoginPwd'),e=document.getElementById('stLoginError');
   if(!id||!pw)return;
-  var s=STORE.loginStaff(id.value.trim(),pw.value);
-  if(s){e.style.display='none';enterStaffPanel();}else{e.style.display='block';}
+  try{
+    await loginStaffFromApi(id.value.trim(),pw.value);
+    if(e)e.style.display='none';
+    enterStaffPanel();
+  }catch(err){
+    if(e)e.style.display='block';
+  }
 }
 
 function enterStaffPanel(){
@@ -6711,140 +6709,131 @@ function doAssignTickets(){
   if(asn){closeAssignModal();refreshStaffManage();var st=STORE.getStaffByPk(_assignToStaffPk);showToast('\u2705 '+qty+' \u00d7 '+tier+' assigned to '+(st?st.name:'staff')+'!');}
 }
 
+// ── SIGN IN (M20) ──────────────────────────────────────────────────────────
+// The user picks who they are signing in as, and the password is sent to
+// exactly ONE endpoint for that role. (Previously the same password was tried
+// against admin, staff, creator and buyer logins in turn.)
+var LOGIN_ROLE='buyer';
+var LOGIN_ROLE_LABELS={
+  buyer:'Email or Phone',
+  creator:'Organizer email',
+  staff:'Staff login ID, email or phone',
+  admin:'Admin email'
+};
+
+function selectLoginRole(role){
+  if(!LOGIN_ROLE_LABELS[role])role='buyer';
+  LOGIN_ROLE=role;
+  document.querySelectorAll('[data-login-role]').forEach(function(btn){
+    var active=btn.getAttribute('data-login-role')===role;
+    // Inline !important: the login page's light theme forces every button to
+    // white with !important, and only an inline !important can override that.
+    btn.style.setProperty('background',active?'var(--red)':'transparent','important');
+    btn.style.setProperty('color',active?'#fff':'inherit','important');
+    btn.style.setProperty('border-color',active?'var(--red)':'transparent','important');
+    btn.setAttribute('aria-pressed',active?'true':'false');
+  });
+  var label=document.getElementById('siEmailLabel');if(label)label.textContent=LOGIN_ROLE_LABELS[role];
+  // The email reset flow exists for buyer accounts only (see CLAUDE.md Q4).
+  var forgot=document.getElementById('siForgotWrap');if(forgot)forgot.style.visibility=role==='buyer'?'visible':'hidden';
+}
+
+async function postLogin(path,body){
+  var resp=await fetch(apiUrl(path),{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+  var data=await readAuthResponse(resp);
+  return {resp:resp,data:data};
+}
+
+async function loginAsAdmin(id,pwd){
+  var r=await postLogin('/admin/login',{email:id,password:pwd});
+  if(!r.resp.ok)throw new Error(r.data.error||'Invalid admin email or password');
+  STORE.currentAdmin=r.data.admin;
+  STORE.adminUsers=[r.data.admin];
+  localStorage.setItem('VYBERA_ADMIN_TOKEN',r.data.token||'');
+  cacheIdentity('VYBERA_ADMIN_PROFILE',r.data.admin);
+  sessionStorage.removeItem('VYBERA_GUEST_MODE');
+  document.body.classList.remove('guest-mode');
+  try{await loadAdminSnapshot();}catch(snapshotErr){console.error('Admin snapshot refresh failed:',snapshotErr);}
+  enterAdminPanel();
+}
+
+async function loginAsStaff(id,pwd){
+  var staff;
+  try{ staff=await loginStaffFromApi(id,pwd); }
+  catch(err){ throw new Error('Invalid staff login ID or password'); }
+  enterStaffPanel();
+  showToast('Welcome, '+(staff&&staff.name?staff.name:'staff')+'!');
+}
+
+async function loginAsCreator(id,pwd){
+  var r=await postLogin('/creator/login',{email:id,password:pwd});
+  if(!r.resp.ok){
+    if(r.data&&r.data.reason==='creator_not_verified'){
+      var notice=r.data.error||'Your creator account is under verification. You can login after super admin approval.';
+      setCreatorVerificationMessage(notice);
+      showPage('page-creator-login');
+      var creatorEmail=document.getElementById('creatorLoginEmail');if(creatorEmail)creatorEmail.value=id;
+    }
+    throw new Error(r.data.error||'Invalid email or password');
+  }
+  var account=r.data.creator||{};
+  STORE.creatorProfile=account;
+  STORE.currentUser=account.email;
+  localStorage.setItem('VYBERA_CREATOR_TOKEN',r.data.token||'');
+  cacheIdentity('VYBERA_CREATOR_PROFILE',account);
+  sessionStorage.removeItem('VYBERA_GUEST_MODE');
+  document.body.classList.remove('guest-mode');
+  try{await loadCreatorEvents();}catch(loadErr){console.error('Creator events refresh failed:',loadErr);}
+  try{await loadCreatorStaff();}catch(loadErr){console.error('Creator staff refresh failed:',loadErr);}
+  try{await loadCreatorAnalytics();}catch(loadErr){console.error('Creator analytics refresh failed:',loadErr);}
+  document.body.classList.add('creator-mode');
+  var nav=document.getElementById('creatorNavBar');if(nav)nav.style.display='flex';
+  showPage('page-creator');
+  setTimeout(refreshCreatorDashboard,50);
+  showToast('Welcome back, '+(account.name||'creator')+'!');
+}
+
+async function loginAsBuyer(id,pwd){
+  var r=await postLogin('/login',{email:id,password:pwd});
+  if(!r.resp.ok)throw new Error('Invalid email/phone or password');
+  var user=r.data.user||{};
+  var userName=user.username||[user.firstName,user.lastName].filter(Boolean).join(' ')||id;
+  var pn=document.getElementById('profileName');if(pn)pn.textContent=userName;
+  var pe=document.getElementById('profileEmail');if(pe)pe.textContent=user.email||id;
+  var cityEl=document.getElementById('userCity');if(cityEl&&user.city)cityEl.textContent=user.city;
+  var av=document.querySelector('.profile-avatar');
+  if(av)av.textContent=userName.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+  localStorage.setItem('VYBERA_BUYER_TOKEN',r.data.token||'');
+  cacheIdentity('VYBERA_BUYER_PROFILE',user);
+  sessionStorage.removeItem('VYBERA_GUEST_MODE');
+  document.body.classList.remove('guest-mode');
+  await loadBuyerBookingHistory();
+  await loadProfileCreatorEvents();
+  renderProfileCreatorEvents();
+  if(continueAfterBuyerAuth())return;
+  navigateBuyerHome();
+}
+
 async function doLogin(){
   var emailEl=document.getElementById('siEmail');
   var pwdEl=document.getElementById('siPassword');
+  var id=emailEl?emailEl.value.trim():'';
+  var pwd=pwdEl?pwdEl.value:'';
+  if(!id||!pwd){showToast('Enter your login and password');return;}
+  var handlers={admin:loginAsAdmin,staff:loginAsStaff,creator:loginAsCreator,buyer:loginAsBuyer};
   setButtonBusy('loginBtn',true,'Signing in...','Sign In');
-  if(emailEl && pwdEl){
-    var enteredId=emailEl.value.trim();
-    var enteredPwd=pwdEl.value;
-    if(enteredId && enteredPwd){
-      // 1. Check Neon-backed admin accounts first.
-      try {
-        var adminResp=await fetch(apiUrl('/admin/login'),{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({email:enteredId,password:enteredPwd})
-        });
-        var adminData=await readAuthResponse(adminResp);
-        if(adminResp.ok){
-          STORE.currentAdmin=adminData.admin;
-          STORE.adminUsers=[adminData.admin];
-          localStorage.setItem('VYBERA_ADMIN_TOKEN',adminData.token||'');
-          cacheIdentity('VYBERA_ADMIN_PROFILE',adminData.admin);
-          sessionStorage.removeItem('VYBERA_GUEST_MODE');
-          document.body.classList.remove('guest-mode');
-          try{await loadAdminSnapshot();}catch(snapshotErr){console.error('Admin snapshot refresh failed:',snapshotErr);}
-          emailEl.value='';pwdEl.value='';
-          enterAdminPanel();
-          setButtonBusy('loginBtn',false,null,'Sign In');
-          return;
-        }
-      } catch(adminErr) {
-      }
-      // 2. Check DB-backed staff accounts.
-      try {
-        var apiStaff=await loginStaffFromApi(enteredId,enteredPwd);
-        if(apiStaff){
-          emailEl.value='';pwdEl.value='';
-          enterStaffPanel();
-          showToast('Welcome, '+apiStaff.name+'!');
-          setButtonBusy('loginBtn',false,null,'Sign In');
-          return;
-        }
-      } catch(staffApiErr) {
-        var staffExists=false;
-        try{staffExists=await staffAccountExists(enteredId);}catch(lookupErr){staffExists=false;}
-        if(staffExists){
-          showToast(staffApiErr.message || 'Invalid staff login ID or password');
-          setButtonBusy('loginBtn',false,null,'Sign In');
-          return;
-        }
-      }
-      // 3. Check local/demo staff
-      if(STORE.loginStaff){
-        var staff=STORE.loginStaff(enteredId, enteredPwd);
-        if(staff){ emailEl.value='';pwdEl.value=''; enterStaffPanel(); setButtonBusy('loginBtn',false,null,'Sign In'); return; }
-      }
-      // 4. Creator login through the API
-      try{
-        var creatorResp = await fetch(apiUrl('/creator/login'), {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email: enteredId, user: enteredId, password: enteredPwd })
-        });
-        var creatorData = await readAuthResponse(creatorResp);
-        if(creatorResp.ok){
-          var account = creatorData.creator || {};
-          STORE.creatorProfile = account;
-          STORE.currentUser = account.email;
-          localStorage.setItem('VYBERA_CREATOR_TOKEN', creatorData.token || '');
-          cacheIdentity('VYBERA_CREATOR_PROFILE',account);
-          sessionStorage.removeItem('VYBERA_GUEST_MODE');
-          document.body.classList.remove('guest-mode');
-          try{await loadCreatorEvents();}catch(loadErr){console.error('Creator events refresh failed:',loadErr);}
-          try{await loadCreatorStaff();}catch(loadErr){console.error('Creator staff refresh failed:',loadErr);}
-          try{await loadCreatorAnalytics();}catch(loadErr){console.error('Creator analytics refresh failed:',loadErr);}
-          emailEl.value='';pwdEl.value='';
-          document.body.classList.add('creator-mode');
-          var nav=document.getElementById('creatorNavBar');
-          if(nav) nav.style.display='flex';
-          showPage('page-creator');
-          setTimeout(refreshCreatorDashboard,50);
-          showToast('Welcome back, '+account.name+'!');
-          setButtonBusy('loginBtn',false,null,'Sign In');
-          return;
-        }
-        if(creatorData && creatorData.reason==='creator_not_verified'){
-          var notice=creatorData.error||'Your creator account is under verification. You can login after super admin approval.';
-          setCreatorVerificationMessage(notice);
-          showPage('page-creator-login');
-          var creatorEmail=document.getElementById('creatorLoginEmail'); if(creatorEmail)creatorEmail.value=enteredId;
-          showToast(notice);
-          setButtonBusy('loginBtn',false,null,'Sign In');
-          return;
-        }
-      }catch(creatorErr){
-      }
-      // 5. Buyer login through the API
-      try{
-        var resp = await fetch(apiUrl('/login'), {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email: enteredId, password: enteredPwd })
-        });
-        var data = await readAuthResponse(resp);
-        if(!resp.ok){ throw new Error(data.error || 'Login failed'); }
-        var user = data.user || {};
-        var userName = user.username || [user.firstName,user.lastName].filter(Boolean).join(' ') || enteredId;
-        var pn=document.getElementById('profileName');if(pn)pn.textContent=userName;
-        var pe=document.getElementById('profileEmail');if(pe)pe.textContent=user.email || enteredId;
-        var cityEl=document.getElementById('userCity');if(cityEl&&user.city)cityEl.textContent=user.city;
-        var av=document.querySelector('.profile-avatar');
-        if(av)av.textContent=userName.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
-        localStorage.setItem('VYBERA_BUYER_TOKEN',data.token||'');
-        cacheIdentity('VYBERA_BUYER_PROFILE',user);
-        sessionStorage.removeItem('VYBERA_GUEST_MODE');
-        document.body.classList.remove('guest-mode');
-        await loadBuyerBookingHistory();
-        await loadProfileCreatorEvents();
-        renderProfileCreatorEvents();
-        if(continueAfterBuyerAuth()){setButtonBusy('loginBtn',false,null,'Sign In');return;}
-        navigateBuyerHome();
-        setButtonBusy('loginBtn',false,null,'Sign In');
-        return;
-      }catch(err){
-        var msg=String(err.message||'Login failed');
-        if(msg.toLowerCase().includes('user not found')) msg='Invalid email/login ID or password';
-        showToast(msg);
-        setButtonBusy('loginBtn',false,null,'Sign In');
-        return;
-      }
-    }
+  try{
+    await (handlers[LOGIN_ROLE]||loginAsBuyer)(id,pwd);
+    emailEl.value='';pwdEl.value='';
+  }catch(err){
+    showToast(err.message||'Login failed');
+  }finally{
+    setButtonBusy('loginBtn',false,null,'Sign In');
   }
-  // 6. Guest-style fallback when no credentials were entered.
-  setButtonBusy('loginBtn',false,null,'Sign In');
-  return;
 }
 
 // ── Password reset (email link flow) ───────────────────────────────────────
@@ -6961,6 +6950,7 @@ function openResetFromLink(){
   openResetPasswordModal(token);
 }
 window.addEventListener('load',openResetFromLink);
+window.addEventListener('load',function(){selectLoginRole(LOGIN_ROLE);});
 
 async function loadAdminSnapshot(){
   var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';

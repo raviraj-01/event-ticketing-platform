@@ -141,3 +141,7 @@ test("H3: forgot-password is limited per email address", async () => {
 test("H3: the unused /otp/msg91 aliases are gone", async () => {
   assert.equal((await api(server.baseUrl, "POST", "/otp/msg91/send", { json: { identifier: "919800000009" } })).status, 404);
 });
+
+test("M20: the anonymous staff existence lookup is gone", async () => {
+  assert.equal((await api(server.baseUrl, "GET", "/staff/lookup?identifier=someone@test.local")).status, 404);
+});
