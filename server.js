@@ -134,6 +134,9 @@ const pool = new Pool({
 const rateLimit = createRateLimiter(pool);
 // H6: log successful admin changes (see src/services/adminAudit.js).
 const audit = (action, describe) => audited(pool, action, describe);
+// Forwarder so routes defined earlier in the file can use the step-up check
+// (requireRecentReauth is defined next to the admin login code).
+const confirmed = (req, res, next) => requireRecentReauth(req, res, next);
 
 const r2Config = {
   endpoint: process.env.R2_ENDPOINT,
@@ -2106,6 +2109,55 @@ app.post(
   },
 );
 
+// ── Step-up confirmation for destructive admin actions (H6 part 4) ──
+const ADMIN_REAUTH_MINUTES = 5;
+
+// Destructive routes need the admin's password confirmed in the last 5 minutes.
+const requireRecentReauth = async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT reauth_until FROM ${adminTable(req.admin.adminType)} WHERE id=$1`,
+      [req.admin.sub],
+    );
+    const until = result.rows[0] && result.rows[0].reauth_until;
+    if (until && new Date(until) > new Date()) return next();
+    res.status(403).json({ error: "Please confirm your password to continue", reauthRequired: true });
+  } catch (err) {
+    console.error("Re-auth check failed:", err);
+    res.status(500).json({ error: "Could not verify confirmation" });
+  }
+};
+
+app.post(
+  "/admin/reauth",
+  requireAdmin,
+  rateLimit({ name: "admin-reauth", windowSeconds: 600, max: 10, key: (req) => req.admin && String(req.admin.sub), message: TOO_MANY_ATTEMPTS }),
+  async (req, res) => {
+    try {
+      const password = String((req.body && req.body.password) || "");
+      const table = adminTable(req.admin.adminType);
+      const found = await pool.query(`SELECT *, $2::text AS admin_type FROM ${table} WHERE id=$1`, [req.admin.sub, req.admin.adminType]);
+      const account = found.rows[0];
+      const ok = account && String(account.password || "").startsWith("$2") && (await bcrypt.compare(password, account.password));
+      if (!ok) {
+        // Wrong confirmations count towards the same lockout as logins.
+        if (account) await registerFailedAdminLogin(account);
+        await recordAdminAction(pool, req, { action: "reauth.failed" }).catch(() => {});
+        return res.status(401).json({ error: "Wrong password" });
+      }
+      await pool.query(
+        `UPDATE ${table} SET reauth_until = NOW() + make_interval(mins => $2), failed_login_count = 0 WHERE id=$1`,
+        [req.admin.sub, ADMIN_REAUTH_MINUTES],
+      );
+      await recordAdminAction(pool, req, { action: "reauth.success" });
+      res.json({ success: true, validForMinutes: ADMIN_REAUTH_MINUTES });
+    } catch (err) {
+      console.error("Admin re-auth failed:", err);
+      res.status(500).json({ error: "Could not confirm password" });
+    }
+  },
+);
+
 // Step 2 of admin login: the emailed code. The challenge row is locked so two
 // parallel guesses cannot both be counted as the "first" attempt.
 app.post(
@@ -2194,7 +2246,7 @@ app.get("/admin/session", requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/admin/accounts", requireAdmin, requireSuperAdmin, audit("admin.create", (req) => ({ targetType: "admin", targetId: req.body && req.body.email })), async (req, res) => {
+app.post("/admin/accounts", requireAdmin, requireSuperAdmin, confirmed, audit("admin.create", (req) => ({ targetType: "admin", targetId: req.body && req.body.email })), async (req, res) => {
   try {
     const { name, email, password, role, phone, permissions, notes } =
       req.body || {};
@@ -2250,7 +2302,7 @@ app.patch(
   "/admin/accounts/:adminId/status",
   requireAdmin,
   requireSuperAdmin,
-  audit("admin.status", (req) => ({ targetType: "admin", targetId: req.params.adminId, details: { status: req.body && req.body.status } })),
+  confirmed, audit("admin.status", (req) => ({ targetType: "admin", targetId: req.params.adminId, details: { status: req.body && req.body.status } })),
   async (req, res) => {
     try {
       const adminId = Number(req.params.adminId);
@@ -2282,7 +2334,7 @@ app.delete(
   "/admin/accounts/:adminId",
   requireAdmin,
   requireSuperAdmin,
-  audit("admin.delete", (req) => ({ targetType: "admin", targetId: req.params.adminId })),
+  confirmed, audit("admin.delete", (req) => ({ targetType: "admin", targetId: req.params.adminId })),
   async (req, res) => {
     try {
       const adminId = Number(req.params.adminId);
@@ -2374,7 +2426,7 @@ app.post("/admin/staff", requireAdmin, audit("staff.create", (req) => ({ targetT
   }
 });
 
-app.delete("/admin/staff/:staffId", requireAdmin, audit("staff.delete", (req) => ({ targetType: "staff", targetId: req.params.staffId })), async (req, res) => {
+app.delete("/admin/staff/:staffId", requireAdmin, confirmed, audit("staff.delete", (req) => ({ targetType: "staff", targetId: req.params.staffId })), async (req, res) => {
   try {
     const staffId = String(req.params.staffId || "").trim();
     if (!staffId) {
@@ -2563,7 +2615,7 @@ app.get("/admin/snapshot", requireAdmin, async (req, res) => {
   }
 });
 
-app.patch("/admin/events/:eventId/status", requireAdmin, audit("event.status", (req) => ({ targetType: "event", targetId: req.params.eventId, details: { status: req.body && req.body.status } })), async (req, res) => {
+app.patch("/admin/events/:eventId/status", requireAdmin, confirmed, audit("event.status", (req) => ({ targetType: "event", targetId: req.params.eventId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const { eventId } = req.params;
     const { status } = req.body || {};
@@ -2590,7 +2642,7 @@ app.patch("/admin/events/:eventId/status", requireAdmin, audit("event.status", (
   }
 });
 
-app.patch("/admin/users/:userId/status", requireAdmin, audit("user.status", (req) => ({ targetType: "user", targetId: req.params.userId, details: { status: req.body && req.body.status } })), async (req, res) => {
+app.patch("/admin/users/:userId/status", requireAdmin, confirmed, audit("user.status", (req) => ({ targetType: "user", targetId: req.params.userId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const rawUserId = String(req.params.userId || "").replace(/^USR-/i, "");
     const userId = Number(rawUserId);
@@ -2690,7 +2742,7 @@ app.patch("/admin/creators/:creatorId/documents/:documentId/status", requireAdmi
   }
 });
 
-app.patch("/admin/creators/:creatorId/status", requireAdmin, requireSuperAdmin, audit("creator.status", (req) => ({ targetType: "creator", targetId: req.params.creatorId, details: { status: req.body && req.body.status } })), async (req, res) => {
+app.patch("/admin/creators/:creatorId/status", requireAdmin, requireSuperAdmin, confirmed, audit("creator.status", (req) => ({ targetType: "creator", targetId: req.params.creatorId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const rawCreatorId = String(req.params.creatorId || "").replace(/^CRT-/i, "");
     const creatorId = Number(rawCreatorId);
@@ -2731,7 +2783,7 @@ app.patch("/admin/creators/:creatorId/status", requireAdmin, requireSuperAdmin, 
   }
 });
 
-app.patch("/admin/creators/status-by-email", requireAdmin, requireSuperAdmin, audit("creator.status", (req) => ({ targetType: "creator", targetId: req.body && req.body.email, details: { status: req.body && req.body.status } })), async (req, res) => {
+app.patch("/admin/creators/status-by-email", requireAdmin, requireSuperAdmin, confirmed, audit("creator.status", (req) => ({ targetType: "creator", targetId: req.body && req.body.email, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const email = String((req.body || {}).email || "").trim().toLowerCase();
     const status = String((req.body || {}).status || "").trim();
@@ -2776,7 +2828,7 @@ app.patch("/admin/creators/status-by-email", requireAdmin, requireSuperAdmin, au
   }
 });
 
-app.patch("/admin/staff/:staffId/status", requireAdmin, audit("staff.status", (req) => ({ targetType: "staff", targetId: req.params.staffId, details: { status: req.body && req.body.status } })), async (req, res) => {
+app.patch("/admin/staff/:staffId/status", requireAdmin, confirmed, audit("staff.status", (req) => ({ targetType: "staff", targetId: req.params.staffId, details: { status: req.body && req.body.status } })), async (req, res) => {
   try {
     const { staffId } = req.params;
     const { status } = req.body || {};

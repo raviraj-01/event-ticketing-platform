@@ -45,6 +45,7 @@ test("H6 audit: admin logins are logged, success and failure", async () => {
 test("H6 audit: successful admin changes are logged with target and new status; failures are not", async () => {
   const superAdmin = await makeAdmin({ superAdmin: true });
   const creator = await fx.createCreator({ kycStatus: "Pending" });
+  await api(server.baseUrl, "POST", "/admin/reauth", { token: superAdmin.token, json: { password: PASSWORD } });
   const ok = await api(server.baseUrl, "PATCH", `/admin/creators/${creator.id}/status`, { token: superAdmin.token, json: { status: "Rejected" } });
   assert.equal(ok.status, 200);
   const missing = await api(server.baseUrl, "PATCH", "/admin/creators/999999/status", { token: superAdmin.token, json: { status: "Rejected" } });
@@ -146,4 +147,25 @@ test("H6 OTP: in production without SMTP, admin login is refused (dev-mode code 
   } finally {
     await prod.stop();
   }
+});
+
+// ── H6 part 4: password re-confirmation for destructive actions ──
+test("H6 step-up: destructive actions need the password confirmed in the last 5 minutes", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  const admin = await makeAdmin();
+  const buyer = await fx.createBuyer();
+  const suspend = () => api(server.baseUrl, "PATCH", `/admin/users/${buyer.id}/status`, { token: admin.token, json: { status: "Suspended" } });
+  const first = await suspend();
+  assert.equal(first.status, 403);
+  assert.equal(first.body.reauthRequired, true);
+  assert.equal((await api(server.baseUrl, "POST", "/admin/reauth", { token: admin.token, json: { password: "wrong" } })).status, 401);
+  assert.equal((await api(server.baseUrl, "POST", "/admin/reauth", { token: admin.token, json: { password: PASSWORD } })).status, 200);
+  assert.equal((await suspend()).status, 200);
+  await server.db.query("UPDATE admin_accounts SET reauth_until = NOW() - INTERVAL '1 second' WHERE id=$1", [admin.id]);
+  assert.equal((await suspend()).status, 403, "confirmation expired");
+});
+
+test("H6 step-up: read-only admin requests do not need confirmation", async () => {
+  const admin = await makeAdmin();
+  assert.equal((await api(server.baseUrl, "GET", "/admin/snapshot", { token: admin.token })).status, 200);
 });
