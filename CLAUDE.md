@@ -299,8 +299,14 @@ Frontend consolidation (M14) happens before the first frontend-touching fix (C2)
 | D18 | Password recovery (Q4) | Buyers, organizers, staff with email: emailed single-use link. Staff without email: organizer or admin sets a temporary password, forced change at next login. Admins: only a super admin resets them; next login still needs the emailed code. Super admin: no self-service; `npm run reset-super-admin -- <email>` on the server. |
 | D19 | Staff resale (Q5b) | Out of scope: staff-owned resale disabled in UI and API; listed in README as future work. |
 | D8 | Static files | Serve only a dedicated `public/` folder; CLAUDE.md is never public. |
+| D20 | Event approval (Q6) | New events start `pending`; an admin approves before they are listed or bookable. A price/date change on a live event sends it back to pending, which **pauses new sales only**: existing ticket holders still see the event and their tickets, and the change never alters existing paid orders (applies to new orders only). |
+| D21 | Refunds (Q8) | Not in v1 (feature freeze). `paid_needs_refund` orders are refunded by hand in the PayU dashboard, then an admin marks them refunded. README future work. |
+| D22 | Global scanner (Q10, M18) | No. Every scanner must be assigned to the event, including admin-created staff. |
+| D23 | Unique buyer phone (Q12) | Unique only for verified, non-empty phones: partial unique index `WHERE phone IS NOT NULL AND phone_verified`. Google-only buyers without a phone keep working. Needs a new `users.phone_verified` column (none exists today), backfilled from OTP signups. **Report existing duplicates to Ravi before the migration runs.** |
+| D24 | Phone for PayU (Q14) | Ask for the phone once before the first paid checkout, save it to the profile; stop sending `9999999999`. |
+| D25 | Share-link regeneration (Q15) | Both the staff member and their organizer can regenerate; the old link stops crediting commission immediately. |
 
-Still open (ask when reached): password reset for non-buyers (old Q4), event approval before live (Q6), refunds in v1 (Q8), global scanner staff (Q10, M18), unique phone per buyer (Q12), staff_owned upfront payment (rest of Q5).
+Decided but **not built yet**: D20, D22, D23, D24, D25 (D21 needs only the admin "mark refunded" action). Planned slot: after Phase 3, before the Mediums.
 
 ## Change log
 | Date | Change | Why |
@@ -337,6 +343,7 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 | 2026-11-21 | M14: Cordova-only features merged into `public/index.html`; `scripts/build-cordova.js` generates `vybera-cordova/www/`. | One frontend source, so every fix is made once (D6). |
 | 2026-11-21 | `.env.example` rewritten as a checklist of Ravi's own test accounts (dropped the unused `R2_ACCOUNT_ID`); CLAUDE.md records decisions D1-D8. | C1 / D1. |
 | 2026-11-21 | Added `docs/PAYU-TEST.md`, `docs/ANDROID-DEVICE-CHECKLIST.md`, the Study guide section and recommended answers for Q6/Q8/Q10/Q12/Q14/Q15. | Ravi runs the two acceptance tests himself; study guide for interview prep; questions ready to confirm. |
+| 2026-11-21 | Recorded Ravi's answers to Q6/Q8/Q10/Q12/Q14/Q15 as D20-D25 (not built yet). | Decisions confirmed; implementation scheduled after Phase 3. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).
@@ -344,13 +351,7 @@ Still open (ask when reached): password reset for non-buyers (old Q4), event app
 - [ ] Rename/rebrand (Ravi gives the name; see "Branding/cleanup to do").
 
 ## Open questions for Ravi
-(Answered ones moved to "Decisions from Ravi". Each has my recommended answer; **not decided until Ravi confirms**.)
-- Q6. Admin approval for events? **Recommend yes:** new events start `pending`, an admin approves before they are listed or bookable; edits to price/date of a live event go back to pending.
-- Q8. Refunds in v1? **Recommend no (feature freeze):** refunds are README future work; `paid_needs_refund` orders are refunded by hand in the PayU dashboard and then marked refunded by an admin.
-- Q10. Admin-created staff with no event scanning any event (M18)? **Recommend no:** every scanner must be assigned to the event; no global scanner.
-- Q12. Phone unique per buyer? **Recommend yes:** one buyer account per verified phone (unique index, after checking existing duplicates; migration).
-- Q14. Phone for PayU when a Google buyer has none? **Recommend:** ask for the phone once before the first paid checkout and save it to the profile, instead of sending `9999999999`.
-- Q15. Who regenerates a staff share link (D12)? **Recommend both** the staff member and their organizer; the old link stops crediting commission immediately.
+None open. Q6/Q8/Q10/Q12/Q14/Q15 answered 2026-11-21 → D20-D25.
 
 ## Branding/cleanup to do (don't rename until Ravi picks a name)
 - **Names:** "BLAK Tickets" (server.js ×13, vybera_26.html ×51, Cordova index ×49, VYBERA.html ×14, config.xml ×3, Cordova package.json). "VYBERA"/"Vybera" (≈170-250 per HTML file, package name, repo name, README, `localStorage` keys `VYBERA_*`, `window.VYBERA_API_BASE`).
