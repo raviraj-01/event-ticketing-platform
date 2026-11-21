@@ -186,6 +186,23 @@ const publicAdmin = (admin) => ({
   createdAt: admin.created_at,
 });
 
+const publicOrder = (order) => ({
+  id: order.id,
+  status: order.status,
+  eventId: order.event_id,
+  tierName: order.tier_name,
+  qty: Number(order.qty),
+  unitPrice: Number(order.unit_price),
+  subtotal: Number(order.subtotal),
+  platformFee: Number(order.platform_fee),
+  gst: Number(order.gst),
+  amount: Number(order.amount),
+  paymentMethod: order.payment_method,
+  expiresAt: order.expires_at,
+  paidAt: order.paid_at,
+  createdAt: order.created_at,
+});
+
 module.exports = {
   publicCreator,
   publicCreatorEvent,
@@ -200,4 +217,5 @@ module.exports = {
   USER_NOT_FOUND_ERROR,
   publicUser,
   publicCreatorKycDocument,
+  publicOrder,
 };
