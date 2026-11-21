@@ -4,7 +4,6 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const bodyParser = require("body-parser");
-const cors = require("cors");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
@@ -12,21 +11,19 @@ const { OAuth2Client } = require("google-auth-library");
 const { runMigrations } = require("./src/db/migrate");
 const { AUDIENCE, signToken, verifyToken } = require("./src/utils/tokens");
 const { WalletError, staffWallet, requestWithdrawal, recordCashSettlement } = require("./src/services/staffWallet");
-const { recordAdminAction, audited, listAdminActions } = require("./src/services/adminAudit");
+const { recordAdminAction, listAdminActions } = require("./src/services/adminAudit");
 const { RESET_ROLES, ResetError, findResetTargets, createResetToken, resetPasswordWithToken, setTemporaryPassword } = require("./src/services/passwordReset");
-const { parseCookies } = require("./src/utils/cookies");
-const { USER_ACTIVE_STATUS, normalizeUserStatus, isUserActive } = require("./src/utils/accounts");
+const { USER_ACTIVE_STATUS, normalizeUserStatus, isUserActive, adminTable } = require("./src/utils/accounts");
 const {
   AuthError,
   ROLES,
-  authenticateRequest,
   startSession,
   rotateSession,
   endSession,
   revokeAllSessions,
 } = require("./src/services/sessions");
 const { isEventBookable, eventSalesClosed } = require("./src/utils/events");
-const { createRateLimiter, pruneRateLimitHits } = require("./src/middleware/rateLimit");
+const { pruneRateLimitHits, rateLimit } = require("./src/middleware/rateLimit");
 const {
   getPayuConfig,
   cleanPayuText,
@@ -71,6 +68,20 @@ const {
   publicCreatorKycDocument,
 } = require("./src/utils/serializers");
 const { hasSmtpConfig, createMailTransporter } = require("./src/services/mail");
+const {
+  requireCreator,
+  requireStaff,
+  requireAdmin,
+  ADMIN_REAUTH_MINUTES,
+  requireSuperAdmin,
+  confirmed,
+  requireBuyer,
+  requireTicketViewer,
+  requireScanIdentity,
+  requireRole,
+} = require("./src/middleware/auth");
+const { audit } = require("./src/middleware/audit");
+const { corsMiddleware, openerPolicy, blockCrossSiteCookieRequests } = require("./src/middleware/security");
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled async error:", err);
@@ -85,46 +96,9 @@ const app = express();
 // the real client IP for rate limiting; 0 = trust nobody (local development).
 app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 0));
 
-// H16: only these origins may call the API from a browser with credentials.
-// Default: the app's own origin + the Cordova WebView origin. Override with
-// CORS_ORIGINS="https://a.example,https://b.example".
-const allowedOrigins = new Set(
-  String(process.env.CORS_ORIGINS || "")
-    .split(",")
-    .map((origin) => origin.trim().replace(/\/+$/, ""))
-    .filter(Boolean),
-);
-if (!allowedOrigins.size) {
-  allowedOrigins.add(new URL(APP_BASE_URL).origin);
-  allowedOrigins.add("https://localhost"); // Cordova Android WebView
-}
-app.use(
-  cors({
-    // Requests without an Origin header (same-origin GETs, curl, PayU's
-    // server-side posts) are not CORS requests and are allowed through.
-    origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Client", "X-Session-Role"],
-    optionsSuccessStatus: 204,
-  }),
-);
-app.use((req, res, next) => {
-  res.header("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  next();
-});
-// CSRF defence for cookie sessions (on top of SameSite=Strict): a
-// state-changing request that carries our session cookies must come from an
-// allowed origin. Bearer-token clients (the app) are not cookie based.
-app.use((req, res, next) => {
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method) || req.headers.authorization) return next();
-  const hasSessionCookie = Object.keys(parseCookies(req)).some((name) => /^(at|rt)_/.test(name));
-  const origin = req.headers.origin;
-  if (hasSessionCookie && origin && !allowedOrigins.has(origin)) {
-    return res.status(403).json({ error: "Cross-site request blocked" });
-  }
-  next();
-});
+app.use(corsMiddleware);
+app.use(openerPolicy);
+app.use(blockCrossSiteCookieRequests);
 app.use(bodyParser.json({ limit: "30mb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.get("/favicon.ico", (req, res) => {
@@ -138,12 +112,6 @@ app.use("/uploads", express.static(uploadsDir, {
   setHeaders: (res) => res.setHeader("X-Content-Type-Options", "nosniff"),
 }));
 
-const rateLimit = createRateLimiter(pool);
-// H6: log successful admin changes (see src/services/adminAudit.js).
-const audit = (action, describe) => audited(pool, action, describe);
-// Forwarder so routes defined earlier in the file can use the step-up check
-// (requireRecentReauth is defined next to the admin login code).
-const confirmed = (req, res, next) => requireRecentReauth(req, res, next);
 
 
 const hasTwilioVerifyConfig = () =>
@@ -171,99 +139,6 @@ const creatorEventSalesQuery = `
   LEFT JOIN bookings b ON b.event_id=e.id
 `;
 
-// Authentication middleware. Every request re-checks the account in the DB
-// (exists, active, same token_version), so suspensions and "log out
-// everywhere" take effect immediately (H4, H5).
-// { allowPasswordChange: true } only for the change-password and logout-all routes.
-const requireRole = (roles, attach, { allowPasswordChange = false } = {}) => async (req, res, next) => {
-  try {
-    const session = await authenticateRequest(pool, req, roles);
-    // Q4: after a reset by someone else, the only thing allowed is choosing a new password.
-    if (session.account.must_change_password && !allowPasswordChange) {
-      return res.status(403).json({ error: "Please choose a new password to continue", passwordChangeRequired: true });
-    }
-    attach(req, session);
-    next();
-  } catch (err) {
-    if (!(err instanceof AuthError)) console.error("Authentication failed:", err);
-    res.status(401).json({ error: "Login required" });
-  }
-};
-
-const requireCreator = requireRole(["creator"], (req, s) => { req.creator = s.payload; });
-const requireAdmin = requireRole(["admin"], (req, s) => { req.admin = s.payload; });
-const requireSuperAdmin = async (req, res, next) => {
-  try {
-    if (!req.admin) {
-      return res.status(403).json({ error: "Super Admin access required" });
-    }
-    const migrateLegacySuperAdmin = async (legacyAdmin) => {
-      const migrated = await pool.query(
-        `INSERT INTO super_admin_accounts (name, email, password, status, last_login, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (email) DO UPDATE SET
-           name=EXCLUDED.name,
-           password=EXCLUDED.password,
-           status=EXCLUDED.status,
-           last_login=EXCLUDED.last_login
-         RETURNING id, status`,
-        [
-          legacyAdmin.name,
-          legacyAdmin.email,
-          legacyAdmin.password,
-          legacyAdmin.status,
-          legacyAdmin.last_login,
-          legacyAdmin.created_at,
-        ],
-      );
-      await pool.query("DELETE FROM admin_accounts WHERE id=$1", [
-        legacyAdmin.id,
-      ]);
-      return migrated;
-    };
-    let result =
-      req.admin.adminType === "super"
-        ? await pool.query(
-            "SELECT id, status FROM super_admin_accounts WHERE id=$1",
-            [req.admin.sub],
-          )
-        : await pool.query(
-            "SELECT id, status FROM super_admin_accounts WHERE LOWER(email)=LOWER($1)",
-            [req.admin.email || ""],
-          );
-    if (!result.rows.length) {
-      const legacyById = await pool.query(
-        "SELECT * FROM admin_accounts WHERE id=$1 AND role='Super Admin'",
-        [req.admin.sub],
-      );
-      if (legacyById.rows.length) {
-        result = await migrateLegacySuperAdmin(legacyById.rows[0]);
-      }
-    }
-    if (!result.rows.length && req.admin.email) {
-      const legacyByEmail = await pool.query(
-        "SELECT * FROM admin_accounts WHERE LOWER(email)=LOWER($1) AND role='Super Admin'",
-        [req.admin.email],
-      );
-      if (legacyByEmail.rows.length) {
-        result = await migrateLegacySuperAdmin(legacyByEmail.rows[0]);
-      }
-    }
-    const admin = result.rows[0];
-    if (!admin || admin.status !== "Active") {
-      return res.status(403).json({ error: "Super Admin access required" });
-    }
-    next();
-  } catch (err) {
-    res.status(500).json({ error: "Could not verify admin access" });
-  }
-};
-
-const requireStaff = requireRole(["staff"], (req, s) => { req.staff = s.payload; });
-const requireBuyer = requireRole(["buyer"], (req, s) => { req.buyer = s.payload; });
-const requireScanIdentity = requireRole(["creator", "staff"], (req, s) => {
-  req.scanIdentity = { type: s.role, payload: s.payload };
-});
 
 
 
@@ -1514,7 +1389,6 @@ const ADMIN_LOCKOUT = { maxFailures: 5, lockMinutes: 15 };
 const TOO_MANY_ATTEMPTS = "Too many attempts. Please try again later.";
 // Compared against when the email is unknown, so both cases take about as long.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync("not-a-real-password", 10);
-const adminTable = (adminType) => (adminType === "super" ? "super_admin_accounts" : "admin_accounts");
 
 // Super admins live in their own table; check it first.
 async function findAdminByEmail(email) {
@@ -1631,24 +1505,6 @@ app.post(
   },
 );
 
-// ── Step-up confirmation for destructive admin actions (H6 part 4) ──
-const ADMIN_REAUTH_MINUTES = 5;
-
-// Destructive routes need the admin's password confirmed in the last 5 minutes.
-const requireRecentReauth = async (req, res, next) => {
-  try {
-    const result = await pool.query(
-      `SELECT reauth_until FROM ${adminTable(req.admin.adminType)} WHERE id=$1`,
-      [req.admin.sub],
-    );
-    const until = result.rows[0] && result.rows[0].reauth_until;
-    if (until && new Date(until) > new Date()) return next();
-    res.status(403).json({ error: "Please confirm your password to continue", reauthRequired: true });
-  } catch (err) {
-    console.error("Re-auth check failed:", err);
-    res.status(500).json({ error: "Could not verify confirmation" });
-  }
-};
 
 app.post(
   "/admin/reauth",
@@ -2698,12 +2554,6 @@ app.get("/profile/creator-events", requireCreator, async (req, res) => {
   }
 });
 
-// Who may see a ticket (and its QR payload): the buyer who owns it, the
-// creator of its event, or staff assigned to its event. Anyone else gets 404
-// (never 403), so booking IDs cannot be probed.
-const requireTicketViewer = requireRole(["buyer", "creator", "staff"], (req, s) => {
-  req.ticketViewer = { type: s.role, id: s.payload.sub };
-});
 
 app.get("/bookings/:bookingId/ticket", requireTicketViewer, async (req, res) => {
   try {

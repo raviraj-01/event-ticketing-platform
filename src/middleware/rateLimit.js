@@ -2,12 +2,14 @@
 // limit holds across restarts and across several server instances.
 //
 // Usage:
-//   const rateLimit = createRateLimiter(pool);
-//   app.post("/x", rateLimit({ name: "x-ip", windowSeconds: 600, max: 30, key: (req) => req.ip }), handler);
+//   const { rateLimit } = require("../middleware/rateLimit");
+//   router.post("/x", rateLimit({ name: "x-ip", windowSeconds: 600, max: 30, key: (req) => req.ip }), handler);
 //
 // Fixed window = count hits per bucket in the current N-second window. Simple
 // and good enough here; the trade-off is that a client can do up to 2×max
 // around a window boundary.
+const db = require("../db/pool");
+
 function createRateLimiter(pool) {
   return function rateLimit({ name, windowSeconds, max, key, message }) {
     return async (req, res, next) => {
@@ -42,4 +44,7 @@ async function pruneRateLimitHits(pool) {
   await pool.query("DELETE FROM rate_limit_hits WHERE window_start < NOW() - INTERVAL '1 day'");
 }
 
-module.exports = { createRateLimiter, pruneRateLimitHits };
+// The shared limiter used by the routes.
+const rateLimit = createRateLimiter(db.pool);
+
+module.exports = { createRateLimiter, pruneRateLimitHits, rateLimit };
