@@ -59,7 +59,11 @@ http://localhost:3003
 
 ## Tests
 
-`npm test` starts a throwaway real PostgreSQL (embedded-postgres, downloaded on first `npm install`) and the real server, then runs the integration tests in `test/`.
+`npm test` runs ESLint (`npm run lint`), then starts a throwaway real PostgreSQL (embedded-postgres, downloaded on first `npm install`) and the real server, then runs the integration tests in `test/`.
+
+## Code layout
+
+`server.js` only starts the app (migrations → data fix-ups → listen). The app is built in `src/app.js`; routes live in `src/routes/` (one file per area), business logic and SQL in `src/services/`, shared middleware in `src/middleware/`, database setup in `src/db/`, small helpers in `src/utils/`. Schema changes go in `migrations/`.
 
 ## Health Check
 

@@ -39,15 +39,15 @@ Purpose tokens use the same secret: `{scope:'password-reset', email}` (TTL `PASS
 
 Verified against the code on 2026-11-21:
 - **Tokens:** `jose` (JWT) via `src/utils/tokens.js`.
-- **Backend:** one file, `server.js` (4,585 lines). Node (local v25.9; README says ≥20), Express 5.2, `pg` Pool, `bcrypt`, hand-written HS256 JWT on Node `crypto` (`server.js:161-202`), `nodemailer`, `qrcode`, `google-auth-library` (added in uncommitted work). Twilio Verify is called through raw `fetch` (no SDK). PayU uses a form post + SHA-512 hash. **Cloudflare R2** storage uses a hand-written SigV4 presigner (`server.js:598-671`), with a fallback to local disk `uploads/`.
+- **Backend:** Node ≥ 22.12, Express 5.2, `pg` Pool, `bcrypt`, `jose`, `nodemailer`, `qrcode`, `google-auth-library`, `node-pg-migrate`. Split in Phase 3 (2026-11-22) from one 4,585-line `server.js` into `src/` (see Architecture). Twilio Verify is called through raw `fetch` (no SDK). PayU uses a form post + SHA-512 hash. **Cloudflare R2** storage uses a hand-written SigV4 presigner (`src/services/storage.js`), with a fallback to local disk `uploads/`.
 - **Frontend:** plain HTML + inline JS, no build step.
   - `public/index.html` (~12,800 lines) is the **only** frontend source (web + APK), served at `/` (see "Frontend consolidation"). The legacy `VYBERA.html` and `prev` were deleted.
   - Firebase JS SDK v10 is loaded from the gstatic CDN in `firebaseconfig.js`. The `firebase` npm dependency is not used by the server.
 - **Android:** Cordova (`cordova-android` 15, target SDK 36), app id `com.vybera.app`. Plugins: inappbrowser, customurlscheme (`vybera://`), googleplus, android-permissions.
   - `vybera-cordova/www/` is **generated** (git-ignored) by `CORDOVA_API_BASE=https://… npm run build:cordova`, then `cd vybera-cordova && npx cordova build android`.
-  - **Source of truth:** backend = `server.js`, frontend = `public/`.
+  - **Source of truth:** backend = `server.js` + `src/`, frontend = `public/`.
 - **Hosting:** Render (`https://vybera.onrender.com`, referenced in the HTML and `config.xml`).
-- **Tests:** none. `npm test` only runs `node --check`.
+- **Tests:** `npm test` = syntax check + ESLint (`no-undef`, `no-unused-vars`) + `node:test` integration tests against a real embedded Postgres (`test/`, 94 tests).
 
 ## How to run locally
 
@@ -96,23 +96,33 @@ Reference: what each variable does.
 ## Architecture
 
 ```
-server.js            config, JWT, middleware, R2 presign, routes, startup (migrate → initDb data fix-ups → listen)
-migrations/          versioned SQL migrations (node-pg-migrate)
-src/db/migrate.js    migration runner (used at startup and by npm run migrate)
-public/index.html    live web SPA (was vybera_26.html; all roles in one page, "pages" toggled by showPage)
+server.js                 entry point: load .env → migrations → data fix-ups → listen
+src/app.js                Express app: global middleware, static files, route files in order
+src/config.js             APP_BASE_URL, folders, JWT secret check
+src/db/                   pool.js (shared pg pool), migrate.js, initDb.js (startup data fix-ups), queries.js (shared SQL)
+src/middleware/           auth.js (requireRole, requireSuperAdmin, confirmed), security.js (CORS + CSRF),
+                          rateLimit.js, audit.js
+src/routes/               one Express Router per area: pages, creator, staff, adminAuth, admin, orders,
+                          tickets, buyerAuth, auth (password + session lifecycle)
+src/services/             business logic and outside services: orders, payu, sessions, staffWallet,
+                          staffAssignments, passwordReset, adminAudit, signupOtp (Twilio), mail, storage (R2), tickets
+src/utils/                small pure helpers: tokens (jose), cookies, accounts, events, serializers (row → JSON)
+migrations/               versioned SQL migrations (node-pg-migrate)
+public/index.html         live web SPA (all roles in one page, "pages" toggled by showPage)
 public/firebaseconfig.js  Firebase Google sign-in helper (ES module, CDN imports)
-public/assets/       logos (BLAK Tickets)
-public/              the ONLY folder served by express.static (H1)
-uploads/             local file fallback (git-ignored, publicly served at /uploads)
-scripts/build-cordova.js  generates vybera-cordova/www/ from public/
-vybera-cordova/      Cordova Android project; www/ is generated, never edit it
+public/                   the ONLY folder served by express.static (H1)
+uploads/                  local file fallback (git-ignored, publicly served at /uploads)
+scripts/                  build-cordova.js, check-html-escaping.js, reset-super-admin.js
+test/                     integration tests (embedded Postgres + SMTP sink)
+vybera-cordova/           Cordova Android project; www/ is generated, never edit it
 ```
+**Layering rule:** routes handle HTTP (read the request, call a service, send JSON); services hold the logic and SQL and take `pool`/`client` as an argument where a transaction is involved; utils are pure. Nothing in `src/services` or `src/utils` requires a route file.
 
-**Auth model (H5, since 2026-11-21):** see "Sessions" under Key design decisions. Middleware = `requireRole([roles])` from `src/services/sessions.js`; token comes from `Authorization: Bearer` (app) or the `at_<role>` cookie (web, with `X-Session-Role` naming the role on multi-role endpoints).
+**Auth model (H5, since 2026-11-21):** see "Sessions" under Key design decisions. Middleware = `requireRole([roles])` in `src/middleware/auth.js`, built on `authenticateRequest` in `src/services/sessions.js`; token comes from `Authorization: Bearer` (app) or the `at_<role>` cookie (web, with `X-Session-Role` naming the role on multi-role endpoints).
 
 **Request flow (original, partly superseded):** `cors` (reflects any origin) → a hand-written CORS/COOP middleware → `bodyParser.json({limit:'30mb'})` → `express.static(public/)` (fixed H1; previously the whole repo root) → routes. Auth is per-route middleware: `requireCreator`, `requireAdmin`, `requireSuperAdmin`, `requireStaff`, `requireBuyer`, `requireScanIdentity`, `requireProfileIdentity`. Tokens are sent as `Authorization: Bearer`. The frontend stores them in `localStorage` (`VYBERA_BUYER_TOKEN`, `VYBERA_CREATOR_TOKEN`, `VYBERA_STAFF_TOKEN`, `VYBERA_ADMIN_TOKEN`).
 
-**Key tables** (created in `initDb`, `server.js:750-1071`):
+**Key tables** (schema in `migrations/`; descriptions below are from the Phase 1 audit, later changes are in the Issues log):
 - `users`: buyers. `email` UNIQUE (case-sensitive); `phone` not unique; `status` Active/Suspended.
 - `bookings`: PK `id TEXT`, **chosen by the client**. Has `user_id` (FK → users), `event_id` (**no FK**), price/qty/total, `status`, `qr_token`, `scanned_at`, `staff_id`, `staff_ref`.
 - `creator_accounts` (+ `finance_pin`) and `creator_kyc_documents` (document type, object key, verification status).
@@ -191,6 +201,7 @@ Every reset ends all sessions of that account (token_version + refresh tokens). 
 | Twilio Verify issues a 10-minute, phone-bound signup token | The OTP state lives at Twilio; the server only signs "this phone was verified" | Token is reusable within 10 minutes (M17) |
 
 ## Issues log
+**`file:line` references** in this log point at the pre-split `server.js` (before Phase 3, 2026-11-22); use the function or route name to find the code in `src/` now.
 
 Severity: **Critical** = exploitable now, money/accounts at stake. **High** = serious security/logic flaw. **Medium** = correctness/robustness/defence in depth. **Low** = hygiene.
 "Ravi#" maps to the numbered known-issues list Ravi gave. All are confirmed by reading the code unless the row says otherwise.
@@ -346,6 +357,7 @@ Decided but **not built yet**: D20, D22, D23, D24, D25 (D21 needs only the admin
 | 2026-11-21 | Added `docs/PAYU-TEST.md`, `docs/ANDROID-DEVICE-CHECKLIST.md`, the Study guide section and recommended answers for Q6/Q8/Q10/Q12/Q14/Q15. | Ravi runs the two acceptance tests himself; study guide for interview prep; questions ready to confirm. |
 | 2026-11-21 | Recorded Ravi's answers to Q6/Q8/Q10/Q12/Q14/Q15 as D20-D25 (not built yet). | Decisions confirmed; implementation scheduled after Phase 3. |
 | 2026-11-21 | Phase 3 prep: ESLint (`no-undef`, `no-unused-vars`) in `npm test`; L10 fixed (.env loaded before modules that read settings). | Lint catches missing imports while splitting server.js; L10 found while mapping the file. |
+| 2026-11-22 | Phase 3: split `server.js` (3,892 → 41 lines) into `src/app.js`, `src/config.js`, `src/db/`, `src/middleware/`, `src/routes/` (9 routers), `src/services/`, `src/utils/`. One commit per area, all tests green after each; no behaviour change except removing the `staffWalletFor` wrapper. Architecture and Study guide paths updated. | Ravi's Phase 3 plan: one 3,900-line file was hard to read, review and test. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).
@@ -366,21 +378,21 @@ None open. Q6/Q8/Q10/Q12/Q14/Q15 answered 2026-11-21 → D20-D25.
 - **Dead files:** deleted 2026-11-21 (`prev`, `VYBERA.html`, `vybera-cordova/www/server.js`).
 
 ## Study guide (read in this order)
-Function names, not line numbers, so this survives the Phase 3 split. Each area: files → what to look for → 3 likely interview questions.
+Paths updated after the Phase 3 split (2026-11-22). Function names, not line numbers. Each area: files → what to look for → 3 likely interview questions.
 
 ### 1. Orders and seat holds (C4, H9, H11)
 1. `migrations/0002_orders.sql`: order statuses, `bookings.order_id` unique index.
 2. `src/services/orders.js`: `createOrder` → `lockEvent` (`SELECT … FOR UPDATE`) → `seatUsage` → `hasRoom` → `priceOrder` → insert; `resolveReferral`; `applyPayuResult` (late-payment rule, idempotency); `issueBooking`; `recordReferralCommission`.
 3. `src/services/payu.js`: `makeRequestHash`, `makeResponseHash`, `isValidResponseHash` (constant time).
-4. `server.js`: `POST /orders`, `handlePayuCallback` (303 redirect), `GET /orders/:orderId`.
+4. `src/routes/orders.js`: `POST /orders`, `handlePayuCallback` (303 redirect), `GET /orders/:orderId`.
 5. `test/orders.test.js`: race tests, forged/mismatched callbacks, late payment.
 - *Q: How do you stop two buyers getting the last seat?* — Both requests lock the same event row with `SELECT … FOR UPDATE` in a transaction; the second waits, then counts the first one's hold and gets 409. I proved the test is real by removing the lock: it fails every time.
 - *Q: PayU confirms after the 15-minute hold expired. What happens?* — I re-check seats under the lock: if there's room the order is paid and the ticket issued; if not it becomes `paid_needs_refund` and shows up for admins to refund.
 - *Q: Gateways retry callbacks. How do you avoid two tickets?* — Already-paid orders return success without issuing again, and a unique index on `bookings.order_id` guarantees it at the database level.
 
 ### 2. Ticket scan lock (keep-as-is design)
-1. `server.js` `POST /bookings/scan`: transaction → `SELECT b.* … FOR UPDATE OF b` → refunded/duplicate checks → `UPDATE bookings SET scanned_at`.
-2. `requireScanIdentity` (creator or staff) and the staff-assignment condition in the scan query.
+1. `src/routes/tickets.js` `POST /bookings/scan`: transaction → `SELECT b.* … FOR UPDATE OF b` → refunded/duplicate checks → `UPDATE bookings SET scanned_at`.
+2. `requireScanIdentity` in `src/middleware/auth.js` (creator or staff) and the staff-assignment condition in the scan query.
 - *Q: Two gates scan the same ticket at the same moment?* — The row lock makes the second scan wait; when it continues it sees `scanned_at` set and answers 409 duplicate. Only one entry.
 - *Q: Why `FOR UPDATE OF b` and not just `FOR UPDATE`?* — The query joins events and assignments; `OF b` locks only the booking row, so we don't block unrelated work on the event.
 - *Q: Why 403 vs 409?* — 403: the ticket is valid but this staff member is not assigned to its event. 409: the ticket was already used or refunded.
@@ -389,7 +401,7 @@ Function names, not line numbers, so this survives the Phase 3 split. Each area:
 1. `src/utils/tokens.js`: `jose`, issuer + audience per purpose.
 2. `migrations/0004_sessions.sql`: `token_version`, `refresh_tokens`.
 3. `src/services/sessions.js`: `authenticateRequest` (Bearer or cookie, DB status + `tv`), `startSession`, `rotateSession` (reuse detection + grace), `endSession`, `revokeAllSessions`.
-4. `server.js`: `requireRole`, CORS allowlist + CSRF origin middleware, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`.
+4. `src/middleware/auth.js` `requireRole`; `src/middleware/security.js` (CORS allowlist, `blockCrossSiteCookieRequests`); `src/routes/auth.js` `/auth/refresh`, `/auth/logout`, `/auth/logout-all`.
 5. `public/index.html` first script: `authHeaders`, `saveSession`, `refreshSession`, the `window.fetch` wrapper.
 6. `test/sessions.test.js`.
 - *Q: JWTs are stateless. How do you revoke one instantly?* — Every access token carries `tv` (token_version). Each request already loads the account to check its status, and compares `tv`; bumping the column kills all old tokens immediately.
@@ -399,15 +411,15 @@ Function names, not line numbers, so this survives the Phase 3 split. Each area:
 ### 4. Staff withdrawals and cash (H10, D4)
 1. `migrations/0005_staff_cash_settlements.sql`.
 2. `src/services/staffWallet.js`: `staffWallet` (commission vs cash owed), `requestWithdrawal`, `recordCashSettlement`.
-3. `server.js` `POST /staff/withdrawals`, `POST /creator/staff/:staffId/cash-settlements`.
+3. `src/routes/staff.js` `POST /staff/withdrawals`; `src/routes/creator.js` `POST /creator/staff/:staffId/cash-settlements`.
 4. `test/wallet.test.js`.
 - *Q: What was the double-spend bug?* — Balance check and insert were two separate queries, so parallel requests all saw the full balance. Now it's one transaction that locks the staff row first and recomputes the balance inside the lock.
 - *Q: Why recompute inside the transaction instead of passing the balance in?* — A balance read before taking the lock can be stale; only a read made while holding the lock is guaranteed current.
 - *Q: Why can't staff withdraw cash sales?* — That cash already sits with the staff member and belongs to the organizer; it's tracked as "cash owed" and settled by the organizer. Only commission is the staff member's money.
 
 ### 5. Admin hardening (H6, Q4)
-1. `src/services/adminAudit.js`: `recordAdminAction`, `audited` middleware.
-2. `server.js` admin login section: `findAdminByEmail`, `registerFailedAdminLogin`, `startAdminOtpChallenge`, `POST /admin/login/verify`, `requireRecentReauth`, `POST /admin/reauth`.
+1. `src/services/adminAudit.js`: `recordAdminAction`, `audited`; `src/middleware/audit.js` (`audit(...)` used on admin routes).
+2. `src/routes/adminAuth.js`: `findAdminByEmail`, `registerFailedAdminLogin`, `startAdminOtpChallenge`, `POST /admin/login/verify`, `POST /admin/reauth`; `src/middleware/auth.js` `requireRecentReauth` (= `confirmed`).
 3. `migrations/0006`–`0009`, `0011`; `src/services/passwordReset.js` `setTemporaryPassword`; `scripts/reset-super-admin.js`.
 4. `test/admin.test.js`, `test/tempPassword.test.js`.
 - *Q: Why the same message for a locked account and an unknown email?* — Different answers would tell an attacker which emails are real admins; we even run a dummy bcrypt compare for unknown emails so timing doesn't leak it.
@@ -453,3 +465,4 @@ _(One entry per fixed issue: a 2-line explanation to say out loud.)_
 - **Q4 password recovery:** "Each account type has a recovery path that matches its risk: buyers, organizers and staff get a single-use emailed link; staff without email and admins get a temporary password from someone above them and must change it at the next login, enforced on every API call; the super admin can only be recovered with a script on the server."
 - **M1 bootstrap overwrite:** "On every restart the server wrote the super admin password from an environment variable, which silently undid password changes. I made the bootstrap insert-only, and tested it by booting a second server against the same database."
 - **L10 .env load order:** "Some modules read settings like the platform fee when they load, but the server loaded the .env file after requiring them, so local overrides were ignored. I moved the .env load to the first line and added a test that keeps it there."
+- **Phase 3 split:** "I split a 3,900-line server file into routes, services, middleware and db modules, one area per commit, with the full integration suite green after every step. I added ESLint's undefined-variable rule first so a forgotten import fails the build instead of crashing one route in production; it caught a real one, because Node's global `crypto` is WebCrypto, not the crypto module."
