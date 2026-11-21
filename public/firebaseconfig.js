@@ -2,13 +2,11 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/fireba
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithCredential,
   browserLocalPersistence,
   setPersistence,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  onAuthStateChanged,
   signOut,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
@@ -19,7 +17,6 @@ const firebaseConfig = {
   storageBucket: "vybera.firebasestorage.app",
   messagingSenderId: "544899681732",
   appId: "1:544899681732:web:72950958f1ac6b83356891",
-  oauthClientId: "544899681732-.apps.googleusercontent.com",
 };
 
 const app = initializeApp(firebaseConfig);
@@ -35,14 +32,6 @@ googleProvider.setCustomParameters({
 function isCordovaWebView() {
   const ua = navigator.userAgent || "";
   return !!window.cordova || window.location.protocol === "file:" || /\bwv\)/i.test(ua) || /; wv\)/i.test(ua);
-}
-
-function hasCordovaFirebaseAuth() {
-  return typeof cordova !== 'undefined' && 
-         cordova.plugins && 
-         cordova.plugins.firebase && 
-         cordova.plugins.firebase.auth &&
-         typeof cordova.plugins.firebase.auth.signInWithGoogle === 'function';
 }
 
 function normalizeLocalAuthOrigin() {
@@ -70,10 +59,6 @@ function clearGooglePending() {
   try { window.sessionStorage.removeItem("VYBERA_GOOGLE_PENDING"); } catch (_) {}
 }
 
-function hasGooglePending() {
-  try { return window.sessionStorage.getItem("VYBERA_GOOGLE_PENDING") === "1"; } catch (_) { return false; }
-}
-
 function forceBuyerHome() {
   if (typeof window.showPage === "function") {
     const homeNav = document.querySelector(".buyer-nav .nav-btn");
@@ -81,18 +66,6 @@ function forceBuyerHome() {
   } else {
     window.location.hash = "page-home";
   }
-}
-
-function waitForInitialAuthUser() {
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      resolve(user || null);
-    }, () => {
-      unsubscribe();
-      resolve(null);
-    });
-  });
 }
 
 function waitForAppLogin() {
@@ -126,29 +99,38 @@ function waitForAppLogin() {
   });
 }
 
-async function finishGoogleUser(user) {
-  if (!user || googleSessionApplied) return;
-  const displayName = user.displayName || "Google User";
-  const email = user.email || "";
-  if (!email) {
-    throw new Error("Google account did not return an email address.");
+// The server only accepts a Google-signed ID token (POST /auth/google verifies
+// signature, audience and email). Never send a bare name/email: that was the
+// unverified /social-login route (C3), now deleted.
+function googleIdTokenFromResult(result) {
+  const credential = result ? GoogleAuthProvider.credentialFromResult(result) : null;
+  return (credential && credential.idToken) || "";
+}
+
+async function finishGoogleUser(googleIdToken) {
+  if (googleSessionApplied) return;
+  if (!googleIdToken) {
+    throw new Error("Google sign-in did not return a verifiable token. Please try again.");
   }
   await waitForAppLogin();
-  await window.applySocialLogin({
-    name: displayName,
-    email,
-    photoURL: user.photoURL || "",
-  }, { force: true });
+  await window.applySocialLogin({ credential: googleIdToken }, { force: true });
   googleSessionApplied = true;
   clearGooglePending();
   setTimeout(forceBuyerHome, 80);
+}
+
+async function getGoogleWebClientId() {
+  const base = String(window.VYBERA_API_BASE || "").replace(/\/$/, "");
+  const resp = await fetch(`${base}/auth/google/client-config`);
+  const data = await resp.json().catch(() => ({}));
+  return String((data && data.clientId) || "").trim();
 }
 
 if (!isCordovaWebView()) {
   googleRedirectResultPromise = getRedirectResult(auth)
     .then((result) => {
       if (result && result.user) {
-        return finishGoogleUser(result.user).then(() => true);
+        return finishGoogleUser(googleIdTokenFromResult(result)).then(() => true);
       }
       return false;
     })
@@ -166,137 +148,49 @@ window.vyberaFirebaseCompleteGoogleReturn = async function vyberaFirebaseComplet
   const redirectHandled = await googleRedirectResultPromise;
   if (redirectHandled || googleSessionApplied) return true;
 
-  const existingUser = auth.currentUser || await waitForInitialAuthUser();
-  if (existingUser) {
-    await finishGoogleUser(existingUser);
-    return true;
-  }
-
+  // A cached Firebase session has no fresh Google ID token to verify, so always
+  // go through Google again instead of trusting the cached profile.
   return signInWithRedirect(auth, googleProvider);
 };
-
-async function signInWithGoogleInApp() {
-  return new Promise((resolve, reject) => {
-    let closedByApp = false;
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${firebaseConfig.oauthClientId}&` +
-      `redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}&` +
-      `response_type=token&` +
-      `scope=email%20profile&` +
-      `prompt=select_account`;
-    
-    const inAppBrowserRef = cordova.InAppBrowser.open(authUrl, '_blank', 'location=yes,clearcache=yes,clearsessioncache=yes');
-    
-    inAppBrowserRef.addEventListener('loadstart', function(event) {
-      const url = event.url;
-      if (url.includes(window.location.href.split('#')[0])) {
-        closedByApp = true;
-        inAppBrowserRef.close();
-        
-        const urlParams = new URLSearchParams(url.split('#')[1]);
-        const accessToken = urlParams.get('access_token');
-        
-        if (accessToken) {
-          fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-          })
-          .then(response => response.json())
-          .then(user => {
-            const mappedUser = {
-              displayName: user.name,
-              email: user.email,
-              photoURL: user.picture
-            };
-            finishGoogleUser(mappedUser).then(() => resolve(true)).catch(reject);
-          })
-          .catch(reject);
-        } else {
-          reject(new Error('Failed to get access token'));
-        }
-      }
-    });
-    
-    inAppBrowserRef.addEventListener('exit', function() {
-      if (!googleSessionApplied && !closedByApp) {
-        clearGooglePending();
-        reject(new Error('Google sign-in was cancelled'));
-      }
-    });
-    
-    inAppBrowserRef.addEventListener('loaderror', function(event) {
-      inAppBrowserRef.close();
-      clearGooglePending();
-      reject(new Error('Failed to load Google sign-in page'));
-    });
-  });
-}
 
 window.vyberaFirebaseGoogleSignIn = async function vyberaFirebaseGoogleSignIn() {
   try {
     if (isCordovaWebView()) {
       markGooglePending();
-      
-      // Use cordova-plugin-googleplus for direct Google Sign-In
+
+      // cordova-plugin-googleplus returns a Google ID token for the web client ID;
+      // the server verifies it. The client ID comes from the server config.
       if (window.plugins && window.plugins.googleplus) {
+        const webClientId = await getGoogleWebClientId();
+        if (!webClientId) {
+          clearGooglePending();
+          alert("Google sign-in is not configured on the server.");
+          return;
+        }
         window.plugins.googleplus.login(
-          {
-            webClientId: '544899681732-68u9ma1sfqtttsfp2nde8q6jtff9bh6g.apps.googleusercontent.com',
-            offline: true
-          },
+          { webClientId, offline: false },
           async (userData) => {
             try {
-              const credential = GoogleAuthProvider.credential(userData.idToken);
-              const userCredential = await signInWithCredential(auth, credential);
-              await finishGoogleUser(userCredential.user);
+              await finishGoogleUser(userData && userData.idToken);
             } catch (err) {
-              console.error('Firebase credential sign-in failed:', err);
+              console.error("Google sign-in failed:", err);
               clearGooglePending();
-              alert('Google sign-in failed: ' + (err.message || 'Unknown error'));
+              alert("Google sign-in failed: " + (err.message || "Unknown error"));
             }
           },
           (err) => {
-            console.error('Google login failed:', err);
+            console.error("Google login failed:", err);
             clearGooglePending();
-            alert('Google sign-in failed: ' + (err.message || 'Please try again'));
+            alert("Google sign-in failed: " + ((err && err.message) || "Please try again"));
           }
         );
         return;
       }
-      
-      if (hasCordovaFirebaseAuth()) {
-        cordova.plugins.firebase.auth.signInWithGoogle().then(function(user) {
-          return finishGoogleUser({
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL
-          });
-        }).catch(function(err) {
-          console.error('Cordova Firebase auth failed:', err);
-          clearGooglePending();
-          alert('Google sign-in failed: ' + (err.message || 'Unknown error'));
-        });
-        return;
+
+      if (typeof window.openGoogleInSystemBrowser === "function") {
+        return window.openGoogleInSystemBrowser();
       }
-      
-      if (typeof cordova !== 'undefined' && cordova.InAppBrowser) {
-        try {
-          await signInWithGoogleInApp();
-          return;
-        } catch (err) {
-          console.error('In-app Google sign-in failed:', err);
-          clearGooglePending();
-          if (typeof window.openGoogleInSystemBrowser === 'function') {
-            const message = 'In-app sign-in encountered an issue. Would you like to open your phone browser instead?';
-            if (confirm(message)) {
-              return window.openGoogleInSystemBrowser();
-            }
-          }
-          alert('Google sign-in failed: ' + (err.message || 'Please try again'));
-          return;
-        }
-      }
-      
-      alert('Google login is not available in this app version.');
+      alert("Google login is not available in this app version.");
       clearGooglePending();
       return;
     }
@@ -311,7 +205,7 @@ window.vyberaFirebaseGoogleSignIn = async function vyberaFirebaseGoogleSignIn() 
       return signInWithRedirect(auth, googleProvider);
     }
     const result = await signInWithPopup(auth, googleProvider);
-    return finishGoogleUser(result.user);
+    return finishGoogleUser(googleIdTokenFromResult(result));
   } catch (err) {
     console.error("Google sign-in failed:", err);
 

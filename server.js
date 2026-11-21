@@ -4251,12 +4251,20 @@ app.post("/auth/google", async (req, res) => {
     if (!credential) {
       return res.status(400).json({ error: "Google credential is required" });
     }
-    const ticket = await googleOAuthClient.verifyIdToken({
-      idToken: credential,
-      audience: googleClientId,
-    });
-    const payload = ticket.getPayload() || {};
-    if (!payload.email || payload.email_verified === false) {
+    // Checks Google's signature, expiry, issuer and that the token was issued
+    // for OUR client ID. A forged or foreign token is a 401, not a 500.
+    let payload;
+    try {
+      const ticket = await googleOAuthClient.verifyIdToken({
+        idToken: credential,
+        audience: googleClientId,
+      });
+      payload = ticket.getPayload() || {};
+    } catch (verifyErr) {
+      console.error("Google ID token rejected:", verifyErr.message);
+      return res.status(401).json({ error: "Google sign-in could not be verified" });
+    }
+    if (!payload.email || payload.email_verified !== true) {
       return res.status(400).json({ error: "Google account email is not verified" });
     }
     const user = await upsertGoogleBuyer({
@@ -4273,49 +4281,6 @@ app.post("/auth/google", async (req, res) => {
   } catch (err) {
     console.error("Google login failed:", err);
     res.status(err.statusCode || 500).json({ error: err.message || "Google login failed" });
-  }
-});
-app.post("/social-login", async (req, res) => {
-  try {
-    const { name, email, photoURL, provider } = req.body || {};
-    const cleanEmail = String(email || "").trim().toLowerCase();
-    const cleanName = String(name || "Google User").trim();
-    if (!cleanEmail) {
-      return res.status(400).json({ error: "Email is required" });
-    }
-    const parts = cleanName.split(/\s+/);
-    const firstName = parts.shift() || cleanName;
-    const lastName = parts.join(" ");
-    const result = await pool.query(
-      "SELECT id, status FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1",
-      [cleanEmail],
-    );
-    if (result.rows.length && !isUserActive(result.rows[0].status)) {
-      return res.status(404).json({ error: USER_NOT_FOUND_ERROR });
-    }
-    const upsert = await pool.query(
-      `INSERT INTO users (username, first_name, last_name, email, password, auth_provider, profile_image_url)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
-      ON CONFLICT (email) DO UPDATE SET
-        username=EXCLUDED.username,
-        first_name=EXCLUDED.first_name,
-        last_name=EXCLUDED.last_name,
-        auth_provider=EXCLUDED.auth_provider,
-        profile_image_url=COALESCE(users.profile_image_url, EXCLUDED.profile_image_url)
-      RETURNING id, username, first_name, last_name, email, phone, country_code, city,
-        profile_image_url, profile_image_key, profile_image_storage, auth_provider, status`,
-      [cleanName, firstName, lastName, cleanEmail, "oauth-provider", provider || "google", photoURL || ""],
-    );
-    const user = upsert.rows[0];
-    res.json({
-      message: "Login successful",
-      user: publicUser(user),
-      token: signJwt({ sub: user.id, email: user.email }),
-      expiresInDays: 30,
-    });
-  } catch (err) {
-    console.error("Social login failed:", err);
-    res.status(500).json({ error: "Social login failed" });
   }
 });
 

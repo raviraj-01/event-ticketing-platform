@@ -857,7 +857,7 @@ window.addEventListener('DOMContentLoaded', function(){
 window.VYBERA_GOOGLE_USE_REDIRECT=false;
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script type="module" src="firebaseconfig.js?v=apk-auth-api-1"></script>
+<script type="module" src="firebaseconfig.js?v=verified-google-1"></script>
 
 
 <!-- SPLASH -->
@@ -7316,25 +7316,30 @@ async function startGoogleIdentitySignIn(){
     }catch(err){reject(err);}
   });
 }
+// Google login: the only accepted input is a Google-signed ID token, which the
+// server verifies at POST /auth/google. There is no name/email fallback (C3).
 async function applySocialLogin(user,options){
   options=options||{};
-  var name = user.name || 'Google User';
-  var email = user.email || '';
-  var credential = user.credential || user.idToken || '';
+  var credential = (user && (user.credential || user.idToken)) || '';
   if(!options.force && safeSessionGet('VYBERA_GOOGLE_PENDING')!=='1'){
     console.warn('Ignoring Google login result because the Google button was not clicked in this session.');
     return;
   }
+  if(!credential){
+    safeSessionRemove('VYBERA_GOOGLE_PENDING');
+    showToast('Google sign-in did not return a verifiable token. Please try again.');
+    return;
+  }
   try{
-    var resp=await fetch(apiUrl(credential?'/auth/google':'/social-login'),{
+    var resp=await fetch(apiUrl('/auth/google'),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(credential?{credential:credential}:{name:name,email:email,photoURL:user.photoURL||'',provider:'google'})
+      body:JSON.stringify({credential:credential})
     });
     var data=await readAuthResponse(resp);
     if(!resp.ok)throw new Error(data.error||'Google login failed');
     localStorage.setItem('VYBERA_BUYER_TOKEN',data.token||'');
-    var socialUser=data.user||{username:name,email:email,profileImage:user.photoURL||''};
+    var socialUser=data.user;
     cacheIdentity('VYBERA_BUYER_PROFILE',socialUser);
     applyBuyerProfile(socialUser);
     safeSessionRemove('VYBERA_GOOGLE_PENDING');
@@ -7346,7 +7351,7 @@ async function applySocialLogin(user,options){
     var relayCode = urlParams.get('code');
     if(relayCode && data.token){
       try{
-        var profile = data.user || {username:name,email:email,profileImage:user.photoURL||''};
+        var profile = data.user;
         await fetch('/google-token/store?code=' + encodeURIComponent(relayCode), {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -7384,17 +7389,19 @@ window.applySocialLogin=applySocialLogin;
 window.vyberaAppAuthReady=true;
 window.dispatchEvent(new Event('vybera-app-auth-ready'));
 
-async function localGoogleSignInFallback(){
-  safeSessionRemove('VYBERA_GUEST_MODE');
-  safeSessionSet('VYBERA_GOOGLE_PENDING','1');
-  var existingEmail=(document.getElementById('siEmail')||{}).value||'';
-  var email=(prompt('Enter your Google email to continue:', existingEmail)||'').trim();
-  if(!email)return;
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showToast('Enter a valid Google email');return;}
-  var name=email.split('@')[0].replace(/[._-]+/g,' ').replace(/\b\w/g,function(ch){return ch.toUpperCase();}).trim()||'Google User';
-  await applySocialLogin({name:name,email:email,photoURL:''},{force:true});
+// APK: the Google login happened inside an InAppBrowser tab, which stored a buyer
+// token. Before trusting that copied token, ask the server who it belongs to.
+async function applyCopiedBuyerToken(token){
+  var resp=await fetch(apiUrl('/session'),{headers:{Authorization:'Bearer '+token}});
+  var data=await readAuthResponse(resp);
+  if(!resp.ok||!data.user)throw new Error(data.error||'Google login could not be verified');
+  localStorage.setItem('VYBERA_BUYER_TOKEN',token);
+  cacheIdentity('VYBERA_BUYER_PROFILE',data.user);
+  applyBuyerProfile(data.user);
+  showToast('Signed in with Google');
+  if(continueAfterBuyerAuth())return;
+  navigateBuyerHome();
 }
-window.localGoogleSignInFallback=localGoogleSignInFallback;
 function safeSessionGet(key){try{return sessionStorage.getItem(key);}catch(_){return null;}}
 function safeSessionSet(key,value){try{sessionStorage.setItem(key,value);}catch(_){}}
 function safeSessionRemove(key){try{sessionStorage.removeItem(key);}catch(_){}}
@@ -7414,22 +7421,16 @@ function openGoogleInSystemBrowser(){
     var ref = window.cordova.InAppBrowser.open(url, '_blank', 'location=yes,clearcache=yes,clearsessioncache=yes,userAgent=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36');
     var pollInterval = setInterval(function() {
       ref.executeScript({
-        code: "JSON.stringify({token: localStorage.getItem('VYBERA_BUYER_TOKEN'), profile: localStorage.getItem('VYBERA_BUYER_PROFILE')})"
+        code: "localStorage.getItem('VYBERA_BUYER_TOKEN')"
       }, function(result) {
-        if (result && result[0]) {
-          try {
-            var data = JSON.parse(result[0]);
-            if (data.token && data.profile) {
-              clearInterval(pollInterval);
-              localStorage.setItem('VYBERA_BUYER_TOKEN', data.token);
-              localStorage.setItem('VYBERA_BUYER_PROFILE', data.profile);
-              ref.close();
-              var profile = JSON.parse(data.profile);
-              applySocialLogin(profile, {force: true});
-            }
-          } catch(e) {
-            console.error('Error parsing login from browser:', e);
-          }
+        var token = result && result[0];
+        if (token) {
+          clearInterval(pollInterval);
+          ref.close();
+          applyCopiedBuyerToken(token).catch(function(err){
+            console.error('Google login from browser failed:', err);
+            showToast(err.message || 'Google login failed');
+          });
         }
       });
     }, 1000);
