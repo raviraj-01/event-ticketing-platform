@@ -3751,14 +3751,10 @@ var STORE = {
     var a = { id:'ADMIN-'+Date.now(), name:data.name, email:data.email, role:data.role, status:'Active', password:data.password||'vybera@2026', lastLogin:null, createdAt:new Date().toISOString() };
     STORE.adminUsers.push(a); STORE.addAdminLog('Create Admin','Created: '+data.name); return a;
   },
+  // M4: computed by the server over all rows (GET /admin/snapshot → stats).
   getPlatformStats: function() {
-    var evs = STORE.events||[];
-    var cfg = STORE.platformConfig;
-    var totalGMV = evs.reduce(function(s,e){ return s+(e.revenue||0); },0);
-    var totalBookings = evs.reduce(function(s,e){ return s+(e.bookingCount||0); },0);
-    var liveEvents = evs.filter(function(e){ return e.status==='live'; }).length;
-    var totalRevenue = Math.round(totalGMV*(cfg.baseFee/100));
-    return {gmv:totalGMV, revenue:totalRevenue, bookings:totalBookings, liveEvents:liveEvents, creators:(admCreatorsList||[]).length, buyers:(admBuyersList||[]).length};
+    var s = STORE.adminStats||{};
+    return {gmv:Math.round(s.gmv||0), revenue:Math.round(s.platformFees||0), bookings:s.tickets||0, liveEvents:s.liveEvents||0, creators:s.creators||0, buyers:s.buyers||0};
   },
 };
 
@@ -6917,6 +6913,77 @@ function openResetFromLink(){
 window.addEventListener('load',openResetFromLink);
 window.addEventListener('load',function(){selectLoginRole(LOGIN_ROLE);});
 
+// ── M4: admin lists come one page at a time; totals come from the server ──
+// ADM_LISTS[key] = { items, paging } for each list ("events:pending" etc. for
+// filtered ones). The snapshot fills the unfiltered lists; "Load more" and the
+// filtered tabs call GET /admin/list/:kind.
+var ADM_LISTS={};
+function admListKey(kind,status){ return kind+(status?':'+status:''); }
+async function admFetchList(kind,status,offset){
+  var q='?offset='+(offset||0)+(status?'&status='+encodeURIComponent(status):'');
+  var resp=await fetch(apiUrl('/admin/list/'+encodeURIComponent(kind)+q),{headers:authHeaders('admin')});
+  var data=await readAuthResponse(resp);
+  if(!resp.ok) throw new Error(data.error||'Could not load list');
+  return data;
+}
+// The globals the rest of the admin panel reads.
+function admSyncListGlobals(kind,status){
+  var list=ADM_LISTS[admListKey(kind,status)]; if(!list) return;
+  if(kind==='events'){
+    // Filtered event pages are merged in, so actions on them find the event.
+    var byId={}; (STORE.events||[]).forEach(function(e){byId[e.id]=e;});
+    list.items.forEach(function(e){ if(!byId[e.id]){ e._persistedCreatorEvent=true; STORE.events.push(e); byId[e.id]=e; } });
+    return;
+  }
+  if(status) return;
+  if(kind==='buyers') admBuyersList=list.items;
+  if(kind==='creators'){ admCreatorsList=list.items; syncCreatorApplicationsFromCreators(); }
+  if(kind==='ledger') STORE.bookings=list.items;
+  if(kind==='staff'){
+    STORE.staff=list.items;
+    STORE.wallets.staff={};
+    STORE.staff.forEach(function(member){STORE.wallets.staff[member.id]=Number(member.earnings||0);});
+  }
+}
+function admRerenderList(kind){
+  if(kind==='buyers') admRenderBuyers();
+  if(kind==='creators') admRenderCreators();
+  if(kind==='users') admRenderAllUsers();
+  if(kind==='events') admRenderEvents(admCurrentEventTab||'all');
+  if(kind==='ledger') admRefreshPayFilter();
+  if(kind==='staff') admRefreshStaff();
+}
+// Loads the first page of a list that the snapshot does not include.
+async function admEnsureList(kind,status){
+  var key=admListKey(kind,status);
+  if(ADM_LISTS[key]) return ADM_LISTS[key];
+  var data=await admFetchList(kind,status,0);
+  ADM_LISTS[key]={items:data.items||[],paging:data.paging||{}};
+  admSyncListGlobals(kind,status);
+  return ADM_LISTS[key];
+}
+async function admLoadMore(kind,status){
+  var key=admListKey(kind,status||'');
+  var list=ADM_LISTS[key]; if(!list||list.paging.nextOffset==null) return;
+  try{
+    var data=await admFetchList(kind,status||'',list.paging.nextOffset);
+    list.items=list.items.concat(data.items||[]); list.paging=data.paging||{};
+    admSyncListGlobals(kind,status||'');
+    admRerenderList(kind);
+  }catch(err){ admShowToast(err.message||'Could not load more'); }
+}
+function admLoadMoreRow(kind,status,colspan){
+  var list=ADM_LISTS[admListKey(kind,status||'')];
+  if(!list||!list.paging||list.paging.nextOffset==null) return '';
+  return '<tr><td colspan="'+Number(colspan)+'" style="text-align:center;padding:12px;"><button onclick="admLoadMore(\''+jsStr(kind)+'\',\''+jsStr(status||'')+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Load more</button></td></tr>';
+}
+function admStats(){ return STORE.adminStats||{}; }
+function admShowing(kind,status,total,noun){
+  var list=ADM_LISTS[admListKey(kind,status||'')];
+  var shown=list?list.items.length:0;
+  return (shown<total?'Showing '+shown+' of '+total:total)+' '+noun;
+}
+
 async function loadAdminSnapshot(){
   var token=localStorage.getItem('VYBERA_ADMIN_TOKEN')||'';
   if(!token) throw new Error('Admin login required');
@@ -6924,37 +6991,16 @@ async function loadAdminSnapshot(){
   var data=await readAuthResponse(resp);
   if(!resp.ok) throw new Error(data.error||'Could not load admin data');
   STORE.adminUsers=data.admins||STORE.adminUsers||[];
-  admBuyersList=data.buyers||[];
-  admCreatorsList=data.creators||[];
-  syncCreatorApplicationsFromCreators();
-  STORE.events=(data.events||[]).map(function(event){event._persistedCreatorEvent=true;return event;});
-  STORE.bookings=data.bookings||[];
-  var payments=data.payments||[];
-  STORE.bookings.forEach(function(booking){
-    var payment=payments.find(function(tx){return tx.bookingId===booking.id;});
-    if(payment) booking.payment={gateway:payment.txnid.indexOf('LEGACY-')===0?'Legacy Imported':'PayU',status:payment.status,txnid:payment.txnid,verified:payment.verified};
+  STORE.adminStats=data.stats||{};
+  ADM_LISTS={};
+  STORE.events=[];
+  ['buyers','creators','events','ledger','staff'].forEach(function(kind){
+    ADM_LISTS[kind]={items:data[kind]||[],paging:(data.paging||{})[kind]||{}};
+    if(kind==='events') ADM_LISTS.events.items.forEach(function(event){event._persistedCreatorEvent=true;});
+    admSyncListGlobals(kind,'');
   });
-  payments.forEach(function(payment){
-    if(STORE.bookings.some(function(booking){return booking.id===payment.bookingId;})) return;
-    STORE.bookings.push({
-      id:payment.bookingId||payment.txnid,
-      buyer:payment.buyerEmail||'Buyer',
-      buyerEmail:payment.buyerEmail||'',
-      eventId:payment.eventId,
-      eventName:payment.eventId||'Event',
-      ticketType:payment.ticketType||'Ticket',
-      qty:payment.qty||1,
-      total:payment.amount||0,
-      bookedAt:payment.updatedAt,
-      _paymentOnly:true,
-      payment:{gateway:payment.txnid.indexOf('LEGACY-')===0?'Legacy Imported':'PayU',status:payment.status,txnid:payment.txnid,verified:payment.verified}
-    });
-  });
-  STORE.payments=payments;
+  STORE.payments=[];
   STORE.refundsNeeded=data.refundsNeeded||[];
-  STORE.staff=data.staff||[];
-  STORE.wallets.staff={};
-  STORE.staff.forEach(function(member){STORE.wallets.staff[member.id]=Number(member.earnings||0);});
   return data;
 }
 
@@ -7502,15 +7548,14 @@ function admMonthlyBookingSeries(){
   for(var offset=11;offset>=0;offset--){
     var date=new Date(now.getFullYear(),now.getMonth()-offset,1);
     labels.push(date.toLocaleDateString('en-IN',{month:'short'}));
-    keys.push(date.getFullYear()+'-'+date.getMonth());
+    keys.push(date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0'));
     revenue.push(0);bookings.push(0);
   }
-  (STORE.bookings||[]).forEach(function(booking){
-    var date=new Date(booking.bookedAt||0);
-    var index=keys.indexOf(date.getFullYear()+'-'+date.getMonth());
+  (admStats().monthly||[]).forEach(function(row){
+    var index=keys.indexOf(row.month);
     if(index<0)return;
-    revenue[index]+=Number(booking.total||0);
-    bookings[index]+=Number(booking.qty||1);
+    revenue[index]+=Number(row.revenue||0);
+    bookings[index]+=Number(row.tickets||0);
   });
   return {labels:labels,revenue:revenue,bookings:bookings};
 }
@@ -7624,11 +7669,8 @@ function admDrawDonut(){
   var size = 100; canvas.width=size; canvas.height=size;
   var cx=size/2, cy=size/2, r=44;
   var palette=['#8B2010','#00D4D4','#eab308','#22c55e','#a855f7','#60a5fa','#f97316'];
-  var grouped=(STORE.events||[]).reduce(function(acc,event){
-    var category=event.category||'Other';
-    acc[category]=(acc[category]||0)+1;
-    return acc;
-  },{});
+  var grouped={};
+  (admStats().categories||[]).forEach(function(row){ grouped[row.label]=Number(row.count||0); });
   var cats=Object.keys(grouped).map(function(label,index){
     return {label:label,val:grouped[label],color:palette[index%palette.length]};
   });
@@ -7661,7 +7703,7 @@ function admDrawDonut(){
 function admDrawTopEvents(){
   var el = document.getElementById('topEventsChart');
   if(!el) return;
-  var evs = STORE.events.slice().sort(function(a,b){return (b.revenue||0)-(a.revenue||0);}).slice(0,5);
+  var evs = (admStats().topEvents||[]).slice(0,5);
   var max = (evs[0]||{revenue:1}).revenue || 1;
   el.innerHTML = evs.map(function(ev){
     var pct = Math.round((ev.revenue||0)/max*100);
@@ -7677,12 +7719,11 @@ function admDrawTopEvents(){
 function admDrawFunnel(){
   var el = document.getElementById('funnelChart');
   if(!el) return;
-  var payments=STORE.payments||[];
-  var success=payments.filter(function(payment){return payment.status==='Success';}).length;
+  var st=admStats();
   var steps = [
-    {label:'Stored Bookings', val:(STORE.bookings||[]).length},
-    {label:'Payment Records', val:payments.length},
-    {label:'Successful Payments', val:success},
+    {label:'Stored Bookings', val:st.bookingCount||0},
+    {label:'Payment Records', val:st.paymentRecords||0},
+    {label:'Successful Payments', val:st.successfulPayments||0},
   ];
   var max = Math.max.apply(null,steps.map(function(step){return step.val;}))||1;
   el.innerHTML = steps.map(function(s,i){
@@ -7700,14 +7741,7 @@ function admDrawFunnel(){
 function admDrawCities(){
   var el = document.getElementById('citiesChart');
   if(!el) return;
-  var grouped=(STORE.bookings||[]).reduce(function(acc,booking){
-    var event=(STORE.events||[]).find(function(item){return item.id===booking.eventId;});
-    var city=(event&&event.city)||'Unknown';
-    acc[city]=(acc[city]||0)+Number(booking.qty||1);
-    return acc;
-  },{});
-  var cities=Object.keys(grouped).map(function(city){return {city:city,bookings:grouped[city]};})
-    .sort(function(a,b){return b.bookings-a.bookings;}).slice(0,5);
+  var cities=(admStats().cities||[]).map(function(row){return {city:row.city,bookings:Number(row.tickets||0)};}).slice(0,5);
   var max=(cities[0]&&cities[0].bookings)||1;
   cities.forEach(function(city){city.pct=Math.round(city.bookings/max*100);});
   el.innerHTML = cities.map(function(c){
@@ -7723,13 +7757,7 @@ function admDrawCities(){
 function admDrawCreatorLeaderboard(){
   var el = document.getElementById('creatorLeaderboard');
   if(!el) return;
-  var creators = STORE.events.reduce(function(acc,ev){
-    var key = ev.creatorName||'Unknown';
-    if(!acc[key]) acc[key]={name:key,rev:0,events:0};
-    acc[key].rev += ev.revenue||0; acc[key].events++;
-    return acc;
-  },{});
-  var sorted = Object.values(creators).sort(function(a,b){return b.rev-a.rev;}).slice(0,5);
+  var sorted = (admStats().creatorLeaderboard||[]).map(function(row){return {name:row.name,rev:Number(row.revenue||0),events:Number(row.events||0)};}).slice(0,5);
   el.innerHTML = sorted.map(function(c,i){
     var medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
     return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--adm-border);">'
@@ -7761,7 +7789,7 @@ function admRenderBuyers(){
   var lbl   = document.getElementById('buyerCountLbl');
   if(!tbody) return;
   var list = admBuyersList;
-  if(lbl) lbl.textContent = list.length + ' registered buyers';
+  if(lbl) lbl.textContent = admShowing('buyers','',admStats().buyers||list.length,'registered buyers');
   tbody.innerHTML = list.map(function(b, i){
     var bc = b.status==='Active'?'green':'red';
     var created=admFormatAccountCreated(b.createdAt||b.created_at);
@@ -7776,39 +7804,40 @@ function admRenderBuyers(){
         : '<button onclick="admReinstateUser(\''+jsStr(b.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>')
       +'<button onclick="admNotifyUser(\''+jsStr(b.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
       +'</div></td></tr>';
-  }).join('');
+  }).join('')+admLoadMoreRow('buyers','',7);
 }
 
 function admRenderAllUsers(){
   var tbody=document.getElementById('allUsersBody');
   var lbl=document.getElementById('allUsersCountLbl');
   if(!tbody) return;
-  var buyers=(admBuyersList||[]).map(function(user){
-    return {id:user.id,name:user.name,email:user.email,createdAt:user.createdAt||user.created_at,status:user.status,type:'Buyer',source:'buyer'};
+  // M4: one server list of buyers and creators together, newest first.
+  var loaded=ADM_LISTS.users;
+  if(!loaded){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--adm-text2);padding:24px;">Loading…</td></tr>';
+    admEnsureList('users','').then(admRenderAllUsers).catch(function(err){admShowToast(err.message||'Could not load users');});
+    return;
+  }
+  var users=loaded.items.map(function(user){
+    if(user.source==='buyer') return {id:user.id,name:user.name,email:user.email,createdAt:user.createdAt,status:user.status||'Active',type:'Buyer',source:'buyer'};
+    return {id:user.id,name:user.name,email:user.email,createdAt:user.createdAt,status:creatorStatusLabel(user.status),type:'Creator',source:'creator'};
   });
-  var creators=(admCreatorsList||[]).map(function(user){
-    return {id:user.id,name:user.name,email:user.email,createdAt:user.createdAt||user.joinedAt||user.ts||user.created_at,status:creatorStatusLabel(user.status),type:'Creator',source:'creator'};
-  });
-  var users=buyers.concat(creators).sort(function(a,b){
-    return new Date(b.createdAt||0).getTime()-new Date(a.createdAt||0).getTime();
-  });
-  if(lbl) lbl.textContent=users.length+' registered users';
+  if(lbl) lbl.textContent=admShowing('users','',(admStats().buyers||0)+(admStats().creators||0),'registered users');
   tbody.innerHTML=users.map(function(user,index){
     var suspended=String(user.status).toLowerCase()==='suspended';
     var encodedId=encodeURIComponent(String(user.id)).replace(/'/g,'%27');
     var encodedName=encodeURIComponent(String(user.name||'User')).replace(/'/g,'%27');
-    var action=user.source==='buyer'
-      ? (suspended
-        ? '<button onclick="admReinstateUser(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
-        : '<button onclick="admSuspendBuyer(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
-      : (suspended?'':'<button onclick="admSuspendCreator(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>');
     return '<tr><td style="color:var(--adm-text2);">'+(index+1)+'</td>'
       +'<td><div style="font-weight:600;color:var(--adm-text);">'+escapeHtml(user.name||'User')+'</div><div style="font-size:10px;color:var(--adm-text2);">'+escapeHtml(user.email||'')+'</div></td>'
       +'<td><span class="adm-badge blue">'+escapeHtml(user.type)+'</span></td>'
       +'<td><div style="font-size:11px;color:var(--adm-text2);white-space:nowrap;">'+escapeHtml(admFormatAccountCreated(user.createdAt))+'</div></td>'
       +'<td><span class="adm-badge '+(suspended?'red':'green')+'">'+escapeHtml(user.status||'Active')+'</span></td>'
-      +'<td><div style="display:flex;gap:4px;">'+escapeHtml(action)+'<button onclick="admNotifyUser(decodeURIComponent(\''+jsStr(encodedName)+'\'))" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button></div></td></tr>';
-  }).join('');
+      +'<td><div style="display:flex;gap:4px;">'+(user.source==='buyer'
+      ? (suspended
+        ? '<button onclick="admReinstateUser(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
+        : '<button onclick="admSuspendBuyer(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
+      : (suspended?'':'<button onclick="admSuspendCreator(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>'))+'<button onclick="admNotifyUser(decodeURIComponent(\''+jsStr(encodedName)+'\'))" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button></div></td></tr>';
+  }).join('')+admLoadMoreRow('users','',6);
 }
 
 var admCreatorsList = [];
@@ -7818,7 +7847,7 @@ function admRenderCreators(){
   var lbl = document.getElementById('creatorCountLbl');
   if(!tbody) return;
   syncCreatorApplicationsFromCreators();
-  if(lbl) lbl.textContent = (admCreatorsList||[]).length + ' registered creators';
+  if(lbl) lbl.textContent = admShowing('creators','',admStats().creators||(admCreatorsList||[]).length,'registered creators');
   tbody.innerHTML = admCreatorsList.map(function(c,i){
     var verified = c.status==='Verified'||c.status==='Approved';
     var pending = c.status==='Pending';
@@ -7843,7 +7872,7 @@ function admRenderCreators(){
         : '<button onclick="admSuspendCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
       +'<button onclick="admNotifyUser(\''+jsStr(c.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
       +'</div></td></tr>';
-  }).join('');
+  }).join('')+admLoadMoreRow('creators','',8);
 }
 
 async function admSetBuyerStatus(id,status){
@@ -8603,15 +8632,14 @@ function admShowRolePerms(role){
 function admRefreshPayFilter(){
   var status=(document.getElementById('payFilterStatus')||{}).value||'all';
   var stats=STORE.getPlatformStats();
+  var all=admStats();
   var cfg=STORE.platformConfig;
   function se(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
-  se('payStatGMV','\u20b9'+stats.gmv.toLocaleString('en-IN'));
-  se('payStatRev','\u20b9'+stats.revenue.toLocaleString('en-IN'));
+  se('payStatGMV','₹'+stats.gmv.toLocaleString('en-IN'));
+  se('payStatRev','₹'+stats.revenue.toLocaleString('en-IN'));
   se('payoutFeeRate',cfg.baseFee);
-  var avgO=stats.bookings>0?Math.round(stats.gmv/stats.bookings):0;
-  se('payStatAOV','\u20b9'+avgO.toLocaleString('en-IN'));
-  var pend=admCreatorsList.reduce(function(s,c){ return s+(c.status==='Pending'?Math.round(c.revenue):0); },0);
-  se('payStatPending','\u20b9'+pend.toLocaleString('en-IN'));
+  se('payStatAOV','₹'+Number(all.averageOrderValue||0).toLocaleString('en-IN'));
+  se('payStatPending','₹'+Math.round(all.pendingPayouts||0).toLocaleString('en-IN'));
   admDrawPayRevenueChart();
   admRenderLedgerFiltered('all',status);
 }
@@ -8625,12 +8653,11 @@ function admDrawPayRevenueChart(){
   var dayKeys=[];
   for(var offset=13;offset>=0;offset--){
     var date=new Date();date.setHours(0,0,0,0);date.setDate(date.getDate()-offset);
-    dayKeys.push(date.toISOString().slice(0,10));data.push(0);
+    dayKeys.push(date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0'));data.push(0);
   }
-  (STORE.bookings||[]).forEach(function(booking){
-    if(booking._paymentOnly&&(!booking.payment||booking.payment.status!=='Success'))return;
-    var index=dayKeys.indexOf(new Date(booking.bookedAt||0).toISOString().slice(0,10));
-    if(index>=0)data[index]+=Number(booking.total||0);
+  (admStats().daily||[]).forEach(function(row){
+    var index=dayKeys.indexOf(row.day);
+    if(index>=0)data[index]+=Number(row.revenue||0);
   });
   var max=Math.max.apply(null,data.concat([1]))*1.1;
   var pad={l:4,r:4,t:4,b:16}; var cW=W-pad.l-pad.r; var cH=H-pad.t-pad.b;
@@ -8648,7 +8675,15 @@ function admRenderLedgerFiltered(period, status){
   var tbody=document.getElementById('ledgerBody'); if(!tbody) return;
   var cfg=STORE.platformConfig;
   var fee=cfg.baseFee; var gstRate=cfg.gst;
-  var liveB=(STORE.bookings||[]).map(function(b){
+  // M4: the ledger is paged and filtered by the server.
+  var filter=status&&status!=='all'?status:'';
+  if(filter&&!ADM_LISTS[admListKey('ledger',filter)]){
+    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--adm-text2);padding:24px;">Loading…</td></tr>';
+    admEnsureList('ledger',filter).then(function(){ admRenderLedgerFiltered(period,status); }).catch(function(err){admShowToast(err.message||'Could not load payments');});
+    return;
+  }
+  var source=filter?ADM_LISTS[admListKey('ledger',filter)].items:(STORE.bookings||[]);
+  var liveB=source.map(function(b){
     return {
       id:b.id,
       buyer:b.buyer||((STORE.currentUser&&STORE.currentUser.name)||'Buyer'),
@@ -8658,14 +8693,14 @@ function admRenderLedgerFiltered(period, status){
       fee:typeof b.fee==='number'?b.fee:null,
       gst:typeof b.gst==='number'?b.gst:null,
       total:typeof b.total==='number'?b.total:null,
-      status:(b.payment&&b.payment.status)||'Success',
+      status:b.paymentStatus||(b.payment&&b.payment.status)||'Success',
       gateway:(b.payment&&b.payment.gateway)||'PayU',
       txnid:(b.payment&&b.payment.txnid)||'',
       date:new Date(b.bookedAt||Date.now()).toLocaleDateString('en-IN',{day:'numeric',month:'short'})
     };
   });
   var allB=liveB;
-  var filtered=status==='all'?allB:allB.filter(function(b){ return b.status===status; });
+  var filtered=allB;
   var SM="'Space Mono', monospace";
   tbody.innerHTML=filtered.map(function(b){
     var fA=b.fee==null?Math.round(b.subtotal*(fee/100)):b.fee;
@@ -8684,7 +8719,7 @@ function admRenderLedgerFiltered(period, status){
       +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(b.status)+'</span></td>'
       +'<td style="font-size:11px;color:var(--adm-text2);">'+escapeHtml(b.date)+'</td>'
       +'</tr>';
-  }).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--adm-text2);padding:24px;">No payment transactions yet</td></tr>';
+  }).join('')+admLoadMoreRow('ledger',filter,10)||'<tr><td colspan="10" style="text-align:center;color:var(--adm-text2);padding:24px;">No payment transactions yet</td></tr>';
 }
 
 function admProcessAllRefunds(){
@@ -8891,7 +8926,7 @@ function admRefreshDashboard(){
   s('kpiCreators', stats.creators);
   s('admBadgeUsers',  stats.buyers);
   s('admBadgeEvents', stats.liveEvents);
-  s('admBadgeStaff',  (STORE.staff||[]).length);
+  s('admBadgeStaff',  admStats().staff||0);
 
   // Pending disputes
   var pending = (STORE.disputes||[]).filter(function(d){ return d.status==='Pending'; });
@@ -9726,6 +9761,14 @@ function admRenderEvents(tab){
   var titles = {all:'All Events',pending:'Pending Approval',featured:'Featured Events',reported:'Reported',blocked:'Blocked'};
   var tt = document.getElementById('eventTabTitle'); if(tt) tt.textContent = titles[tab]||tab;
 
+  // M4: Pending / Blocked come from the server (all of them, paged), not
+  // just the events already loaded.
+  var filtered=(tab==='pending'||tab==='blocked')?tab:'';
+  if(filtered&&!ADM_LISTS[admListKey('events',filtered)]){
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--adm-text2);padding:24px;">Loading…</td></tr>';
+    admEnsureList('events',filtered).then(function(){ admRenderEvents(tab); }).catch(function(err){admShowToast(err.message||'Could not load events');});
+    return;
+  }
   var evs = (STORE.events||[]);
   if(tab==='pending')  evs = evs.filter(function(e){return e.status==='pending';});
   if(tab==='blocked')  evs = evs.filter(function(e){return e.status==='blocked';});
@@ -9767,7 +9810,7 @@ function admRenderEvents(tab){
         ?'<button onclick="admEmergencyBlock(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.25);font-size:9px;">🚨 Block</button>'
         :'<span style="font-size:9px;color:#ef4444;">BLOCKED</span>')
       +'</div></td></tr>';
-  }).join('');
+  }).join('')+admLoadMoreRow('events',filtered,9);
 }
 
 // ── PAYOUTS TABLE — add Freeze + Approve buttons ──
@@ -10360,22 +10403,19 @@ function admLockWallet(staffId){
 function admRefreshStaff(){
   var tbody = document.getElementById('admStaffBody'); if(!tbody) return;
 
-  var totalRev = 0;
-  var totalSold = 0;
-  (STORE.staff||[]).forEach(function(s){
-    var e = STORE.getStaffEarnings(s.id) + (s.cashRevenue||0);
-    totalRev += e;
-    var ss = STORE.getStaffStats(s.id);
-    totalSold += ss.sold;
-  });
+  // M4: totals over ALL staff come from the server; rows use the server's
+  // per-staff numbers.
+  var all=admStats();
+  var totalRev = Number(all.staffEarnings||0);
+  var totalSold = Number(all.staffSold||0);
 
-  var t=document.getElementById('admStaffTotal'); if(t) t.textContent=(STORE.staff||[]).length;
+  var t=document.getElementById('admStaffTotal'); if(t) t.textContent=all.staff||(STORE.staff||[]).length;
   var sold=document.getElementById('admStaffSold'); if(sold) sold.textContent=formatTicketCount(totalSold);
   var rev=document.getElementById('admStaffRev'); if(rev) rev.textContent='₹'+totalRev.toLocaleString('en-IN');
 
   tbody.innerHTML = (STORE.staff||[]).map(function(s){
-    var ss = STORE.getStaffStats(s.id);
-    var earnings = STORE.getStaffEarnings(s.id) + (s.cashRevenue||0);
+    var ss = {assigned:s.assignedTickets||0, sold:s.soldTickets||0};
+    var earnings = Number(s.earnings||0);
     var frozen = s._inventoryFrozen;
     var locked = s._walletLocked;
     return '<tr>'
@@ -10390,7 +10430,7 @@ function admRefreshStaff(){
       +(frozen?'':'<button onclick="admFreezeInventory(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:9px;">Freeze Inv</button>')
       +(locked?'':'<button onclick="admLockWallet(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(234,179,8,.1);color:#eab308;border:1px solid rgba(234,179,8,.3);font-size:9px;">Lock Wallet</button>')
       +'</div></td></tr>';
-  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff yet</td></tr>';
+  }).join('') + admLoadMoreRow('staff','',7) || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff yet</td></tr>';
 }
 
 // ── CREATOR PERFORMANCE VIEW ──

@@ -22,6 +22,7 @@ const { listAdminActions } = require("../services/adminAudit");
 const { normalizeUserStatus, USER_ACTIVE_STATUS } = require("../utils/accounts");
 const { sendError } = require("../utils/httpError");
 const { organizerEarnings } = require("../services/orders");
+const { adminStats, adminList } = require("../services/adminData");
 
 const router = express.Router();
 
@@ -289,67 +290,36 @@ router.get("/admin/audit-log", requireAdmin, requireSuperAdmin, async (req, res)
   }
 });
 
+// M4: the panel's totals and charts come from adminStats (SQL over all rows);
+// each list is its first page here, and GET /admin/list/:kind loads more.
+const adminListView = (req, kind, items) => {
+  if (kind !== "creators") return items;
+  // KYC documents are for super admins only (H14).
+  return items
+    .map((creator) => (req.admin.adminType === "super" ? creator : { ...creator, documents: [] }))
+    .map(adminCreatorView);
+};
+
 router.get("/admin/snapshot", requireAdmin, async (req, res) => {
   try {
-    const [buyers, creators, events, bookings, payments, staff, admins, refundsNeeded] =
-      await Promise.all([
-        pool.query(`
-        SELECT u.id, u.username, u.first_name, u.last_name, u.email, u.city, u.status, u.created_at,
-          COUNT(b.id)::INTEGER AS bookings
-        FROM users u
-        LEFT JOIN bookings b ON b.user_id=u.id OR (b.user_id IS NULL AND LOWER(b.buyer_email)=LOWER(u.email))
-        GROUP BY u.id
-        ORDER BY u.created_at DESC
-      `),
-        pool.query(`
-        SELECT c.id, c.name, c.email, c.phone, c.category, c.kyc_status, c.created_at,
-          (
-            SELECT COUNT(*)::INTEGER
-            FROM creator_events e
-            WHERE e.creator_id=c.id
-          ) AS events,
-          (
-            SELECT COALESCE(SUM(b.total),0)::NUMERIC
-            FROM creator_events e
-            LEFT JOIN bookings b ON b.event_id=e.id
-            WHERE e.creator_id=c.id
-          ) AS revenue,
-          (
-            SELECT COALESCE(json_agg(d ORDER BY d.created_at DESC), '[]')
-            FROM creator_kyc_documents d
-            WHERE d.creator_id=c.id
-          ) AS documents
-        FROM creator_accounts c
-        ORDER BY c.created_at DESC
-      `),
-        pool.query(`
-        SELECT e.*,
-          COALESCE(SUM(b.qty),0)::INTEGER AS booking_count,
-          COALESCE(SUM(b.total),0)::NUMERIC AS revenue
-        FROM creator_events e
-        LEFT JOIN bookings b ON b.event_id=e.id
-        GROUP BY e.id
-        ORDER BY e.created_at DESC
-      `),
-        pool.query("SELECT * FROM bookings ORDER BY booked_at DESC"),
-        pool.query(
-          "SELECT * FROM payment_transactions ORDER BY updated_at DESC",
-        ),
-        pool.query("SELECT * FROM staff_accounts ORDER BY created_at DESC"),
-        pool.query("SELECT * FROM admin_accounts ORDER BY created_at DESC"),
-        // Payments PayU confirmed after the seat hold expired and the event
-        // had sold out: money was taken but no ticket issued (C4).
-        pool.query(
-          `SELECT o.id, o.txnid, o.gateway_payment_id, o.amount, o.qty, o.tier_name, o.paid_at,
-             o.event_id, e.name AS event_name, u.email AS buyer_email
-           FROM orders o
-           JOIN users u ON u.id = o.user_id
-           LEFT JOIN creator_events e ON e.id = o.event_id
-           WHERE o.status = 'paid_needs_refund'
-           ORDER BY o.paid_at DESC`,
-        ),
-      ]);
-    res.json({
+    const [stats, admins, refundsNeeded, ...lists] = await Promise.all([
+      adminStats(pool),
+      pool.query("SELECT * FROM admin_accounts ORDER BY created_at DESC"),
+      // Payments PayU confirmed after the seat hold expired and the event
+      // had sold out: money was taken but no ticket issued (C4).
+      pool.query(
+        `SELECT o.id, o.txnid, o.gateway_payment_id, o.amount, o.qty, o.tier_name, o.paid_at,
+           o.event_id, e.name AS event_name, u.email AS buyer_email
+         FROM orders o
+         JOIN users u ON u.id = o.user_id
+         LEFT JOIN creator_events e ON e.id = o.event_id
+         WHERE o.status = 'paid_needs_refund'
+         ORDER BY o.paid_at DESC`,
+      ),
+      ...SNAPSHOT_LISTS.map((kind) => adminList(pool, kind)),
+    ]);
+    const body = {
+      stats,
       refundsNeeded: refundsNeeded.rows.map((order) => ({
         orderId: order.id,
         txnid: order.txnid,
@@ -363,71 +333,29 @@ router.get("/admin/snapshot", requireAdmin, async (req, res) => {
         paidAt: order.paid_at,
       })),
       admins: admins.rows.map(publicAdmin),
-      buyers: buyers.rows.map((buyer) => ({
-        id: `USR-${buyer.id}`,
-        name:
-          buyer.username ||
-          [buyer.first_name, buyer.last_name].filter(Boolean).join(" ") ||
-          buyer.email,
-        email: buyer.email,
-        city: buyer.city || "",
-        bookings: Number(buyer.bookings || 0),
-        status: normalizeUserStatus(buyer.status),
-        createdAt: buyer.created_at,
-      })),
-      // KYC documents are for super admins only (H14).
-      creators: creators.rows
-        .map((creator) => (req.admin.adminType === "super" ? creator : { ...creator, documents: [] }))
-        .map(adminCreatorView),
-      events: events.rows.map(publicCreatorEvent),
-      bookings: bookings.rows.map((booking) => ({
-        id: booking.id,
-        userId: booking.user_id,
-        buyerEmail: booking.buyer_email,
-        buyer: booking.buyer_email || "Buyer",
-        eventId: booking.event_id,
-        eventName: booking.event_name,
-        eventDate: booking.event_date,
-        eventVenue: booking.event_venue,
-        eventBanner: booking.event_banner,
-        ticketType: booking.ticket_type,
-        price: Number(booking.price || 0),
-        qty: Number(booking.qty || 0),
-        total: Number(booking.total || 0),
-        status: booking.status,
-        bookedAt: booking.booked_at,
-      })),
-      payments: payments.rows.map((payment) => ({
-        txnid: payment.txnid,
-        bookingId: payment.booking_id,
-        eventId: payment.event_id,
-        ticketType: payment.ticket_type,
-        qty: Number(payment.qty || 0),
-        buyerEmail: payment.buyer_email,
-        amount: Number(payment.amount || 0),
-        gatewayPaymentId: payment.gateway_payment_id,
-        status: payment.status,
-        verified: payment.verified,
-        error: payment.error,
-        updatedAt: payment.updated_at,
-      })),
-      staff: staff.rows.map((member) => ({
-        id: member.id,
-        creatorId: member.creator_id,
-        name: member.name,
-        staffId: member.staff_id,
-        email: member.email,
-        phone: member.phone,
-        status: member.status,
-        assignedTickets: Number(member.assigned_tickets || 0),
-        soldTickets: Number(member.sold_tickets || 0),
-        earnings: Number(member.earnings || 0),
-        createdAt: member.created_at,
-      })),
+      paging: {},
+    };
+    SNAPSHOT_LISTS.forEach((kind, index) => {
+      body[kind] = adminListView(req, kind, lists[index].items);
+      body.paging[kind] = lists[index].paging;
     });
+    res.json(body);
   } catch (err) {
     console.error("Admin snapshot failed:", err);
     res.status(500).json({ error: "Could not load admin data" });
+  }
+});
+
+// Next page of one admin list: ?offset=&limit= (max 100), and ?status= for
+// events (the Pending / Blocked tabs) and the payments ledger.
+router.get("/admin/list/:kind", requireAdmin, async (req, res) => {
+  try {
+    const result = await adminList(pool, req.params.kind, req.query);
+    if (!result) return res.status(404).json({ error: "Unknown list" });
+    res.json({ items: adminListView(req, req.params.kind, result.items), paging: result.paging });
+  } catch (err) {
+    console.error("Admin list failed:", err);
+    res.status(500).json({ error: "Could not load list" });
   }
 });
 
@@ -459,6 +387,8 @@ router.patch("/admin/events/:eventId/status", requireAdmin, confirmed, audit("ev
     res.status(500).json({ error: "Could not update event status" });
   }
 });
+
+const SNAPSHOT_LISTS = ["buyers", "creators", "events", "ledger", "staff"];
 
 // Q16: organizers are not charged a fee (buyers pay it on top), so the
 // organizer fee shown in the admin panel is always 0.
