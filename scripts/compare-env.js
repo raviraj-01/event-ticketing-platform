@@ -40,7 +40,9 @@ function compareEnv(newFile, oldFile) {
     const oldKey = oldHashes.get(hash(pair.value));
     if (!oldKey) continue;
     const label = `${pair.commented ? "# " : ""}${pair.key}${oldKey !== pair.key ? ` (same as old ${oldKey})` : ""}`;
-    (SECRET_KEY.test(pair.key) || SECRET_KEY.test(oldKey) ? reusedSecrets : reusedPlain).push(label);
+    // A number ("10") or a short word ("test") is a setting, not a credential.
+    const trivial = /^\d+$/.test(pair.value) || pair.value.length < 6;
+    (!trivial && (SECRET_KEY.test(pair.key) || SECRET_KEY.test(oldKey)) ? reusedSecrets : reusedPlain).push(label);
   }
   // An old secret hidden inside a longer new value (e.g. the old DB password in a new URL).
   const embedded = old

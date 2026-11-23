@@ -41,3 +41,9 @@ test("equal non-secret settings are listed separately and do not fail the check"
   assert.deepEqual(result.reusedSecrets, []);
   assert.deepEqual(result.reusedPlain, ["PORT", "SMTP_SERVICE"]);
 });
+
+test("numbers and short words are settings, not reused secrets", () => {
+  const result = compareEnv(...files("PASSWORD_RESET_TTL_MINUTES=10\nPAYU_ENV=test\n", "PASSWORD_RESET_TTL_MINUTES=10\nR2_BUCKET=test\n"));
+  assert.deepEqual(result.reusedSecrets, []);
+  assert.equal(result.reusedPlain.length, 2);
+});
