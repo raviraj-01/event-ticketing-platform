@@ -397,6 +397,7 @@ Build status (feature freeze 2026-11-22): **D23 step 1 built** (2026-11-22: `pho
 | 2026-11-23 | L8: browser console keeps warnings and errors (only log/debug/info are hidden outside debug mode). | Errors were invisible when debugging user reports. |
 | 2026-11-23 | M5 (completed): request IDs in a response header, in 5xx bodies and in server error logs. | Users' error reports could not be matched to the log. |
 | 2026-11-23 | M15 (completed): helmet + Content-Security-Policy (host allowlist, form-action PayU only, no framing), HSTS, nosniff; defaults that would break Google sign-in or the Android app deliberately overridden. | No browser-side defences. |
+| 2026-11-23 | Test `test/imports.test.js`: every destructured local `require` must name something the module exports (ESLint cannot see this). | A wrong import during M15 only failed at runtime. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).
