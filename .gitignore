@@ -12,3 +12,5 @@ vybera-cordova/plugins/
 .env.*
 !.env.example
 vybera-cordova/www/
+# Demo logins written by npm run seed-demo
+demo-credentials.local.txt

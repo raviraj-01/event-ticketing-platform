@@ -20,9 +20,7 @@ signed callbacks the automated tests generate.
 
 ## 2. Data
 
-- An approved organizer with one **live** event that has a **paid** tier (e.g. ₹100) and a capacity of 2.
-- A buyer account.
-(Organizer approval needs KYC documents in R2; if R2 is not set up yet, Claude can seed the organizer and event directly in the dev database.)
+`npm run seed-demo` creates everything needed: the paid event `Demo Live Night (paid)` with the tier **General** (₹100, 2 seats online) and the buyer `buyer@demo.local` with a verified phone. Passwords: `demo-credentials.local.txt`.
 
 ## 3. Happy path
 

@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "report-duplicate-phones": "node scripts/report-duplicate-phones.js",
     "db:fixups": "node scripts/db-fixups.js",
-    "report-duplicates": "node scripts/report-duplicate-phones.js"
+    "report-duplicates": "node scripts/report-duplicate-phones.js",
+    "seed-demo": "node scripts/seed-demo.js"
   },
   "keywords": [],
   "author": "",
