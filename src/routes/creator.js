@@ -681,28 +681,83 @@ router.post(
   },
 );
 
-router.post("/creator/finance/unlock", requireCreator, async (req, res) => {
-  try {
-    const pin = String((req.body && req.body.pin) || "").trim();
-    if (!/^\d{4}$/.test(pin))
-      return res.status(400).json({ error: "Enter a valid 4-digit PIN" });
-    const creator = await pool.query(
-      "SELECT finance_pin FROM creator_accounts WHERE id=$1",
-      [req.creator.sub],
-    );
-    if (!creator.rows.length)
-      return res.status(401).json({ error: "Creator account not found" });
-    const hash = creator.rows[0].finance_pin;
-    let initialized = false;
-    if (!hash) {
+// ── Finance PIN (M16) ──
+// Setting or changing the PIN needs the account password; unlock never sets
+// it. Five wrong PINs in a row lock unlock for 15 minutes. Each attempt holds
+// the creator row lock (SELECT … FOR UPDATE), so parallel guesses are counted
+// one by one and cannot slip past the limit.
+const FINANCE_PIN = { maxFailures: 5, lockMinutes: 15 };
+const validPin = (pin) => /^\d{4}$/.test(pin);
+
+router.post(
+  "/creator/finance/pin",
+  requireCreator,
+  rateLimit({ name: "finance-pin-set", windowSeconds: 900, max: 5, key: (req) => String(req.creator.sub) }),
+  async (req, res) => {
+    try {
+      const pin = String((req.body && req.body.pin) || "").trim();
+      const password = String((req.body && req.body.password) || "");
+      if (!validPin(pin)) return res.status(400).json({ error: "Enter a valid 4-digit PIN" });
+      const creator = await pool.query("SELECT password FROM creator_accounts WHERE id=$1", [req.creator.sub]);
+      const stored = creator.rows[0] && creator.rows[0].password;
+      if (!stored || !String(stored).startsWith("$2") || !(await bcrypt.compare(password, stored))) {
+        return res.status(401).json({ error: "Your account password is not correct" });
+      }
       await pool.query(
-        "UPDATE creator_accounts SET finance_pin=$1 WHERE id=$2",
+        "UPDATE creator_accounts SET finance_pin=$1, finance_pin_failures=0, finance_pin_locked_until=NULL WHERE id=$2",
         [await bcrypt.hash(pin, 10), req.creator.sub],
       );
-      initialized = true;
-    } else if (!(await bcrypt.compare(pin, hash))) {
-      return res.status(401).json({ error: "Incorrect finance PIN" });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Finance PIN set failed:", err);
+      res.status(500).json({ error: "Could not save the finance PIN" });
     }
+  },
+);
+
+router.post("/creator/finance/unlock", requireCreator, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const pin = String((req.body && req.body.pin) || "").trim();
+    if (!validPin(pin)) return res.status(400).json({ error: "Enter a valid 4-digit PIN" });
+    await client.query("BEGIN");
+    const found = await client.query(
+      "SELECT finance_pin, finance_pin_failures, finance_pin_locked_until FROM creator_accounts WHERE id=$1 FOR UPDATE",
+      [req.creator.sub],
+    );
+    const creator = found.rows[0];
+    if (!creator) {
+      await client.query("ROLLBACK");
+      return res.status(401).json({ error: "Creator account not found" });
+    }
+    if (!creator.finance_pin) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Set a finance PIN first", code: "pin_not_set" });
+    }
+    if (creator.finance_pin_locked_until && new Date(creator.finance_pin_locked_until) > new Date()) {
+      await client.query("ROLLBACK");
+      return res.status(429).json({ error: "Too many wrong PINs. Try again later.", code: "pin_locked" });
+    }
+    if (!(await bcrypt.compare(pin, creator.finance_pin))) {
+      const failures = Number(creator.finance_pin_failures || 0) + 1;
+      const locked = failures >= FINANCE_PIN.maxFailures;
+      await client.query(
+        `UPDATE creator_accounts
+         SET finance_pin_failures=$2,
+             finance_pin_locked_until=CASE WHEN $3 THEN NOW() + make_interval(mins => $4) ELSE NULL END
+         WHERE id=$1`,
+        [req.creator.sub, locked ? 0 : failures, locked, FINANCE_PIN.lockMinutes],
+      );
+      await client.query("COMMIT");
+      return res.status(locked ? 429 : 401).json(locked
+        ? { error: "Too many wrong PINs. Try again later.", code: "pin_locked" }
+        : { error: "Incorrect finance PIN" });
+    }
+    await client.query(
+      "UPDATE creator_accounts SET finance_pin_failures=0, finance_pin_locked_until=NULL WHERE id=$1",
+      [req.creator.sub],
+    );
+    await client.query("COMMIT");
     const result = await pool.query(
       `SELECT
          COALESCE(SUM(CASE WHEN b.status <> 'refunded' THEN b.total ELSE 0 END),0)::NUMERIC AS gross,
@@ -715,14 +770,16 @@ router.post("/creator/finance/unlock", requireCreator, async (req, res) => {
     // M8 / Q16: same function as analytics (net = gross; buyers pay the fee).
     const { gross, net } = organizerEarnings(result.rows[0].gross);
     res.json({
-      initialized,
       gross,
       net,
       tickets: Number(result.rows[0].tickets || 0),
     });
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
     console.error("Creator finance unlock failed:", err);
     res.status(500).json({ error: "Could not unlock finance" });
+  } finally {
+    client.release();
   }
 });
 

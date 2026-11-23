@@ -2581,7 +2581,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
     <div style="font-size:16px;font-weight:700;color:#fff;">Unlock Finance</div>
     <span onclick="closeFinancePinModal()" style="color:rgba(255,255,255,.5);cursor:pointer;font-size:22px;">&#215;</span>
   </div>
-  <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:14px;">Enter your 4-digit finance PIN. On first use, this PIN will be saved securely for your creator account.</div>
+  <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:14px;">Enter your 4-digit finance PIN. If you have not set one yet, you will be asked to create it (with your account password).</div>
   <input id="financePinInput" type="password" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="4-digit PIN" onkeydown="if(event.key==='Enter')submitFinancePin()" style="width:100%;padding:14px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'Space Mono',monospace;font-size:20px;letter-spacing:8px;text-align:center;box-sizing:border-box;outline:none;margin-bottom:16px;"/>
   <button id="financePinSubmit" onclick="submitFinancePin()" style="width:100%;padding:14px;background:#8B2010;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Unlock Finance</button>
 </div>
@@ -3496,6 +3496,37 @@ function unlockFinance(){
 function closeFinancePinModal(){
   var modal=document.getElementById('financePinModal');if(modal)modal.style.display='none';
 }
+// M16: first-time (or new) finance PIN: PIN twice + account password.
+function askSetFinancePin(){
+  return new Promise(function(resolve){
+    var settled=false;
+    var modal=showPasswordModal('financePinSetModal','Create your finance PIN',
+      'Choose a 4-digit PIN for the finance page. Confirm it with your account password.',
+      '<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">New PIN</label>'
+        +'<input id="financePinNew" type="password" inputmode="numeric" maxlength="4" autocomplete="off" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>'
+        +'<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Repeat PIN</label>'
+        +'<input id="financePinRepeat" type="password" inputmode="numeric" maxlength="4" autocomplete="off" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>'
+        +'<label style="'+escapeHtml(RESET_LABEL_STYLE)+'">Account password</label>'
+        +'<input id="financePinPassword" type="password" autocomplete="current-password" style="'+escapeHtml(RESET_INPUT_STYLE)+'"/>',
+      'Save PIN',
+      async function(m){
+        var pin=((document.getElementById('financePinNew')||{}).value||'').trim();
+        var again=((document.getElementById('financePinRepeat')||{}).value||'').trim();
+        var password=(document.getElementById('financePinPassword')||{}).value||'';
+        if(!/^\d{4}$/.test(pin)){showToast('Enter a valid 4-digit PIN');return;}
+        if(pin!==again){showToast('The two PINs do not match');return;}
+        var resp=await fetch(apiUrl('/creator/finance/pin'),{method:'POST',headers:authHeaders('creator',{'Content-Type':'application/json'}),body:JSON.stringify({pin:pin,password:password})});
+        var data=await readAuthResponse(resp);
+        if(!resp.ok){showToast(data.error||'Could not save the PIN');return;}
+        settled=true; m.remove(); resolve(pin);
+      });
+    modal.addEventListener('click',function(e){
+      if((e.target===modal||e.target.closest('[data-cancel]'))&&!settled){settled=true;resolve('');}
+    });
+    setTimeout(function(){var e=document.getElementById('financePinNew');if(e)e.focus();},50);
+  });
+}
+
 async function submitFinancePin(){
   var input=document.getElementById('financePinInput');
   var button=document.getElementById('financePinSubmit');
@@ -3505,12 +3536,25 @@ async function submitFinancePin(){
     if(button){button.disabled=true;button.textContent='Unlocking...';button.style.opacity='.65';}
     var token=localStorage.getItem('VYBERA_CREATOR_TOKEN')||'';
     if(!token) throw new Error('Sign in as a creator first');
-    var resp=await fetch(apiUrl('/creator/finance/unlock'),{
-      method:'POST',
-      headers:authHeaders('creator',{'Content-Type':'application/json'}),
-      body:JSON.stringify({pin:pin})
-    });
+    var unlock=function(value){
+      return fetch(apiUrl('/creator/finance/unlock'),{
+        method:'POST',
+        headers:authHeaders('creator',{'Content-Type':'application/json'}),
+        body:JSON.stringify({pin:value})
+      });
+    };
+    var resp=await unlock(pin);
     var data=await readAuthResponse(resp);
+    var savedNow=false;
+    // M16: no PIN yet: create it (needs the account password), then unlock.
+    if(resp.status===409&&data.code==='pin_not_set'){
+      closeFinancePinModal();
+      var newPin=await askSetFinancePin();
+      if(!newPin) return;
+      resp=await unlock(newPin);
+      data=await readAuthResponse(resp);
+      savedNow=true;
+    }
     if(!resp.ok) throw new Error(data.error||'Could not unlock finance');
     closeFinancePinModal();
     document.getElementById('financeLock').style.display='none';
@@ -3519,7 +3563,7 @@ async function submitFinancePin(){
     var net=document.getElementById('creatorFinanceNet');if(net)net.textContent='\u20b9'+Number(data.net||0).toLocaleString('en-IN');
     await loadCreatorAnalytics();
     refreshRevenuePage();
-    showToast(data.initialized?'Finance PIN saved securely':'Finance unlocked');
+    showToast(savedNow?'Finance PIN saved securely':'Finance unlocked');
   }catch(err){ console.error(err); showToast(err.message||'Could not unlock finance'); }
   finally{if(button){button.disabled=false;button.textContent='Unlock Finance';button.style.opacity='1';}}
 }

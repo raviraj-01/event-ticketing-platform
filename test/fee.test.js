@@ -39,6 +39,9 @@ test("M8 + Q16: buyer pays fee + GST on top; organizer analytics, finance and ad
     { gross: 1000, fee: 0, net: 1000, buyerFeePercent: 10 },
   );
 
+  // M16: the PIN is set explicitly, with the account password.
+  await server.db.query("UPDATE creator_accounts SET password=$2 WHERE id=$1", [creator.id, await require("bcrypt").hash("Creator-pass-1", 4)]);
+  assert.equal((await api(server.baseUrl, "POST", "/creator/finance/pin", { token: creator.token, json: { pin: "4321", password: "Creator-pass-1" } })).status, 200);
   const finance = await api(server.baseUrl, "POST", "/creator/finance/unlock", { token: creator.token, json: { pin: "4321" } });
   assert.equal(finance.status, 200, JSON.stringify(finance.body));
   assert.equal(finance.body.net, 1000);
