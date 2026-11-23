@@ -989,8 +989,10 @@ window.fetch=async function(input,init){
 </script>
 <script>
 window.VYBERA_DEBUG=false;
+// L8: hide chatty logs unless debugging, but never warnings or errors: those
+// are what someone needs when they open the console to report a problem.
 if(!window.VYBERA_DEBUG&&window.console){
-  ['log','debug','info','warn','error'].forEach(function(k){window.console[k]=function(){};});
+  ['log','debug','info'].forEach(function(k){window.console[k]=function(){};});
 }
 try{
   if(

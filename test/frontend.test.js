@@ -23,3 +23,10 @@ test("H7: the checker catches unescaped values and wrong escapers", () => {
   ].join("\n");
   assert.equal(check(page).length, 4);
 });
+
+test("L8: console warnings and errors are never silenced", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  const silenced = html.match(/\[([^\]]*)\]\.forEach\(function\(k\)\{window\.console\[k\]=function\(\)\{\};\}\)/);
+  assert.ok(silenced, "the debug switch is still there");
+  assert.doesNotMatch(silenced[1], /'warn'|'error'/);
+});
