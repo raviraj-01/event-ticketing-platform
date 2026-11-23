@@ -57,6 +57,20 @@ npm run db:fixups             # dry run: prints what would change, changes nothi
 npm run db:fixups -- --apply  # recount event counters, move legacy super admins
 ```
 
+Before the first start on a database that already has accounts, run `npm run report-duplicates` (read-only). Migration 0019 makes emails (ignoring case) and verified buyer phones unique; if the report lists duplicates, that migration refuses to run and changes nothing until they are resolved.
+
+## Demo data (fresh database)
+
+```
+npm run migrate
+npm run seed-demo                                   # admin email = SMTP_USER with +demo-admin
+npm run seed-demo -- --admin-email=you+admin@x.com  # or choose it
+```
+
+Creates an admin, an approved organizer, a free and a paid live event, a staff member with 10 tickets of the paid event, and a buyer with a verified phone. Insert-only: existing rows are kept as they are, so running it again is safe. The passwords are written to `demo-credentials.local.txt` (git-ignored), never printed. Admin login still needs the emailed 6-digit code.
+
+Checking a new `.env` against an old one without showing any value: `node scripts/compare-env.js .env path/to/old.env`.
+
 ## Deploy (e.g. Render)
 
 1. Create a PostgreSQL database and set every variable from `.env.example` in the host's environment (never commit `.env`).
@@ -98,6 +112,5 @@ Details and file references for each item are in `CLAUDE.md` (Issues log, Decisi
 - **Strict script CSP**: move the page's inline `<script>` blocks and `onclick` handlers into files so the CSP can drop `'unsafe-inline'` (M15).
 
 **Waiting on data or accounts (not code)**
-- Unique case-insensitive emails and unique verified buyer phones (M3, Q12/D23): run `npm run report-duplicates` on the real database, resolve any duplicates, then add the unique indexes.
 - Android device test (H15) and the real PayU test-mode checkout: `docs/ANDROID-DEVICE-CHECKLIST.md`, `docs/PAYU-TEST.md`.
 - Restrict the Firebase web API key to your domains / app in the Google Cloud console (L7).
