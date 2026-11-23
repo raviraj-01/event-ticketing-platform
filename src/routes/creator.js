@@ -30,6 +30,7 @@ const { readPage, pageOf } = require("../utils/paging");
 const { sendError } = require("../utils/httpError");
 const { uploadJson } = require("../middleware/bodyLimits");
 const { passwordProblem } = require("../utils/passwords");
+const { eventInputProblem } = require("../utils/events");
 
 const router = express.Router();
 
@@ -360,6 +361,11 @@ router.post("/creator/events", requireCreator, async (req, res) => {
         .status(400)
         .json({ error: "Add at least one valid ticket tier" });
     }
+    // L5: dates, times, capacity, coordinates, banner, visibility, tiers.
+    // Checked on the tiers as sent, so an invalid tier is reported instead of
+    // being silently dropped.
+    const inputProblem = eventInputProblem(req.body || {}, { creatorId: req.creator.sub });
+    if (inputProblem) return res.status(400).json({ error: inputProblem });
     const creatorResult = await pool.query(
       "SELECT name FROM creator_accounts WHERE id=$1",
       [req.creator.sub],

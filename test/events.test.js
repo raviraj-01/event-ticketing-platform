@@ -22,16 +22,18 @@ beforeEach(() => server.db.query("DELETE FROM rate_limit_hits"));
 
 const call = (method, path, token, json) => api(server.baseUrl, method, path, { token, json });
 
-function newEventBody(name) {
+function newEventBody(name, creatorId) {
   return {
     name, category: "Music", description: "d", date: "2099-12-31", time: "19:00",
-    venue: "Hall", city: "City", capacity: 50, banner: "/b.png", bannerKey: "event-banners/b.png",
+    venue: "Hall", city: "City", capacity: 50,
+    // Shaped like a banner this organizer uploaded (L5 checks it).
+    banner: `/r2/media/event-banners/creator-${creatorId}/b.png`, bannerKey: `event-banners/creator-${creatorId}/b.png`,
     tickets: [{ name: "General", price: 500, qty: 50 }],
   };
 }
 
 async function submitEvent(creator) {
-  const res = await call("POST", "/creator/events", creator.token, newEventBody(`Event ${fx.uid()}`));
+  const res = await call("POST", "/creator/events", creator.token, newEventBody(`Event ${fx.uid()}`, creator.id));
   assert.equal(res.status, 201, JSON.stringify(res.body));
   return res.body.event;
 }
