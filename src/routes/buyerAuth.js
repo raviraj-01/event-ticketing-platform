@@ -24,7 +24,7 @@ const { startSession } = require("../services/sessions");
 const { requireBuyer } = require("../middleware/auth");
 const { payablePhone } = require("../services/orders");
 const { sendError, HttpError } = require("../utils/httpError");
-const { passwordProblem } = require("../utils/passwords");
+const { passwordProblem, DUMMY_PASSWORD_HASH, isBcryptHash } = require("../utils/passwords");
 
 const router = express.Router();
 
@@ -337,18 +337,21 @@ router.post("/login", async (req, res) => {
       ORDER BY created_at DESC`,
       [cleanEmail, cleanPhone],
     );
-    if (result.rows.length === 0) {
-      return res.status(400).json({ error: "User not found" });
-    }
+    // M6: one answer whether the account is unknown or the password is
+    // wrong, and the same bcrypt work in both cases, so neither the message
+    // nor the timing reveals which emails / phones have accounts.
     let user = null;
+    if (!result.rows.length) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    }
     for (const candidate of result.rows) {
-      if (await bcrypt.compare(password, candidate.password)) {
+      if (isBcryptHash(candidate.password) && (await bcrypt.compare(password, candidate.password))) {
         user = candidate;
         break;
       }
     }
     if (!user) {
-      return res.status(400).json({ error: "Invalid password" });
+      return res.status(401).json({ error: "Invalid email/phone or password" });
     }
     if (!isUserActive(user.status)) {
       return res.status(404).json({ error: USER_NOT_FOUND_ERROR });

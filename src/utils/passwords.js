@@ -4,6 +4,15 @@
 const MIN_LENGTH = 8;
 // bcrypt only uses the first 72 bytes; anything longer would be silently cut.
 const MAX_BYTES = 72;
+const bcrypt = require("bcrypt");
+
+// M6: when no account matches, logins still run one bcrypt comparison against
+// this hash, so the response time doesn't reveal whether the account exists.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("not-a-real-password", 10);
+
+// Compare only against real bcrypt hashes (Google-only accounts store a
+// placeholder, which bcrypt cannot compare).
+const isBcryptHash = (value) => String(value || "").startsWith("$2");
 
 // Returns a message for the user, or null when the password is acceptable.
 function passwordProblem(password, label = "Password") {
@@ -13,4 +22,4 @@ function passwordProblem(password, label = "Password") {
   return null;
 }
 
-module.exports = { passwordProblem, MIN_LENGTH, MAX_BYTES };
+module.exports = { passwordProblem, MIN_LENGTH, MAX_BYTES, DUMMY_PASSWORD_HASH, isBcryptHash };

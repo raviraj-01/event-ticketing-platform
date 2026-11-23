@@ -41,3 +41,23 @@ test("M13: an existing account with a short password can still log in", async ()
   const res = await api(server.baseUrl, "POST", "/login", { json: { email, password: "abc123" } });
   assert.equal(res.status, 200, JSON.stringify(res.body));
 });
+
+test("M6: unknown account and wrong password get the same answer; Google-only accounts are a 401, not an error", async () => {
+  const email = `known${Date.now()}@test.local`;
+  await server.db.query(
+    "INSERT INTO users (username, first_name, email, password) VALUES ('K', 'K', $1, $2)",
+    [email, await bcrypt.hash("Right-pass-1", 4)],
+  );
+  const google = `google${Date.now()}@test.local`;
+  await server.db.query(
+    "INSERT INTO users (username, first_name, email, password, auth_provider) VALUES ('G', 'G', $1, 'oauth-provider', 'google')",
+    [google],
+  );
+  const login = (id, password) => api(server.baseUrl, "POST", "/login", { json: { email: id, password } });
+  const unknown = await login(`nobody${Date.now()}@test.local`, "Whatever-1");
+  const wrong = await login(email, "Wrong-pass-1");
+  const googleOnly = await login(google, "Whatever-1");
+  assert.equal(unknown.status, 401);
+  assert.deepEqual([wrong.status, wrong.body], [unknown.status, unknown.body]);
+  assert.deepEqual([googleOnly.status, googleOnly.body], [unknown.status, unknown.body]);
+});

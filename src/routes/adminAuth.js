@@ -11,6 +11,7 @@ const { publicAdmin } = require("../utils/serializers");
 const { startSession } = require("../services/sessions");
 const { rateLimit } = require("../middleware/rateLimit");
 const { requireAdmin, ADMIN_REAUTH_MINUTES } = require("../middleware/auth");
+const { DUMMY_PASSWORD_HASH } = require("../utils/passwords");
 
 const router = express.Router();
 
@@ -21,7 +22,6 @@ const router = express.Router();
 const ADMIN_LOCKOUT = { maxFailures: 5, lockMinutes: 15 };
 const TOO_MANY_ATTEMPTS = "Too many attempts. Please try again later.";
 // Compared against when the email is unknown, so both cases take about as long.
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync("not-a-real-password", 10);
 
 // Super admins live in their own table; check it first.
 async function findAdminByEmail(email) {
