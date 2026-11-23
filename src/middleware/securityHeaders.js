@@ -30,7 +30,11 @@ const contentSecurityPolicy = {
     connectSrc: ["'self'", "https://nominatim.openstreetmap.org", "https://*.googleapis.com",
       "https://accounts.google.com", "https://www.gstatic.com"],
     frameSrc: ["https://accounts.google.com", "https://*.firebaseapp.com"],
-    formAction: ["'self'", "https://test.payu.in", "https://secure.payu.in"],
+    // form-action also covers redirects after the post: PayU answers the
+    // checkout form with a 302 to its payment page (test.payu.in/_payment ->
+    // apitest.payu.in, seen in the real test checkout 2026-11-24), so every
+    // PayU subdomain is allowed, not only the two /_payment hosts.
+    formAction: ["'self'", "https://test.payu.in", "https://secure.payu.in", "https://*.payu.in"],
     frameAncestors: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],

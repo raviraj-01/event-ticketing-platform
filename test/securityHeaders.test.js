@@ -37,6 +37,8 @@ test("M15: both PayU checkout hosts are allowed as form targets", () => {
       const origin = new URL(getPayuConfig().action).origin;
       assert.ok(contentSecurityPolicy.directives.formAction.includes(origin), `${env}: ${origin}`);
     }
+    // ...and the payment page PayU redirects the form post to.
+    assert.ok(contentSecurityPolicy.directives.formAction.includes("https://*.payu.in"), "redirect to apitest.payu.in / api.payu.in");
   } finally {
     if (before === undefined) delete process.env.PAYU_ENV; else process.env.PAYU_ENV = before;
   }
