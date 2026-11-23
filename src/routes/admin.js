@@ -23,6 +23,7 @@ const { normalizeUserStatus, USER_ACTIVE_STATUS } = require("../utils/accounts")
 const { sendError } = require("../utils/httpError");
 const { organizerEarnings } = require("../services/orders");
 const { adminStats, adminList } = require("../services/adminData");
+const { passwordProblem } = require("../utils/passwords");
 
 const router = express.Router();
 
@@ -37,12 +38,11 @@ router.post("/admin/accounts", requireAdmin, requireSuperAdmin, confirmed, audit
     const cleanPassword = String(password || "");
     const requestedRole = String(role || "Admin").trim();
     const cleanRole = requestedRole === "Super Admin" ? requestedRole : "Admin";
-    if (!cleanName || !cleanEmail || cleanPassword.length < 6) {
-      return res.status(400).json({
-        error:
-          "Name, email, and a temporary password of at least 6 characters are required",
-      });
+    if (!cleanName || !cleanEmail) {
+      return res.status(400).json({ error: "Name, email, and a temporary password are required" });
     }
+    const adminPasswordProblem = passwordProblem(cleanPassword, "Temporary password");
+    if (adminPasswordProblem) return res.status(400).json({ error: adminPasswordProblem });
     if (cleanRole === "Super Admin") {
       return res
         .status(400)
@@ -154,12 +154,11 @@ router.post("/admin/staff", requireAdmin, audit("staff.create", (req) => ({ targ
       .trim()
       .toLowerCase();
     const cleanPassword = String(password || "");
-    if (!cleanName || !cleanStaffId || cleanPassword.length < 6) {
-      return res.status(400).json({
-        error:
-          "Name, staff login ID, and a temporary password of at least 6 characters are required",
-      });
+    if (!cleanName || !cleanStaffId) {
+      return res.status(400).json({ error: "Name, staff login ID, and a temporary password are required" });
     }
+    const staffPasswordProblem = passwordProblem(cleanPassword, "Temporary password");
+    if (staffPasswordProblem) return res.status(400).json({ error: staffPasswordProblem });
     const id = `STF-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
     const shareToken = `${cleanPathSegment(cleanStaffId, "staff")}-${crypto.randomBytes(4).toString("hex")}`;
     const isCreatedBySuperAdmin = req.admin && req.admin.adminType === "super";

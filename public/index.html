@@ -2812,6 +2812,7 @@ async function doSignUp(){
   }
   if(!city||!city.value){alert('Please select your city');return;}
   if(!password||!password.value){alert('Please enter a password');return;}
+  if(password.value.length<8){alert('Password must be at least 8 characters');return;}
   if(!terms||!terms.classList.contains('on')){alert('Please accept the Terms of Service');return;}
   setButtonBusy('signupBtn',true,'Creating account...','Create Account');
   try{
@@ -6877,7 +6878,7 @@ function openResetPasswordModal(token){
     async function(modal){
       var pwd=(document.getElementById('resetPwd')||{}).value||'';
       var pwd2=(document.getElementById('resetPwd2')||{}).value||'';
-      if(pwd.length<6){showToast('Password must be at least 6 characters');return;}
+      if(pwd.length<8){showToast('Password must be at least 8 characters');return;}
       if(pwd!==pwd2){showToast('Passwords do not match');return;}
       try{
         var resp=await fetch(apiUrl('/auth/reset-password-by-token'),{
@@ -9081,7 +9082,7 @@ function inviteStepNext(){
       var pwdInput=document.getElementById('newAdmPwd');
       if(pwdInput) pwdInput.value=pwd;
     }
-    if(pwd.length<6){ setInviteError('Password must be at least 6 characters'); admShowToast('Password must be at least 6 characters'); return; }
+    if(pwd.length<8){ setInviteError('Password must be at least 8 characters'); admShowToast('Password must be at least 8 characters'); return; }
     if(_inviteType==='staff'){
       var sid=(document.getElementById('newAdmStaffId')||{}).value||'';
       if(!sid){ setInviteError('Enter a staff login ID'); admShowToast('Enter a staff login ID'); return; }
@@ -9217,7 +9218,7 @@ async function inviteCreateAccount(evt){
     }
     if(!name) throw new Error('Enter full name');
     if(_inviteType==='admin' && !email) throw new Error('Enter email address');
-    if(pwd.length<6) throw new Error('Password must be at least 6 characters');
+    if(pwd.length<8) throw new Error('Password must be at least 8 characters');
 
     if(_inviteType==='admin'){
       var role=(document.getElementById('newAdmRole')||{}).value||'Admin';
@@ -10688,7 +10689,7 @@ async function confirmAddStaff(){
     pwd=makeTempPassword(12);
     if(pwdInput) pwdInput.value=pwd;
   }
-  if(pwd.length<6){ setAddStaffError('Temporary password must be at least 6 characters'); showToast('Temporary password must be at least 6 characters'); return; }
+  if(pwd.length<8){ setAddStaffError('Temporary password must be at least 8 characters'); showToast('Temporary password must be at least 8 characters'); return; }
 
   if((STORE.staff||[]).find(function(s){ return s.staffId===staffId; })){
     setAddStaffError('Staff ID already taken'); showToast('Staff ID already taken'); return;

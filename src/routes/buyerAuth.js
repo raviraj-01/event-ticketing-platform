@@ -24,6 +24,7 @@ const { startSession } = require("../services/sessions");
 const { requireBuyer } = require("../middleware/auth");
 const { payablePhone } = require("../services/orders");
 const { sendError, HttpError } = require("../utils/httpError");
+const { passwordProblem } = require("../utils/passwords");
 
 const router = express.Router();
 
@@ -161,6 +162,9 @@ router.post("/signup", async (req, res) => {
     if (!cleanPhone) {
       return res.status(400).json({ error: "Phone number is required" });
     }
+    // M13: buyer signup had no minimum at all.
+    const signupPasswordProblem = passwordProblem(String(password));
+    if (signupPasswordProblem) return res.status(400).json({ error: signupPasswordProblem });
     if (!otpAccessToken) {
       return res.status(400).json({ error: "Please verify your phone number with OTP before creating an account" });
     }

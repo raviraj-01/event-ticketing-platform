@@ -29,6 +29,7 @@ const { createStaffAssignment } = require("../services/staffAssignments");
 const { readPage, pageOf } = require("../utils/paging");
 const { sendError } = require("../utils/httpError");
 const { uploadJson } = require("../middleware/bodyLimits");
+const { passwordProblem } = require("../utils/passwords");
 
 const router = express.Router();
 
@@ -71,11 +72,8 @@ router.post("/creator/applications", ...applicationLimits, async (req, res) => {
         .status(400)
         .json({ error: "Enter a valid creator email address" });
     }
-    if (cleanPassword.length < 8) {
-      return res
-        .status(400)
-        .json({ error: "Creator password must be at least 8 characters" });
-    }
+    const creatorPasswordProblem = passwordProblem(cleanPassword, "Creator password");
+    if (creatorPasswordProblem) return res.status(400).json({ error: creatorPasswordProblem });
     if (!files.length) {
       return res
         .status(400)
@@ -587,12 +585,11 @@ router.post("/creator/staff", requireCreator, async (req, res) => {
       .trim()
       .toLowerCase();
     const cleanPassword = String(password || "");
-    if (!name || !cleanStaffId || cleanPassword.length < 6) {
-      return res.status(400).json({
-        error:
-          "Name, login ID, and a temporary password of at least 6 characters are required",
-      });
+    if (!name || !cleanStaffId) {
+      return res.status(400).json({ error: "Name, login ID, and a temporary password are required" });
     }
+    const staffPasswordProblem = passwordProblem(cleanPassword, "Temporary password");
+    if (staffPasswordProblem) return res.status(400).json({ error: staffPasswordProblem });
     await client.query("BEGIN");
     const id = `STF-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
     const shareToken = `${cleanPathSegment(cleanStaffId, "staff")}-${crypto.randomBytes(4).toString("hex")}`;

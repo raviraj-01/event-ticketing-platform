@@ -24,6 +24,7 @@ const {
 } = require("../services/sessions");
 const { recordAdminAction } = require("../services/adminAudit");
 const { publicUser } = require("../utils/serializers");
+const { passwordProblem } = require("../utils/passwords");
 
 const router = express.Router();
 
@@ -74,7 +75,8 @@ router.post("/auth/reset-password-by-token", async (req, res) => {
     const token = String((req.body && req.body.token) || "").trim();
     const newPassword = String((req.body && req.body.password) || "");
     if (!token) return res.status(400).json({ error: "Reset token is required" });
-    if (newPassword.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+    const resetProblem = passwordProblem(newPassword);
+    if (resetProblem) return res.status(400).json({ error: resetProblem });
     const role = await resetPasswordWithToken(pool, token, await bcrypt.hash(newPassword, 10));
     res.json({ success: true, role, message: "Password updated successfully. You can now sign in with your new password." });
   } catch (err) {
@@ -99,7 +101,8 @@ router.post(
       const { role, payload, account } = req.session;
       const currentPassword = String((req.body && req.body.currentPassword) || "");
       const newPassword = String((req.body && req.body.newPassword) || "");
-      if (newPassword.length < 8) return res.status(400).json({ error: "New password must be at least 8 characters" });
+      const changeProblem = passwordProblem(newPassword, "New password");
+      if (changeProblem) return res.status(400).json({ error: changeProblem });
       if (newPassword === currentPassword) return res.status(400).json({ error: "Choose a password different from the current one" });
       if (!String(account.password || "").startsWith("$2") || !(await bcrypt.compare(currentPassword, account.password))) {
         return res.status(401).json({ error: "Current password is wrong" });
