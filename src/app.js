@@ -7,12 +7,15 @@ const { publicDir, uploadsDir } = require("./config");
 const { corsMiddleware, openerPolicy, blockCrossSiteCookieRequests } = require("./middleware/security");
 const { sendError } = require("./utils/httpError");
 const { defaultBodies } = require("./middleware/bodyLimits");
+const { requestId } = require("./middleware/requestId");
 
 const app = express();
 // Number of reverse proxies in front of the app (Render: 1). Needed so req.ip is
 // the real client IP for rate limiting; 0 = trust nobody (local development).
 app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 0));
 
+// M5: first, so every response and log line of a request carries its ID.
+app.use(requestId);
 app.use(corsMiddleware);
 app.use(openerPolicy);
 app.use(blockCrossSiteCookieRequests);

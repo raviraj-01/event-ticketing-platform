@@ -12,6 +12,9 @@ const { initDb } = require("./src/db/initDb");
 const { pruneRateLimitHits } = require("./src/middleware/rateLimit");
 const { expireStaleOrders } = require("./src/services/orders");
 const app = require("./src/app");
+const { tagServerLogsWithRequestId } = require("./src/middleware/requestId");
+
+tagServerLogsWithRequestId();
 const { pruneUsedSignupTokens } = require("./src/services/signupOtp");
 
 // A stray rejected promise is logged; request handlers' own errors go to the
