@@ -28,10 +28,17 @@ const { setTemporaryPassword } = require("../services/passwordReset");
 const { createStaffAssignment } = require("../services/staffAssignments");
 const { readPage, pageOf } = require("../utils/paging");
 const { sendError } = require("../utils/httpError");
+const { uploadJson } = require("../middleware/bodyLimits");
 
 const router = express.Router();
 
-router.post("/creator/applications", async (req, res) => {
+// Public form with KYC files (up to 4 × 5 MB, base64 in JSON): rate limited
+// per IP before the large body is read (M11).
+const applicationLimits = [
+  rateLimit({ name: "creator-application-ip", windowSeconds: 3600, max: 5, key: (req) => req.ip }),
+  uploadJson("30mb"),
+];
+router.post("/creator/applications", ...applicationLimits, async (req, res) => {
   const client = await pool.connect();
   try {
     const { name, email, phone, category, about, password, documents } =
@@ -274,7 +281,8 @@ router.get("/events", async (req, res) => {
   }
 });
 
-router.post("/creator/events/banner", requireCreator, async (req, res) => {
+// One 5 MB image; the body is read only after the login check (M11).
+router.post("/creator/events/banner", requireCreator, uploadJson("8mb"), async (req, res) => {
   try {
     const { fileName, dataUrl } = req.body || {};
     if (!fileName || !dataUrl) {

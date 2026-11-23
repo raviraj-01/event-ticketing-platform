@@ -3,10 +3,10 @@
 // things together.
 const path = require("path");
 const express = require("express");
-const bodyParser = require("body-parser");
 const { publicDir, uploadsDir } = require("./config");
 const { corsMiddleware, openerPolicy, blockCrossSiteCookieRequests } = require("./middleware/security");
 const { sendError } = require("./utils/httpError");
+const { defaultBodies } = require("./middleware/bodyLimits");
 
 const app = express();
 // Number of reverse proxies in front of the app (Render: 1). Needed so req.ip is
@@ -16,8 +16,8 @@ app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 0));
 app.use(corsMiddleware);
 app.use(openerPolicy);
 app.use(blockCrossSiteCookieRequests);
-app.use(bodyParser.json({ limit: "30mb" }));
-app.use(bodyParser.urlencoded({ extended: true }));
+// M11: 100 KB bodies by default; the two upload routes parse their own (larger) body.
+app.use(defaultBodies);
 app.get("/favicon.ico", (req, res) => {
   res.type("image/svg+xml").sendFile(path.join(publicDir, "assets", "blak-ticket-logo.svg"));
 });
