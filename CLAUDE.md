@@ -326,7 +326,7 @@ Frontend consolidation (M14) happens before the first frontend-touching fix (C2)
 | D26 | Organizer fee (Q16) | Organizer net = gross ticket subtotal. The platform fee + GST is charged to the buyer only, on top of the ticket price at checkout. |
 | D27 | Admin powers over staff (M19) | **Chosen by Claude 2026-11-23, Ravi to confirm:** suspend = any admin (reversible safety action, audited); activate / set pending / delete = only the admin who created the staff account, or a super admin; organizer staff are not deleted from the admin panel. |
 
-Build status (feature freeze 2026-11-22): **D23 step 1 built** (2026-11-22: `phone_verified`, backfill, signup check, duplicate report); **step 2, the partial unique index, waits for Ravi to run `npm run report-duplicate-phones` on his DB and resolve any duplicates.** **D20 and D24 built** (2026-11-22). D21, D22, D25: feature freeze → README Future work.
+Build status (2026-11-23): **built:** D20, D22 (M18), D23 step 1 (no backfill since M22; `verified_phone_key()`), D24, D26 (Q16), D27 (M19, Ravi to confirm). **Waiting:** D23 step 2 (unique phone index) and the unique-email indexes (M3) need `npm run report-duplicates` on Ravi's real database, which is blocked by Q17. **Feature freeze (README Future work):** D21, D25.
 
 ## Change log
 | Date | Change | Why |
@@ -398,6 +398,7 @@ Build status (feature freeze 2026-11-22): **D23 step 1 built** (2026-11-22: `pho
 | 2026-11-23 | M5 (completed): request IDs in a response header, in 5xx bodies and in server error logs. | Users' error reports could not be matched to the log. |
 | 2026-11-23 | M15 (completed): helmet + Content-Security-Policy (host allowlist, form-action PayU only, no framing), HSTS, nosniff; defaults that would break Google sign-in or the Android app deliberately overridden. | No browser-side defences. |
 | 2026-11-23 | Test `test/imports.test.js`: every destructured local `require` must name something the module exports (ESLint cannot see this). | A wrong import during M15 only failed at runtime. |
+| 2026-11-23 | README Future work rewritten to what is actually left; Study guide section 8; decisions build status. | End of the fix batch. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).
@@ -483,6 +484,15 @@ Paths updated after the Phase 3 split (2026-11-22). Function names, not line num
 - *Q: Why is the approve query `UPDATE … WHERE id=$1 AND status='pending'` instead of read-then-write?* — The condition and the change happen in one statement, so if two admins click at once only one update matches and the other gets 409; no lock or transaction needed.
 - *Q: How do you add a unique constraint when existing data might break it?* — Make the rule explicit (`phone_key`), stop new duplicates in code first, report existing duplicates for a human decision, and only then add the (partial) unique index. Otherwise the migration fails on deploy, or you silently pick a winner.
 - *Q: Why not just return `err.message` on errors?* — It leaks internals (SQL, provider responses, config names) and gives attackers hints. `HttpError` marks messages written for users; everything else is logged with full detail while the client gets a generic message.
+
+### 8. Data safety and hardening (2026-11-23)
+1. Never changing existing data: `src/db/initDb.js` (insert-only), `scripts/db-fixups.js` (dry run unless `--apply`), `migrations/0012` + `0015` (`verified_phone_key()` instead of a backfill), `migrations/0017` (`NOT VALID` constraints), `scripts/report-duplicate-phones.js` (`BEGIN READ ONLY`); `test/dataSafety.test.js`, `test/integrity.test.js`.
+2. Test isolation: `test/helpers/testServer.js` `testEnv()`, `SKIP_ENV_FILE` in `server.js`; `test/config.test.js`.
+3. Limits: `src/middleware/bodyLimits.js` (order of middleware = when the body is read), finance PIN lockout in `src/routes/creator.js` (`SELECT … FOR UPDATE` per attempt), single-use signup token (`claimSignupToken`, migration 0016).
+4. Observability and headers: `src/middleware/requestId.js` (AsyncLocalStorage), `src/middleware/securityHeaders.js` (helmet + CSP); `test/requestId.test.js`, `test/securityHeaders.test.js`.
+- *Q: How do you add a constraint to a production table without touching or failing on old rows?* — `ADD CONSTRAINT … NOT VALID`: Postgres enforces it for every new or changed row but skips the existing ones. Later you can clean the data and run `VALIDATE CONSTRAINT`, which checks without blocking writes.
+- *Q: Why lock the row when checking a PIN or redeeming a one-time token?* — Without it, ten parallel requests all read "0 failures" or "not used yet" before any of them writes, so the limit is bypassed. The row lock (or a primary-key insert for the token) makes the check and the update one step.
+- *Q: What does your CSP protect if scripts still need 'unsafe-inline'?* — It still restricts where scripts, images and connections can come from, where forms can post (only us and PayU), and forbids framing; an injected script can't load code from or send data to an arbitrary host. Moving inline code into files is the step that would allow a strict script-src.
 
 ## Interview notes
 _(One entry per fixed issue: a 2-line explanation to say out loud.)_

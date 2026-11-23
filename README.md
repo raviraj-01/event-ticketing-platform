@@ -89,19 +89,15 @@ Details and file references for each item are in `CLAUDE.md` (Issues log, Decisi
 
 **Features**
 - **Staff resale** ("staff buys inventory from the organizer and resells it"): disabled in the UI and API. Needs a decision on how the staff member pays the organizer up front and who pays out the resale money.
-- **Refunds**: no refund flow yet. Orders paid after their seats sold out are listed for admins as "needs refund" and must be refunded manually in the PayU dashboard. Then add an admin "mark refunded" action (D21), and exclude refunded bookings from the admin snapshot totals (M8, M9).
+- **Refunds** (M9): no refund flow yet. Orders paid after their seats sold out are listed for admins as "needs refund" and must be refunded manually in the PayU dashboard. Then add an admin "mark refunded" action (D21). Admin totals already exclude refunded bookings.
 - **Coupons**: the checkout coupon box is hidden; coupons need server-side storage and validation in `POST /orders`.
 - **Editing an event**: organizers cannot edit an event yet. Any edit to price or date must send the event back to `pending` (D20); existing orders keep their own price.
 - **Share-link regeneration** (D25): staff and their organizer can make a new link; the old one stops earning commission.
-- **Admin data in pages**: split `/admin/snapshot` into per-tab endpoints with totals computed on the server, then page them (M4). The admin UI currently sums the full lists in the browser.
-- **Request IDs in logs**, so an error a user reports can be found in the server log (M5).
+- **Organizer email verification** (rest of H12): confirm an organizer owns the email they apply with.
+- **Uploads straight to storage**: presigned R2 uploads instead of base64 files inside JSON (the reason two routes still accept large bodies, M11).
+- **Strict script CSP**: move the page's inline `<script>` blocks and `onclick` handlers into files so the CSP can drop `'unsafe-inline'` (M15).
 
-**Hardening still open** (see the Issues log in `CLAUDE.md`)
-- No "global scanner": admin-created staff must be assigned to an event to scan it (D22, M18).
-- Database constraints: foreign key from bookings to events, `CHECK`s on qty/price, case-insensitive unique emails (M3).
-- Same answer whether or not an account exists, on every login and lookup route (M6).
-- Development OTP fallback only behind an explicit `OTP_DEV_MODE` flag (M7); signup OTP token single use (M17).
-- Small global JSON body limit; larger only on authenticated upload routes (M11).
-- Remove the APK Google token relay (M12); password policy of 8+ characters everywhere (M13); `helmet` + CSP (M15).
-- Finance PIN: explicit set-up flow and attempt limit (M16); admin vs super admin permission matrix (M19).
-- `/qr` endpoint limits (L1); input validation on event and assignment fields (L5); restrict the Firebase API key (L7); frontend clean-up of dead code and browser-only admin controls (L8, L9).
+**Waiting on data or accounts (not code)**
+- Unique case-insensitive emails and unique verified buyer phones (M3, Q12/D23): run `npm run report-duplicates` on the real database, resolve any duplicates, then add the unique indexes.
+- Android device test (H15) and the real PayU test-mode checkout: `docs/ANDROID-DEVICE-CHECKLIST.md`, `docs/PAYU-TEST.md`.
+- Restrict the Firebase web API key to your domains / app in the Google Cloud console (L7).
