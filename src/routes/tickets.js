@@ -113,10 +113,12 @@ router.post("/bookings/scan", requireScanIdentity, async (req, res) => {
            AND b.qr_token=$2
            AND ($4::text IS NULL OR b.event_id=$4)
            AND st.id IS NOT NULL
+           -- D22 / M18: staff scan only events they are assigned to (an
+           -- assignment or their primary event). Admin-created staff with no
+           -- event used to be able to scan every event.
            AND (
              sa.id IS NOT NULL
              OR st.primary_event_id=b.event_id
-             OR (st.creator_id IS NULL AND st.primary_event_id IS NULL)
            )
          FOR UPDATE OF b`,
         [bookingId, qrToken, scanIdentity.payload.sub, qrEventId],
