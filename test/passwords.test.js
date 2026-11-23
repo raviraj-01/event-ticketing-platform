@@ -61,3 +61,15 @@ test("M6: unknown account and wrong password get the same answer; Google-only ac
   assert.deepEqual([wrong.status, wrong.body], [unknown.status, unknown.body]);
   assert.deepEqual([googleOnly.status, googleOnly.body], [unknown.status, unknown.body]);
 });
+
+test("L13: buyer login is rate limited per account (10 per 10 minutes)", async () => {
+  await server.db.query("DELETE FROM rate_limit_hits");
+  const email = `limited${Date.now()}@test.local`;
+  const statuses = [];
+  for (let i = 0; i < 11; i += 1) {
+    statuses.push((await api(server.baseUrl, "POST", "/login", { json: { email, password: "Wrong-pass-1" } })).status);
+  }
+  assert.ok(statuses.slice(0, 10).every((s) => s === 401), JSON.stringify(statuses));
+  assert.equal(statuses[10], 429);
+  await server.db.query("DELETE FROM rate_limit_hits");
+});

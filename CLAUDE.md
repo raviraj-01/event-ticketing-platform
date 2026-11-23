@@ -279,6 +279,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 | L10 | Low | Config | `server.js` (dotenv loaded at line 46, after the `src/` requires) | `ORDER_SETTINGS` and `SESSION_SETTINGS` read env vars when their module loads, before `.env` was loaded. | `PLATFORM_FEE_PERCENT`, `GST_PERCENT`, `MAX_TICKETS_PER_ORDER`, `FREE_TICKETS_PER_USER_PER_EVENT` and token TTLs set in `.env` were silently ignored locally (Render sets real env vars, so not affected). | Fixed | `server.js` loads `.env` first; `test/config.test.js` keeps it first. | see change log |
 | L11 | Low | Admin UI (H7 follow-up) | `admRenderAllUsers` | The H7 escaping pass wrapped an HTML fragment (`action`, built from fixed markup and `jsStr` values) in `escapeHtml`, so the All users tab printed the Suspend/Reinstate button as text. | Broken button. Found during M4. | Fixed | The fragment is inserted as HTML; a browser pass over every admin section found no other markup shown as text. | see change log |
 | L12 | Low | Admin ledger | `adminData.js` ledger query, `admRenderLedgerFiltered` | A row's status was only its payment's status, so refunded bookings showed "Success" and the "Refunded" filter never matched anything. | Wrong status in the payments ledger. Found during M4. | Fixed | The server sets `paymentStatus` = Refunded for refunded bookings; the filter runs in SQL. Test in `test/adminData.test.js`. | see change log |
+| L13 | Low | Auth | `src/routes/buyerAuth.js` `POST /login` | Buyer login had no rate limit (organizer and admin login did). | Password guessing / credential stuffing against buyer accounts. Found during M6. | Fixed | 20 per IP and 10 per email/phone per 10 minutes (Postgres limiter). Test in `test/passwords.test.js`. | see change log |
 
 ### Verified "keep as-is" items
 - `POST /bookings/scan`: confirmed (transaction, `FOR UPDATE OF b`, assignment check, 403/409, `scanned_at`). Only M18 is questionable. `requireScanIdentity` inherits H4 for creators (no DB status check); the SQL already checks that staff are active.
@@ -386,6 +387,7 @@ Build status (feature freeze 2026-11-22): **D23 step 1 built** (2026-11-22: `pho
 | 2026-11-23 | M18 / D22: no global scanner; admin-created staff need an assignment or primary event to scan. | Ravi's Q10 decision. |
 | 2026-11-23 | M16: finance PIN set explicitly with the account password; 5 wrong PINs lock unlock for 15 minutes (row lock per attempt). | The first guess became the PIN; 4 digits could be brute-forced. |
 | 2026-11-23 | M6 (completed): buyer login gives one answer for unknown account / wrong password, with the same bcrypt work in both cases. | Login told attackers which emails have accounts. |
+| 2026-11-23 | L13: buyer login rate limited (per IP and per email/phone). | Found during M6. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).

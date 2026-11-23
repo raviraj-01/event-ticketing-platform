@@ -312,7 +312,19 @@ router.put("/profile/phone", requireBuyer, async (req, res) => {
 });
 
 // LOGIN API
-router.post("/login", async (req, res) => {
+// L13: buyer login had no limit at all (organizer and admin login did).
+// Per IP, and per email/phone so one account can't be guessed from many IPs.
+const buyerLoginLimits = [
+  rateLimit({ name: "buyer-login-ip", windowSeconds: 600, max: 20, key: (req) => req.ip }),
+  rateLimit({
+    name: "buyer-login-id",
+    windowSeconds: 600,
+    max: 10,
+    key: (req) => String((req.body && req.body.email) || "").trim().toLowerCase() || null,
+    message: "Too many login attempts. Please try again later.",
+  }),
+];
+router.post("/login", ...buyerLoginLimits, async (req, res) => {
   try {
     const { email, password } = req.body;
     const identifier = String(email || "").trim();
