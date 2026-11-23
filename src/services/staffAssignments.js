@@ -28,6 +28,10 @@ const createStaffAssignment = async (
   }
   const cleanMode = "creator_quota";
   const cleanCommissionRate = Math.max(0, Number(commissionRate || 0));
+  // L5 / M3: the database also refuses rates outside 0-100.
+  if (!Number.isFinite(cleanCommissionRate) || cleanCommissionRate > 100) {
+    throw new HttpError(400, "Commission must be between 0 and 100%");
+  }
   const staff = await client.query(
     "SELECT id FROM staff_accounts WHERE id=$1 AND creator_id=$2",
     [staffId, creatorId],

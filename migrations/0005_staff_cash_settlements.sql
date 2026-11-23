@@ -14,7 +14,9 @@ CREATE TABLE staff_cash_settlements (
 CREATE INDEX staff_cash_settlements_staff_idx ON staff_cash_settlements (staff_id);
 
 -- Withdrawals are money: make sure no zero/negative amount can be stored.
-ALTER TABLE staff_withdrawals ADD CONSTRAINT staff_withdrawals_amount_positive CHECK (amount > 0);
+-- NOT VALID (M3/M22): enforced for every new or changed row, but existing rows
+-- are not checked, so old data can never make this migration fail.
+ALTER TABLE staff_withdrawals ADD CONSTRAINT staff_withdrawals_amount_positive CHECK (amount > 0) NOT VALID;
 
 -- Down Migration
 ALTER TABLE staff_withdrawals DROP CONSTRAINT staff_withdrawals_amount_positive;

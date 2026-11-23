@@ -12,7 +12,8 @@
     "reset-super-admin": "node scripts/reset-super-admin.js",
     "lint": "eslint .",
     "report-duplicate-phones": "node scripts/report-duplicate-phones.js",
-    "db:fixups": "node scripts/db-fixups.js"
+    "db:fixups": "node scripts/db-fixups.js",
+    "report-duplicates": "node scripts/report-duplicate-phones.js"
   },
   "keywords": [],
   "author": "",
