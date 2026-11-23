@@ -267,7 +267,7 @@ Severity: **Critical** = exploitable now, money/accounts at stake. **High** = se
 ### Low
 | ID | Sev | Area | File:line | Problem | Impact | Status | Fix summary | Commit |
 |---|---|---|---|---|---|---|---|---|
-| L1 | Low | Abuse | `server.js:1162` `/qr` | Ravi#10. Public endpoint renders any text as a QR (CPU, free QR service). It is only used for the staff share link (`vybera_26.html:2964`). | Minor abuse. | Open | Generate the share QR client-side or only for own share URLs; length cap + rate limit. | – |
+| L1 | Low | Abuse | `server.js:1162` `/qr` | Ravi#10. Public endpoint renders any text as a QR (CPU, free QR service). It is only used for the staff share link (`vybera_26.html:2964`). | Minor abuse. | Fixed | `/qr` draws only http(s) URLs with a `staff` share parameter, at most 512 characters, 60 per IP per 10 minutes. Tests: `test/qr.test.js`. | – |
 | L2 | Low | Bug | `server.js:59` | Favicon route points to `assets/blak-tickets-logo.svg`; the file is actually `blak-ticket-logo.svg`. | 404 / error log on every page load. | Fixed | Path corrected while moving assets (part of the H1 commit). | `d06d580` |
 | L3 | Low | Cleanup | `prev`, `VYBERA.html` | An old server copy and an old frontend copy are tracked and publicly served. | Confusion, source disclosure (H1). | Fixed | Deleted `prev` and `VYBERA.html` (approved D6). | see change log
 | L4 | Low | JWT | `server.js:161-202` | Ravi#11. The hand-written JWT is actually implemented safely (fixed HS256, timing-safe compare, exp checked), but it has no `iss`/`aud`, and one secret serves session, reset and OTP tokens (only `scope` separates them). | Token-confusion risk (see H12). | Fixed | `src/utils/tokens.js` wraps `jose` (v6): HS256 only, issuer `ticketing-app`, audience per purpose (`session`, `password-reset`, `signup-otp`); `sub` is a string. Hand-written base64/HMAC code deleted; all call sites awaited. Old-format tokens no longer verify (everyone logs in again once). Needs Node ≥ 22.12 (`require()` of an ES module), set in `package.json` `engines`. Tests: 3 in `test/auth.test.js`. | see change log
@@ -391,6 +391,7 @@ Build status (feature freeze 2026-11-22): **D23 step 1 built** (2026-11-22: `pho
 | 2026-11-23 | L13: buyer login rate limited (per IP and per email/phone). | Found during M6. |
 | 2026-11-23 | M19 / D27: admin permission matrix for staff accounts (suspend: any admin; activate, pending, delete: creator-of-record or super admin). Refused deletes are 403 instead of a silent 200. | Any admin could delete legacy admin-created staff and re-activate any organizer's staff. |
 | 2026-11-23 | M12 (completed): Google token relay routes and client code removed. | Unauthenticated store/fetch of login tokens under any code. |
+| 2026-11-23 | L1: `/qr` only for staff share links, length-capped, rate limited. | Free public QR service. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).

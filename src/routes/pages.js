@@ -6,6 +6,7 @@ const { appHtmlPath } = require("../config");
 const { pool } = require("../db/pool");
 const { hasR2Config, presignR2 } = require("../services/storage");
 const QRCode = require("qrcode");
+const { rateLimit } = require("../middleware/rateLimit");
 
 const router = express.Router();
 
@@ -44,10 +45,23 @@ router.get("/health", async (req, res) => {
   }
 });
 
-router.get("/qr", async (req, res) => {
+// L1: QR images only for staff share links (the one thing the app draws), so
+// this is not a free "QR for any text" service; length-capped and rate limited.
+const MAX_QR_TEXT = 512;
+function isStaffShareLink(text) {
+  if (!text || text.length > MAX_QR_TEXT) return false;
+  try {
+    const url = new URL(text);
+    return (url.protocol === "https:" || url.protocol === "http:") && url.searchParams.has("staff");
+  } catch (err) {
+    return false;
+  }
+}
+
+router.get("/qr", rateLimit({ name: "qr-ip", windowSeconds: 600, max: 60, key: (req) => req.ip }), async (req, res) => {
   try {
     const text = String((req.query && req.query.text) || "").trim();
-    if (!text) return res.status(400).send("Missing QR text");
+    if (!isStaffShareLink(text)) return res.status(400).send("QR codes are only made for staff share links");
     const png = await QRCode.toBuffer(text, {
       width: 420,
       margin: 2,
