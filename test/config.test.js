@@ -40,3 +40,18 @@ test("H18: server.js skips .env when SKIP_ENV_FILE=true; scripts imported by tes
   const topLevel = report.slice(0, report.indexOf("async function main"));
   assert.doesNotMatch(topLevel, /dotenv/);
 });
+
+// M12: the APK's Google token relay (unauthenticated store/fetch of login
+// tokens under any code) is gone; the app uses POST /auth/google.
+test("M12: no Google token relay routes or client code", () => {
+  const root = path.join(__dirname, "..");
+  const files = [path.join(root, "public", "index.html")];
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) walk(p); else if (p.endsWith(".js")) files.push(p);
+  });
+  walk(path.join(root, "src"));
+  for (const file of files) {
+    assert.doesNotMatch(fs.readFileSync(file, "utf8"), /google-token\/(store|fetch)|google-auth-success/, file);
+  }
+});

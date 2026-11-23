@@ -7200,28 +7200,6 @@ async function applySocialLogin(user,options){
     applyBuyerProfile(socialUser);
     safeSessionRemove('VYBERA_GOOGLE_PENDING');
 
-    // ── APK token relay ─────────────────────────────────────────────────────
-    // If this page was opened by the APK's system browser (has ?code=XYZ),
-    // POST the token+profile to the server relay so the app can pick it up.
-    var urlParams = new URLSearchParams(window.location.search);
-    var relayCode = urlParams.get('code');
-    if(relayCode && data.token){
-      try{
-        var profile = data.user;
-        await fetch('/google-token/store?code=' + encodeURIComponent(relayCode), {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ token: data.token, profile: profile })
-        });
-        // Show success page — user closes browser and returns to app
-        showToast('Signed in! You can close this tab and return to BLAK Tickets.');
-        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0a0a0a;font-family:sans-serif;color:#fff;flex-direction:column;gap:16px"><div style="font-size:64px">✅</div><h2 style="margin:0">Signed in successfully!</h2><p style="margin:0;color:#aaa;font-size:14px;text-align:center">You can close this tab and return to BLAK Tickets.</p></div>';
-        return;
-      }catch(relayErr){
-        console.error('Token relay failed:', relayErr);
-        // Fall through to normal web login flow
-      }
-    }
     // ── Normal web flow ──────────────────────────────────────────────────────
 
     showToast('Signed in with Google');
