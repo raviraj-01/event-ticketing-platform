@@ -5,6 +5,7 @@ const path = require("path");
 const express = require("express");
 const { publicDir, uploadsDir } = require("./config");
 const { corsMiddleware, openerPolicy, blockCrossSiteCookieRequests } = require("./middleware/security");
+const { securityHeaders } = require("./middleware/securityHeaders");
 const { sendError } = require("./utils/httpError");
 const { defaultBodies } = require("./middleware/bodyLimits");
 const { requestId } = require("./middleware/requestId");
@@ -16,6 +17,7 @@ app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 0));
 
 // M5: first, so every response and log line of a request carries its ID.
 app.use(requestId);
+app.use(securityHeaders);
 app.use(corsMiddleware);
 app.use(openerPolicy);
 app.use(blockCrossSiteCookieRequests);

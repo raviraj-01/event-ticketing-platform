@@ -1,5 +1,5 @@
 // Browser-facing protections: CORS allowlist (H16) and the CSRF origin check
-// for cookie sessions.
+// for cookie sessions. Security headers / CSP: securityHeaders.js (M15).
 const { APP_BASE_URL } = require("../config");
 const cors = require("cors");
 const { parseCookies } = require("../utils/cookies");
