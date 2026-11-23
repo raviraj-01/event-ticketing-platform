@@ -205,18 +205,19 @@ router.delete("/admin/staff/:staffId", requireAdmin, confirmed, audit("staff.del
     if (!staffId) {
       return res.status(400).json({ error: "Valid staffId is required" });
     }
-    const adminEmail =
-      req.admin && req.admin.email ? String(req.admin.email).trim().toLowerCase() : "";
-    const result = await pool.query(
-      `DELETE FROM staff_accounts
-       WHERE id=$1
-         AND creator_id IS NULL
-         AND (created_by_admin_email IS NULL OR LOWER(created_by_admin_email)=LOWER($2))
-       RETURNING *`,
-      [staffId, adminEmail],
-    );
-    if (!result.rows.length) {
+    const existing = await pool.query("SELECT * FROM staff_accounts WHERE id=$1", [staffId]);
+    if (!existing.rows.length) {
       return res.json({ success: true, alreadyDeleted: true, staffId });
+    }
+    // M19 / D27: admins delete only admin-created staff they created
+    // themselves; a super admin may delete any admin-created staff. Organizer
+    // staff are never deleted from the admin panel.
+    if (!adminManagesStaff(req.admin, existing.rows[0])) {
+      return res.status(403).json({ error: "Only the admin who created this staff account, or a super admin, can delete it" });
+    }
+    const result = await pool.query("DELETE FROM staff_accounts WHERE id=$1 AND creator_id IS NULL RETURNING *", [staffId]);
+    if (!result.rows.length) {
+      return res.status(403).json({ error: "Organizer staff can only be removed by their organizer" });
     }
     res.json({ success: true, staff: publicStaff(result.rows[0]) });
   } catch (err) {
@@ -392,6 +393,16 @@ const SNAPSHOT_LISTS = ["buyers", "creators", "events", "ledger", "staff"];
 // Q16: organizers are not charged a fee (buyers pay it on top), so the
 // organizer fee shown in the admin panel is always 0.
 const adminCreatorView = (creator) => ({ ...publicAdminCreator(creator), fee: organizerEarnings(0).fee });
+
+// M19 / D27: does this admin manage this staff account? Super admins manage
+// all admin-created staff; normal admins only those they created. Organizer
+// staff (creator_id set) belong to their organizer.
+function adminManagesStaff(admin, staff) {
+  if (staff.creator_id) return admin.adminType === "super";
+  if (admin.adminType === "super") return true;
+  const createdBy = String(staff.created_by_admin_email || "").trim().toLowerCase();
+  return Boolean(createdBy) && createdBy === String(admin.email || "").trim().toLowerCase();
+}
 
 // Q6 / D20: approve or reject an event waiting for review. Only a pending
 // event can be reviewed, so two admins clicking at once can't both act on it.
@@ -660,6 +671,13 @@ router.patch("/admin/staff/:staffId/status", requireAdmin, confirmed, audit("sta
     }
     if (existing.rows[0].status === "pending" && status === "active" && req.admin.adminType !== "super") {
       return res.status(403).json({ error: "Super Admin verification is required to activate this staff member" });
+    }
+    // M19 / D27: any admin may SUSPEND any staff member (reversible safety
+    // action, audited). Activating or resetting to pending undoes someone
+    // else's decision, so it is limited to staff the admin created themselves
+    // (super admins: any).
+    if (status !== "suspended" && !adminManagesStaff(req.admin, existing.rows[0])) {
+      return res.status(403).json({ error: "Only the admin who created this staff account, or a super admin, can change it" });
     }
     const result = await pool.query(
       "UPDATE staff_accounts SET status=$1 WHERE id=$2 RETURNING *",
