@@ -54,20 +54,41 @@ test("L5: a commission over 100% is a clear 400, not a database error", async ()
   assert.match(res.body.error, /between 0 and 100/);
 });
 
-test("M3: the duplicate report finds emails that differ only in case, read-only", async () => {
+test("M3: emails that differ only in case: refused by the unique index; the report finds old ones", async () => {
   const stamp = fx.uid();
   await fx.createBuyer({ email: `Case${stamp}@Test.local` });
-  await fx.createBuyer({ email: `case${stamp}@test.local` });
+  await assert.rejects(fx.createBuyer({ email: `case${stamp}@test.local` }), { code: "23505", constraint: "users_email_lower_unique" });
+
+  // A database from before 0019 can hold such pairs: recreate that state in a
+  // transaction that is rolled back.
   const client = await server.db.connect();
   try {
-    await client.query("BEGIN READ ONLY");
+    await client.query("BEGIN");
+    await client.query("DROP INDEX users_email_lower_unique");
+    await client.query("INSERT INTO users (username, email, password) VALUES ('Buyer', $1, 'x')", [`case${stamp}@test.local`]);
     const emails = await findDuplicateEmails(client);
     await findDuplicatePhones(client);
-    await client.query("ROLLBACK");
     const group = emails.find((g) => g.table === "users" && g.email === `case${stamp}@test.local`);
     assert.ok(group, JSON.stringify(emails));
     assert.equal(group.accounts.length, 2);
   } finally {
+    await client.query("ROLLBACK");
     client.release();
   }
+});
+
+test("M3: Google login's upsert treats Mixed@Case and mixed@case as one account (ON CONFLICT on LOWER(email))", async () => {
+  const stamp = fx.uid();
+  const existing = await fx.createBuyer({ email: `Google${stamp}@Test.local` });
+  // The statement shape used by upsertGoogleBuyer() in src/routes/buyerAuth.js.
+  const result = await server.db.query(
+    `INSERT INTO users (username, first_name, last_name, email, password, auth_provider, profile_image_url)
+     VALUES ('G', 'G', '', $1, 'oauth-provider', 'google', '')
+     ON CONFLICT ((LOWER(email))) DO UPDATE SET auth_provider = EXCLUDED.auth_provider
+     RETURNING id`,
+    [`google${stamp}@test.local`],
+  );
+  assert.equal(result.rows[0].id, existing.id);
+  const count = await server.db.query("SELECT COUNT(*)::int AS n FROM users WHERE LOWER(email) = $1", [`google${stamp}@test.local`]);
+  assert.equal(count.rows[0].n, 1);
 });

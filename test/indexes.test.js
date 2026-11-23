@@ -27,10 +27,12 @@ const CASES = [
   ["staff_accounts_creator_idx", "SELECT * FROM staff_accounts WHERE creator_id = 1"],
   ["creator_kyc_documents_creator_idx", "SELECT * FROM creator_kyc_documents WHERE creator_id = 1"],
   ["payment_transactions_booking_idx", "SELECT * FROM payment_transactions WHERE booking_id = 'ORD-1'"],
-  ["users_email_lower_idx", "SELECT * FROM users WHERE LOWER(email) = LOWER('a@b.c')"],
-  ["creator_accounts_email_lower_idx", "SELECT * FROM creator_accounts WHERE LOWER(email) = 'a@b.c'"],
-  ["admin_accounts_email_lower_idx", "SELECT * FROM admin_accounts WHERE LOWER(email) = 'a@b.c'"],
-  ["super_admin_accounts_email_lower_idx", "SELECT * FROM super_admin_accounts WHERE LOWER(email) = 'a@b.c'"],
+  // Since 0019 the planner may pick the unique index on the same expression.
+  ["users_email_lower_idx|users_email_lower_unique", "SELECT * FROM users WHERE LOWER(email) = LOWER('a@b.c')"],
+  ["creator_accounts_email_lower_idx|creator_accounts_email_lower_unique", "SELECT * FROM creator_accounts WHERE LOWER(email) = 'a@b.c'"],
+  ["admin_accounts_email_lower_idx|admin_accounts_email_lower_unique", "SELECT * FROM admin_accounts WHERE LOWER(email) = 'a@b.c'"],
+  ["super_admin_accounts_email_lower_idx|super_admin_accounts_email_lower_unique", "SELECT * FROM super_admin_accounts WHERE LOWER(email) = 'a@b.c'"],
+  ["users_verified_phone_unique", "SELECT 1 FROM users WHERE verified_phone_key(phone_verified, country_code, phone) = phone_key('+91', '9812345678')"],
   ["staff_accounts_email_lower_idx", "SELECT * FROM staff_accounts WHERE LOWER(email) = LOWER('a@b.c')"],
   ["orders_pending_expiry_idx", "SELECT id FROM orders WHERE status = 'pending' AND expires_at < NOW()"],
 ];
@@ -41,7 +43,7 @@ test("M2: each lookup can use its index", async () => {
     await client.query("SET enable_seqscan = off");
     for (const [index, sql] of CASES) {
       const plan = (await client.query(`EXPLAIN ${sql}`)).rows.map((r) => r["QUERY PLAN"]).join("\n");
-      assert.ok(plan.includes(index), `${index} not used for: ${sql}\n${plan}`);
+      assert.ok(index.split("|").some((name) => plan.includes(name)),`${index} not used for: ${sql}\n${plan}`);
     }
   } finally {
     await client.query("RESET enable_seqscan");

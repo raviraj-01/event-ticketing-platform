@@ -207,7 +207,9 @@ router.post("/signup", async (req, res) => {
     res.json({ message: "Signup successful", user: result.rows[0] });
   } catch (err) {
     if (err.code === "23505") {
-      return res.status(409).json({ error: "An account with this email already exists" });
+      // Two signups racing past the checks above: the unique indexes (0019) decide.
+      const phone = err.constraint === "users_verified_phone_unique";
+      return res.status(409).json({ error: `An account with this ${phone ? "phone number" : "email"} already exists` });
     }
     sendError(res, err, { message: "Signup failed", log: "Signup failed" });
   }
@@ -233,10 +235,12 @@ async function upsertGoogleBuyer({ name, email, photoURL }) {
   if (existing.rows.length && !isUserActive(existing.rows[0].status)) {
     throw new HttpError(404, USER_NOT_FOUND_ERROR);
   }
+  // Conflict on LOWER(email) (0019): an account stored as Ravi@Gmail.com is the
+  // same account as ravi@gmail.com from Google, not a second one (M3).
   const upsert = await pool.query(
     `INSERT INTO users (username, first_name, last_name, email, password, auth_provider, profile_image_url)
     VALUES ($1,$2,$3,$4,$5,$6,$7)
-    ON CONFLICT (email) DO UPDATE SET
+    ON CONFLICT ((LOWER(email))) DO UPDATE SET
       username=EXCLUDED.username,
       first_name=EXCLUDED.first_name,
       last_name=EXCLUDED.last_name,

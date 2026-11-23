@@ -10,6 +10,8 @@ let server;
 let db;
 let seq = 0;
 const uid = () => `${Date.now()}${++seq}`;
+// Verified phones are unique (migration 0019): one per buyer.
+const uniquePhone = () => `9${String(Date.now() % 100000).padStart(5, "0")}${String(++seq % 10000).padStart(4, "0")}`;
 
 before(async () => {
   server = await startTestServer();
@@ -41,7 +43,7 @@ async function createBuyer({ email, phone } = {}) {
   const result = await db.query(
     `INSERT INTO users (username, first_name, email, password, phone)
      VALUES ('Buyer', 'Buyer', $1, 'x', $2) RETURNING id, email`,
-    [email || `buyer${uid()}@test.local`, phone === undefined ? `98${String(Date.now()).slice(-8)}` : phone],
+    [email || `buyer${uid()}@test.local`, phone === undefined ? uniquePhone() : phone],
   );
   const user = result.rows[0];
   return { ...user, token: await signTestToken({ sub: user.id, email: user.email }) };

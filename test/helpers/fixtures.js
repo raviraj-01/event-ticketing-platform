@@ -6,6 +6,7 @@ const { signTestToken } = require("./testServer");
 function makeFixtures(db) {
   let seq = 0;
   const uid = () => `${Date.now()}${++seq}${crypto.randomBytes(2).toString("hex")}`;
+  const uniquePhone = () => `9${String(Date.now() % 100000).padStart(5, "0")}${String(++seq % 10000).padStart(4, "0")}`;
 
   async function createCreator({ kycStatus = "Approved" } = {}) {
     const result = await db.query(
@@ -22,7 +23,8 @@ function makeFixtures(db) {
       `INSERT INTO users (username, first_name, email, password, phone)
        VALUES ('Buyer', 'Buyer', $1, 'x', $2) RETURNING id, email`,
       // Paid checkout needs a phone (Q14); pass phone: null for a phoneless buyer.
-      [email || `buyer${uid()}@test.local`, phone === undefined ? `98${String(Date.now()).slice(-8)}` : phone],
+      // Unique per buyer: verified phones are unique (migration 0019).
+      [email || `buyer${uid()}@test.local`, phone === undefined ? uniquePhone() : phone],
     );
     const user = result.rows[0];
     return { ...user, token: await signTestToken({ sub: user.id, email: user.email }) };

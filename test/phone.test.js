@@ -98,7 +98,8 @@ test("Q12 + M22: the migration leaves existing rows untouched; their phones stil
     [ids],
   ).then((r) => r.rows);
   const before = await snapshot();
-  await migrate("up", Infinity);
+  // Up to (not including) 0019, the unique indexes, which need the report first.
+  await migrate("up", laterMigrations.indexOf("0019_unique_phone_and_emails.sql"));
   assert.deepEqual(await snapshot(), before, "existing values unchanged");
 
   const rows = await server.db.query(
@@ -118,6 +119,26 @@ test("Q12 + M22: the migration leaves existing rows untouched; their phones stil
   assert.ok(group, JSON.stringify(groups));
   assert.deepEqual(group.accounts.map((a) => a.id).sort(), [dupOne, dupTwo].sort());
   assert.ok(!groups.some((g) => g.phone === "919812345604"));
+
+  // 0019 on a database with duplicates: refused as a whole, nothing changed.
+  await assert.rejects(migrate("up", Infinity));
+  assert.deepEqual(await snapshot(), before, "a failed 0019 changes nothing");
+  const leftover = await server.db.query("SELECT 1 FROM pg_indexes WHERE indexname = 'users_email_lower_unique'");
+  assert.equal(leftover.rows.length, 0, "no index from 0019 was left behind");
+
+  // Resolved by hand (here: the throwaway test row is removed), 0019 goes through.
+  await server.db.query("DELETE FROM users WHERE id = $1", [dupTwo]);
+  await migrate("up", Infinity);
+  await assert.rejects(
+    insert(`old-f-${Date.now()}@test.local`, "+91 98123 45605", null),
+    { code: "23505", constraint: "users_verified_phone_unique" },
+  );
+  // Unverified (typed in before a payment, Q14) and phoneless accounts are never blocked.
+  await server.db.query(
+    "INSERT INTO users (username, email, password, phone, country_code, phone_verified) VALUES ('u', $1, 'x', '9812345605', '+91', FALSE)",
+    [`unverified-${Date.now()}@test.local`],
+  );
+  await insert(`old-g-${Date.now()}@test.local`, null, null);
 });
 
 // ── M17: a verification token works for one signup only ──

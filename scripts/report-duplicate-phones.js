@@ -5,6 +5,7 @@
 // Lists, read-only:
 //   - verified buyer phones used by more than one account (same phone key)
 //   - emails used twice when case is ignored (A@x.com vs a@x.com), per account table
+//     (buyers, organizers, admins, super admins)
 // Each group has to be resolved by hand before the matching unique index can
 // be added. It runs inside a READ ONLY transaction, so it cannot change data,
 // and it does not need the app's migrations to have run.
@@ -41,7 +42,9 @@ async function findDuplicatePhones(db) {
   return result.rows;
 }
 
-const EMAIL_TABLES = ["users", "creator_accounts", "admin_accounts", "super_admin_accounts", "staff_accounts"];
+// Tables that get a unique LOWER(email) index (migration 0019). Not
+// staff_accounts: staff may share an email on purpose (D18).
+const EMAIL_TABLES = ["users", "creator_accounts", "admin_accounts", "super_admin_accounts"];
 
 async function findDuplicateEmails(db) {
   const groups = [];
