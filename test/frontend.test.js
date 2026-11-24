@@ -52,3 +52,9 @@ test("L15: organizer dashboard has a Log out button; organizer and staff sign-ou
   assert.match(html, /function performCreatorSignOut\(\)\{[^]*?logoutSession\('creator'\);[^]*?openRoleLogin\('creator'\);\s*\}/);
   assert.match(html, /function performStaffSignOut\(\)\{[^]*?logoutSession\('staff'\);[^]*?openRoleLogin\('staff'\);\s*\}/);
 });
+
+test("L16: a login ends the other roles' sessions, so a refresh cannot switch to an earlier role", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  assert.match(html, /async function saveSession\(role,data\)\{[^]*?await endOtherRoleSessions\(role\);[^]*?\n\}/);
+  assert.match(html, /async function endOtherRoleSessions\(keepRole\)\{[^]*?r!==keepRole&&hasSession\(r\)[^]*?await logoutSession\(r\);/);
+});

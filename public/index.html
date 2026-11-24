@@ -914,9 +914,29 @@ async function saveSession(role,data){
   }else{
     localStorage.setItem(SESSION_KEYS[role],'cookie:'+role);
   }
+  // L16: one signed-in role per browser. A new login ends the other roles'
+  // sessions (on the server too), so an earlier staff/organizer/admin login
+  // cannot take over on refresh, e.g. on a shared phone.
+  await endOtherRoleSessions(role);
   // Q4: logged in with a temporary password -> choose a new one right away.
   if(data.mustChangePassword&&typeof window.forcePasswordChange==='function'){
     await window.forcePasswordChange(role);
+  }
+}
+var ROLE_PROFILE_KEYS={buyer:'VYBERA_BUYER_PROFILE',creator:'VYBERA_CREATOR_PROFILE',staff:'VYBERA_STAFF_PROFILE',admin:'VYBERA_ADMIN_PROFILE'};
+async function endOtherRoleSessions(keepRole){
+  var others=Object.keys(SESSION_KEYS).filter(function(r){return r!==keepRole&&hasSession(r);});
+  for(var i=0;i<others.length;i++){
+    var r=others[i];
+    await logoutSession(r);
+    localStorage.removeItem(ROLE_PROFILE_KEYS[r]);
+    if(r==='creator'){
+      if(typeof STORE!=='undefined')STORE.creatorProfile=null;
+      document.body.classList.remove('creator-mode');
+      var nav=document.getElementById('creatorNavBar');if(nav)nav.style.display='none';
+    }
+    if(r==='staff'&&typeof STORE!=='undefined')STORE.currentStaff=null;
+    if(r==='admin'&&typeof STORE!=='undefined')STORE.currentAdmin=null;
   }
 }
 function clearLocalSession(role){
