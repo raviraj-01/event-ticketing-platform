@@ -11,7 +11,7 @@ const { pool, dbSsl } = require("./src/db/pool");
 const { initDb } = require("./src/db/initDb");
 const { pruneRateLimitHits } = require("./src/middleware/rateLimit");
 const { expireStaleOrders } = require("./src/services/orders");
-const { reconcilePayuOrders } = require("./src/services/payuReconcile");
+const { reconcilePayuOrders, describeResult } = require("./src/services/payuReconcile");
 const app = require("./src/app");
 const { tagServerLogsWithRequestId } = require("./src/middleware/requestId");
 
@@ -41,8 +41,7 @@ async function start() {
   // confirmed). Once shortly after start, then with the housekeeping below.
   const reconcile = () =>
     reconcilePayuOrders(pool)
-      .then((results) => results.filter((r) => r.outcome !== "unchanged")
-        .forEach((r) => console.log(`PayU reconciliation: ${r.orderId} ${r.gatewayStatus} -> ${r.outcome}`)))
+      .then((results) => results.map(describeResult).filter(Boolean).forEach((line) => console.log(line)))
       .catch((err) => console.error("PayU reconciliation failed:", err.message));
   setTimeout(reconcile, 30 * 1000).unref();
   // Housekeeping every 5 minutes (correctness never depends on it).

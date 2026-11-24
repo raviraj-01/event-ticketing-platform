@@ -26,7 +26,7 @@ const {
   isValidResponseHash,
 } = require("../services/payu");
 const { APP_BASE_URL } = require("../config");
-const { reconcilePayuOrders } = require("../services/payuReconcile");
+const { reconcilePayuOrders, describeResult } = require("../services/payuReconcile");
 
 const router = express.Router();
 
@@ -121,7 +121,7 @@ router.post("/payments/payu/webhook", webhookLimit, async (req, res) => {
   if (txnid) {
     try {
       const results = await reconcilePayuOrders(pool, { txnids: [txnid] });
-      for (const r of results) console.log(`PayU webhook: ${r.orderId} ${r.gatewayStatus} -> ${r.outcome}`);
+      for (const line of results.map(describeResult).filter(Boolean)) console.log(`(webhook) ${line}`);
     } catch (err) {
       console.error("PayU webhook check failed:", err.message);
     }

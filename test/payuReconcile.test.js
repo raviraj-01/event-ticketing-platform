@@ -81,7 +81,7 @@ test("H19: browser never came back, PayU says success -> the poll confirms the o
 
   const results = await reconcilePayuOrders(server.db, { payu });
   const mine = results.find((r) => r.orderId === start.orderId);
-  assert.deepEqual({ gatewayStatus: mine.gatewayStatus, outcome: mine.outcome }, { gatewayStatus: "success", outcome: "paid" });
+  assert.deepEqual({ gatewayStatus: mine.gatewayStatus, outcome: mine.outcome }, { gatewayStatus: "captured", outcome: "paid" });
   assert.equal((await orderRow(start.orderId)).status, "paid");
   assert.equal((await bookings(start.orderId)).length, 1);
   const payment = await server.db.query("SELECT status, verified FROM payment_transactions WHERE txnid = $1", [start.txnid]);
@@ -135,20 +135,53 @@ test("H19: PayU's answer must be about this order and amount", async () => {
   assert.equal((await bookings(wrongOrder.orderId)).length + (await bookings(wrongAmount.orderId)).length, 0);
 });
 
-test("H19: failed or cancelled at PayU -> nothing issued, and the order is not asked about again", async () => {
+test("H19: a failed attempt keeps the hold and is asked again (PayU allows a retry), until 2 hours old", async () => {
   const eventId = await fx.createEvent({ creatorId: creator.id });
   const buyer = await fx.createBuyer();
   const start = await startCheckout(buyer, eventId);
   stub.state.answers[start.txnid] = { ...success(start), status: "failure", unmappedstatus: "failed" };
   await age(start.orderId, 3);
   await reconcilePayuOrders(server.db, { payu });
-  const row = await orderRow(start.orderId);
-  assert.equal(row.gateway_status, "failure");
+  let row = await orderRow(start.orderId);
+  assert.deepEqual([row.status, row.gateway_status], ["pending", "failed"]);
   assert.equal((await bookings(start.orderId)).length, 0);
-  await server.db.query("UPDATE orders SET gateway_checked_at = NOW() - interval '1 hour' WHERE id = $1", [start.orderId]);
+
+  // The buyer retries on PayU's page and pays, but the browser is lost again: still found.
+  stub.state.answers[start.txnid] = success(start);
+  await server.db.query("UPDATE orders SET gateway_checked_at = NOW() - interval '10 minutes' WHERE id = $1", [start.orderId]);
+  await reconcilePayuOrders(server.db, { payu });
+  assert.equal((await orderRow(start.orderId)).status, "paid");
+
+  // A failure older than 2 hours is final: not asked again.
+  const buyer2 = await fx.createBuyer();
+  const old = await startCheckout(buyer2, eventId);
+  stub.state.answers[old.txnid] = { ...success(old), status: "failure", unmappedstatus: "failed" };
+  await server.db.query(
+    "UPDATE orders SET status = 'expired', gateway_status = 'failed', gateway_checked_at = NOW() - interval '1 hour', created_at = NOW() - interval '3 hours' WHERE id = $1",
+    [old.orderId],
+  );
   const calls = stub.state.calls.length;
   await reconcilePayuOrders(server.db, { payu });
-  assert.ok(!stub.state.calls.slice(calls).some((c) => c.var1.split("|").includes(start.txnid)));
+  assert.ok(!stub.state.calls.slice(calls).some((c) => c.var1.split("|").includes(old.txnid)));
+  row = await orderRow(old.orderId);
+  assert.equal(row.status, "expired");
+});
+
+test("H19: the buyer cancelled at PayU -> the seat hold is released at once, no ticket", async () => {
+  const eventId = await fx.createEvent({ creatorId: creator.id, capacity: 1, tiers: [{ name: "General", price: 500, qty: 1 }] });
+  const buyer = await fx.createBuyer();
+  const start = await startCheckout(buyer, eventId);
+  const seatsLeft = async () => {
+    const events = (await api(server.baseUrl, "GET", "/events")).body.events;
+    return events.find((e) => e.id === eventId).tickets[0].available;
+  };
+  assert.equal(await seatsLeft(), 0, "held during checkout");
+  stub.state.answers[start.txnid] = { ...success(start), status: "failure", unmappedstatus: "userCancelled" };
+  const [result] = await reconcilePayuOrders(server.db, { payu, txnids: [start.txnid] });
+  assert.deepEqual([result.gatewayStatus, result.outcome], ["usercancelled", "released"]);
+  assert.equal((await orderRow(start.orderId)).status, "expired");
+  assert.equal(await seatsLeft(), 1, "seat is free again");
+  assert.equal((await bookings(start.orderId)).length, 0);
 });
 
 test("H19 webhook: the posted status is ignored, PayU's verify answer decides", async () => {
