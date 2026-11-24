@@ -9,21 +9,23 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=DM+Sans:wght@300;400;500;600;700&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
-  --bg: #ffffff;           /* Changed from #000000 */
-  --bg2: #f8f8f8;          /* Changed from #0D0D0D */
-  --bg3: #f0f0f0;          /* Changed from #161616 */
-  --red: #8B2010;
-  --red-dim: rgba(139,32,16,0.15);
-  --purple: #8B2010;
-  --neon: #00D4D4;
-  --white: #111111;        /* Changed text color for readability */
-  --grey: #666666;         /* Changed from #B3B3B3 */
-  --muted: #999999;        /* Changed from #555 */
-  --glass: rgba(0,0,0,0.04);
-  --glass-border: rgba(0,0,0,0.12);
-  --radius: 16px;
-  --brick: #8B2010;
-  --teal: #0c0f0f;
+  /* Legacy names, kept so existing CSS keeps working; values come from the
+     design-system tokens (the style block with id "design-system"). New code: use --c-*. */
+  --bg: var(--c-surface);
+  --bg2: var(--c-surface-2);
+  --bg3: var(--c-surface-3);
+  --red: var(--c-primary);
+  --red-dim: rgba(139,32,16,0.12);
+  --purple: var(--c-primary);
+  --neon: var(--c-accent);
+  --white: var(--c-text);        /* text colour (historic name) */
+  --grey: var(--c-text-2);
+  --muted: var(--c-text-muted);
+  --glass: var(--c-surface-2);
+  --glass-border: var(--c-border);
+  --radius: var(--r-lg);
+  --brick: var(--c-primary);
+  --teal: var(--c-accent);
 }
 *{margin:0;padding:0;box-sizing:border-box;}html{scroll-behavior:smooth;}
 body{background:var(--bg);color:var(--white);font-family:"DM Sans",sans-serif;overflow-x:hidden;min-height:100vh;}
@@ -48,17 +50,7 @@ body.on-login .bottom-nav,
 body.on-creator-login .bottom-nav{display:none !important;}
 body.guest-mode .profile-stats,
 body.guest-mode #profileCreatedEventsItem{display:none !important;}
-.cta-full{width:100%;padding:16px;background:var(--red);color:#fff;border:none;border-radius:16px;font-size:16px;font-weight:700;cursor:pointer;font-family:"DM Sans",sans-serif;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
-.cta-full:hover{background:#ff0f1e;transform:translateY(-1px);}
-.btn-red{background:var(--red);color:#fff;border:none;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:"DM Sans",sans-serif;transition:all .2s;}
-.btn-red:hover{background:#ff0f1e;}
-.btn-ghost{background:var(--glass);border:1px solid var(--glass-border);color:var(--white);padding:12px 24px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;transition:all .2s;}
-.back-btn{width:36px;height:50px;background:var(--bg2);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--glass-border);flex-shrink:0;}
 .sub-header .back-btn img{display:none!important;}
-.back-btn svg{width:18px;height:18px;stroke:var(--white);fill:none;stroke-width:2;}
-.icon-btn{background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
-.icon-btn svg{width:18px;height:18px;stroke:var(--grey);fill:none;stroke-width:1.8;}
-.tag-pill{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--glass);border:1px solid var(--glass-border);color:var(--grey);letter-spacing:.5px;text-transform:uppercase;}
 .sec-header{display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin-bottom:12px;}
 .sec-title{font-size:17px;font-weight:700;}
 .sec-more{color:var(--grey);font-size:13px;cursor:pointer;}
@@ -68,11 +60,6 @@ body.guest-mode #profileCreatedEventsItem{display:none !important;}
 .chips-wrap{overflow-x:auto;padding:0 16px 16px;scrollbar-width:none;}
 .chips-wrap::-webkit-scrollbar{display:none;}
 .chips{display:flex;gap:8px;}
-.chip{flex-shrink:0;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid var(--glass-border);background:var(--glass);color:var(--grey);cursor:pointer;transition:all .2s;white-space:nowrap;}
-.chip.active{background:var(--red);border-color:var(--red);color:#fff;}
-.form-input{width:100%;background:var(--bg2);border:1px solid var(--glass-border);border-radius:12px;padding:12px 16px;color:var(--white);font-size:14px;font-family:"DM Sans",sans-serif;outline:none;transition:border .2s;}
-.form-input:focus{border-color:var(--red);}
-.form-input::placeholder{color:var(--muted);}
 textarea.form-input{resize:vertical;min-height:100px;}
 .toggle{width:44px;height:24px;background:var(--bg3);border-radius:999px;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
 .toggle.on{background:var(--red);}
@@ -436,6 +423,160 @@ textarea.form-input{resize:vertical;min-height:100px;}
     background:#fff!important;
     color:#111!important;
   }
+}
+</style>
+<style id="design-system">
+/* ══════════════════════════════════════════════════════════════════════
+   Design system (docs/UI-AUDIT.md, approved 2026-11-25). One place for
+   colour, type, spacing, radius, shadow and motion. Legacy variables
+   (--bg, --red, --muted …) point here; new code uses the --c-* names.
+   ══════════════════════════════════════════════════════════════════════ */
+:root{
+  /* colour (light) — contrast on white: primary 9.1, accent 5.5, text 17.7, text-2 7.7, muted 4.8 */
+  --c-primary:#8B2010; --c-primary-hover:#74190C; --c-primary-subtle:#FBEDEA; --c-on-primary:#FFFFFF;
+  --c-accent:#0F766E; --c-accent-subtle:#E6F4F2;
+  --c-text:#18181B; --c-text-2:#52525B; --c-text-muted:#71717A; --c-text-inverse:#FFFFFF;
+  --c-surface:#FFFFFF; --c-surface-2:#F7F7F8; --c-surface-3:#EFEFF1;
+  --c-border:#E4E4E7; --c-border-strong:#D4D4D8;
+  --c-success:#15803D; --c-success-subtle:#DCFCE7;
+  --c-warning:#B45309; --c-warning-text:#92400E; --c-warning-subtle:#FEF3C7;
+  --c-danger:#B91C1C; --c-danger-subtle:#FEE2E2;
+  --c-info:#0F766E; --c-info-subtle:#E6F4F2;
+  --c-focus:#2563EB; --c-overlay:rgba(24,24,27,.55);
+  /* type — DM Sans everywhere, Bebas Neue for display, Space Mono for codes */
+  --font-sans:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-display:"Bebas Neue","DM Sans",sans-serif;
+  --font-mono:"Space Mono",ui-monospace,monospace;
+  --fs-12:12px; --fs-14:14px; --fs-16:16px; --fs-18:18px; --fs-22:22px; --fs-28:28px; --fs-36:36px;
+  /* spacing, radius, shadow */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-6:24px; --sp-8:32px; --sp-12:48px;
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+  --sh-sm:0 1px 2px rgb(0 0 0 / .06); --sh-md:0 4px 12px rgb(0 0 0 / .08); --sh-lg:0 12px 32px rgb(0 0 0 / .14);
+  /* motion — transform/opacity only */
+  --dur-fast:150ms; --dur:200ms; --dur-slow:250ms; --ease:cubic-bezier(.2,.8,.2,1);
+  --tap:44px;
+}
+/* Admin keeps its dark/light switch; both are the same tokens. */
+.adm-dark{
+  --c-primary:#8B2010; --c-primary-hover:#A3271A; --c-primary-subtle:#2A1412;
+  --c-accent:#22D3EE; --c-accent-subtle:#0E2A30;
+  --c-text:#F4F4F5; --c-text-2:#D4D4D8; --c-text-muted:#A1A1AA;
+  --c-surface:#0B0B0C; --c-surface-2:#18181B; --c-surface-3:#232326;
+  --c-border:#2E2E33; --c-border-strong:#3F3F46;
+  --c-success:#4ADE80; --c-success-subtle:#0F2A19; --c-warning:#FBBF24; --c-warning-text:#FBBF24; --c-warning-subtle:#2B2108;
+  --c-danger:#F87171; --c-danger-subtle:#2D1414; --c-info:#22D3EE; --c-info-subtle:#0E2A30; --c-focus:#60A5FA;
+  --adm-bg:var(--c-surface); --adm-bg2:var(--c-surface-2); --adm-bg3:var(--c-surface-3);
+  --adm-border:var(--c-border); --adm-text:var(--c-text); --adm-text2:var(--c-text-muted); --adm-text3:#8B8B94;
+  --adm-card-bg:var(--c-surface-2); --adm-hover:rgba(255,255,255,.05); --adm-input-bg:var(--c-surface-3);
+}
+.adm-light{
+  --adm-bg:var(--c-surface-2); --adm-bg2:var(--c-surface); --adm-bg3:var(--c-surface-3);
+  --adm-border:var(--c-border); --adm-text:var(--c-text); --adm-text2:var(--c-text-2); --adm-text3:var(--c-text-muted);
+  --adm-card-bg:var(--c-surface); --adm-hover:rgba(0,0,0,.03); --adm-input-bg:var(--c-surface);
+}
+
+/* ── Focus: always visible for keyboard users (overrides inline outline:none) ── */
+:where(a,button,input,select,textarea,summary,[tabindex],[role="button"]):focus-visible{
+  outline:2px solid var(--c-focus)!important; outline-offset:2px!important;
+}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+/* ── Shared classes already in the markup, on the new tokens ── */
+.cta-full{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;min-height:48px;padding:12px 20px;background:var(--c-primary);color:var(--c-on-primary);border-radius:var(--r-md);font:700 var(--fs-16)/1.2 var(--font-sans);transition:transform var(--dur-fast) var(--ease),background-color var(--dur) var(--ease),opacity var(--dur);}
+.cta-full:hover{background:var(--c-primary-hover);transform:none;}
+.cta-full:active{transform:scale(.98);}
+.cta-full:disabled,.cta-full[aria-disabled="true"]{opacity:.55;cursor:not-allowed;transform:none;}
+.btn-red{display:flex;align-items:center;gap:8px;border:none;cursor:pointer;min-height:var(--tap);padding:0 20px;background:var(--c-primary);color:var(--c-on-primary);border-radius:var(--r-md);font:600 var(--fs-14)/1 var(--font-sans);justify-content:center;transition:transform var(--dur-fast) var(--ease),background-color var(--dur) var(--ease);}
+.btn-red:hover{background:var(--c-primary-hover);}
+.btn-red:active{transform:scale(.98);}
+.btn-ghost{cursor:pointer;min-height:var(--tap);padding:0 20px;background:var(--c-surface);border:1px solid var(--c-border-strong);color:var(--c-text);border-radius:var(--r-md);font:600 var(--fs-14)/1 var(--font-sans);display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform var(--dur-fast) var(--ease),background-color var(--dur) var(--ease);}
+.btn-ghost:hover{background:var(--c-surface-2);}
+.btn-ghost:active{transform:scale(.98);}
+.back-btn{display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;width:var(--tap);height:var(--tap);border-radius:var(--r-md);background:var(--c-surface);border:1px solid var(--c-border);}
+.back-btn svg{width:18px;height:18px;fill:none;stroke-width:2;stroke:var(--c-text);}
+.icon-btn{display:flex;align-items:center;justify-content:center;cursor:pointer;width:var(--tap);height:var(--tap);border-radius:var(--r-md);background:var(--c-surface);border:1px solid var(--c-border);}
+.icon-btn svg{width:18px;height:18px;fill:none;stroke-width:1.8;stroke:var(--c-text-2);}
+.chip{flex-shrink:0;cursor:pointer;white-space:nowrap;min-height:40px;padding:0 16px;display:inline-flex;align-items:center;border-radius:var(--r-pill);font:600 var(--fs-14)/1 var(--font-sans);border:1px solid var(--c-border-strong);background:var(--c-surface);color:var(--c-text-2);transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease);}
+.chip.active{background:var(--c-primary);border-color:var(--c-primary);color:var(--c-on-primary);}
+.tag-pill{font-weight:600;padding:3px 10px;border-radius:var(--r-pill);border:1px solid;letter-spacing:.5px;text-transform:uppercase;font-size:var(--fs-12);color:var(--c-text-2);background:var(--c-surface-3);border-color:var(--c-border);}
+.form-input{width:100%;font-family:var(--font-sans);outline:none;min-height:var(--tap);padding:10px 14px;background:var(--c-surface);border:1px solid var(--c-border-strong);border-radius:var(--r-md);color:var(--c-text);font-size:var(--fs-16);transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease);}
+.form-input:focus{border-color:var(--c-primary);box-shadow:0 0 0 3px var(--c-primary-subtle);}
+.form-input::placeholder{color:var(--c-text-muted);}
+.form-input[aria-invalid="true"]{border-color:var(--c-danger);}
+
+/* ── New components (use these in new and migrated markup) ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:var(--tap);padding:0 18px;border-radius:var(--r-md);border:1px solid transparent;font:600 var(--fs-14)/1.2 var(--font-sans);cursor:pointer;text-decoration:none;transition:transform var(--dur-fast) var(--ease),background-color var(--dur) var(--ease),border-color var(--dur) var(--ease),opacity var(--dur);}
+.btn:active{transform:scale(.98);}
+.btn:disabled,.btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed;transform:none;}
+.btn-primary{background:var(--c-primary);color:var(--c-on-primary);}
+.btn-primary:hover{background:var(--c-primary-hover);}
+.btn-secondary{background:var(--c-surface);color:var(--c-text);border-color:var(--c-border-strong);}
+.btn-secondary:hover{background:var(--c-surface-2);}
+.btn-quiet{background:transparent;color:var(--c-text-2);}
+.btn-quiet:hover{background:var(--c-surface-2);color:var(--c-text);}
+.btn-danger{background:var(--c-danger);color:#fff;}
+.btn-block{width:100%;}
+@media (pointer:fine){.btn-compact{min-height:36px;padding:0 12px;}}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:var(--sp-4);}
+.field-label{font:600 var(--fs-12)/1.3 var(--font-sans);color:var(--c-text-2);letter-spacing:.02em;}
+.field-hint{font-size:var(--fs-12);color:var(--c-text-muted);}
+.field-error{font-size:var(--fs-12);color:var(--c-danger);}
+.card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-md);box-shadow:var(--sh-sm);}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:var(--r-pill);font:600 var(--fs-12)/20px var(--font-sans);white-space:nowrap;}
+.badge-success{background:var(--c-success-subtle);color:var(--c-success);}
+.badge-warning{background:var(--c-warning-subtle);color:var(--c-warning-text);}
+.badge-danger{background:var(--c-danger-subtle);color:var(--c-danger);}
+.badge-info{background:var(--c-info-subtle);color:var(--c-info);}
+.badge-neutral{background:var(--c-surface-3);color:var(--c-text-2);}
+.spinner{display:inline-block;width:20px;height:20px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:ds-spin .7s linear infinite;flex-shrink:0;}
+.spinner-lg{width:32px;height:32px;border-width:3px;}
+.ui-state{display:flex;flex-direction:column;align-items:center;text-align:center;gap:var(--sp-2);padding:var(--sp-8) var(--sp-4);color:var(--c-text-2);}
+.ui-state-icon{font-size:32px;line-height:1;margin-bottom:var(--sp-1);}
+.ui-state-title{font:700 var(--fs-16)/1.3 var(--font-sans);color:var(--c-text);}
+.ui-state-text{font-size:var(--fs-14);line-height:1.5;max-width:320px;}
+.ui-state .btn{margin-top:var(--sp-2);}
+.ui-state-error .ui-state-title{color:var(--c-danger);}
+.skeleton{display:block;background:var(--c-surface-3);border-radius:var(--r-sm);animation:ds-pulse 1.2s ease-in-out infinite;}
+.skeleton-line{height:14px;margin:8px 0;}
+.skeleton-card{height:88px;margin-bottom:var(--sp-3);border-radius:var(--r-md);}
+
+/* ── Dialogs: role/aria/focus handled by the dialog manager (JS) ── */
+.ui-dialog-backdrop{position:fixed;inset:0;z-index:10000;background:var(--c-overlay);display:flex;align-items:center;justify-content:center;padding:var(--sp-4);animation:ds-fade var(--dur) var(--ease);}
+.ui-dialog{width:100%;max-width:400px;max-height:calc(100vh - 32px);overflow:auto;background:var(--c-surface);color:var(--c-text);border-radius:var(--r-lg);box-shadow:var(--sh-lg);padding:var(--sp-6);font-family:var(--font-sans);animation:ds-scale-in var(--dur-slow) var(--ease);}
+.ui-dialog:focus{outline:none;}
+.ui-dialog-title{font:700 var(--fs-18)/1.3 var(--font-sans);color:var(--c-text);margin-bottom:6px;}
+.ui-dialog-text{font-size:var(--fs-14);line-height:1.5;color:var(--c-text-2);margin-bottom:var(--sp-4);}
+.ui-dialog-amount{font:700 var(--fs-28)/1.2 var(--font-sans);font-variant-numeric:tabular-nums;color:var(--c-text);margin:var(--sp-1) 0 var(--sp-3);}
+.ui-dialog-actions{display:flex;gap:10px;margin-top:var(--sp-2);}
+.ui-dialog-actions .btn{flex:1;}
+.ui-dialog-center{text-align:center;}
+.ui-dialog-center .spinner{color:var(--c-primary);margin:0 auto var(--sp-3);}
+.ui-dialog label{display:block;font:600 var(--fs-12)/1.3 var(--font-sans);color:var(--c-text-2);margin:0 0 6px;}
+.ui-dialog input,.ui-dialog select,.ui-dialog textarea{width:100%;min-height:var(--tap);padding:10px 14px;margin:0 0 var(--sp-3);border:1px solid var(--c-border-strong);border-radius:var(--r-md);background:var(--c-surface);color:var(--c-text);font:var(--fs-16) var(--font-sans);box-sizing:border-box;}
+.ui-dialog input:focus,.ui-dialog select:focus,.ui-dialog textarea:focus{border-color:var(--c-primary);box-shadow:0 0 0 3px var(--c-primary-subtle);outline:none;}
+@media (max-width:480px){
+  .ui-dialog-backdrop{align-items:flex-end;padding:0;}
+  .ui-dialog{max-width:none;border-radius:var(--r-lg) var(--r-lg) 0 0;padding:var(--sp-6) var(--sp-4) calc(var(--sp-6) + env(safe-area-inset-bottom,0px));animation-name:ds-sheet-in;}
+}
+
+/* ── Toasts: one live region (role=status, aria-live=polite) ── */
+.toast-region{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:10050;display:flex;flex-direction:column;align-items:center;gap:8px;width:calc(100% - 32px);max-width:420px;pointer-events:none;}
+.toast{pointer-events:auto;max-width:100%;padding:12px 16px;border-radius:var(--r-md);background:var(--c-text);color:var(--c-text-inverse);font:600 var(--fs-14)/1.4 var(--font-sans);box-shadow:var(--sh-lg);text-align:center;animation:ds-toast-in var(--dur) var(--ease);transition:opacity var(--dur) var(--ease),transform var(--dur) var(--ease);}
+.toast.toast-leaving{opacity:0;transform:translateY(8px);}
+
+/* ── Motion ── */
+@keyframes ds-spin{to{transform:rotate(360deg);}}
+@keyframes ds-pulse{50%{opacity:.55;}}
+@keyframes ds-fade{from{opacity:0;}}
+@keyframes ds-scale-in{from{opacity:0;transform:scale(.96);}}
+@keyframes ds-sheet-in{from{opacity:0;transform:translateY(24px);}}
+@keyframes ds-toast-in{from{opacity:0;transform:translateY(12px);}}
+/* Page change: short and never fully invisible (was 0 → 1 over .3 s). */
+@keyframes fadeUp{from{opacity:.6;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.page.active,.sub-page.active{animation-duration:var(--dur);animation-timing-function:var(--ease);}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}
+  .spinner{animation-duration:1.2s!important;animation-iteration-count:infinite!important;} /* loading feedback is essential */
 }
 </style>
 <!-- App-only styles: enabled by scripts/build-cordova.js (media="all"). -->
@@ -3393,14 +3534,13 @@ function confirmSignOut(onConfirm){
   if(existing) existing.remove();
   var modal=document.createElement('div');
   modal.id='signOutConfirmModal';
-  modal.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px;';
-  modal.innerHTML='<div style="width:100%;max-width:360px;background:#111;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;box-shadow:0 18px 70px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
-    +'<div style="width:48px;height:48px;border-radius:16px;background:rgba(139,32,16,.16);border:1px solid rgba(139,32,16,.35);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:#ff6b57;font-size:22px;">&#8634;</div>'
-    +'<div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">Sign out?</div>'
-    +'<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,.58);margin-bottom:18px;">You will need to sign in again to access this profile.</div>'
-    +'<div style="display:flex;gap:10px;">'
-    +'<button data-cancel="1" style="flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Cancel</button>'
-    +'<button data-confirm="1" style="flex:1;padding:12px;border-radius:12px;border:none;background:#8B2010;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Sign Out</button>'
+  modal.className='ui-dialog-backdrop';
+  modal.innerHTML='<div class="ui-dialog">'
+    +'<div class="ui-dialog-title">Sign out?</div>'
+    +'<div class="ui-dialog-text">You will need to sign in again to access this profile.</div>'
+    +'<div class="ui-dialog-actions">'
+    +'<button type="button" class="btn btn-secondary" data-cancel="1">Cancel</button>'
+    +'<button type="button" class="btn btn-primary" data-confirm="1">Sign out</button>'
     +'</div></div>';
   document.body.appendChild(modal);
   function close(){modal.remove();}
@@ -4894,18 +5034,21 @@ function showPaymentStatusDialog(title,message,buttons){
   var old=document.getElementById('paymentStatusModal');if(old)old.remove();
   var modal=document.createElement('div');
   modal.id='paymentStatusModal';
-  modal.setAttribute('role','dialog');
-  modal.style.cssText='position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px;';
-  var box=document.createElement('div');
-  box.style.cssText='width:100%;max-width:360px;background:#111;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;font-family:"DM Sans",sans-serif;';
-  var h=document.createElement('div');h.style.cssText='font-size:18px;font-weight:800;margin-bottom:8px;';h.textContent=title;
-  var p=document.createElement('div');p.style.cssText='font-size:13px;line-height:1.5;color:rgba(255,255,255,.65);margin-bottom:16px;';p.textContent=message;
+  modal.className='ui-dialog-backdrop';
+  var box=document.createElement('div');box.className='ui-dialog';
+  var h=document.createElement('div');h.className='ui-dialog-title';h.textContent=title;
+  var p=document.createElement('div');p.className='ui-dialog-text';p.setAttribute('aria-live','assertive');p.textContent=message;
   box.appendChild(h);box.appendChild(p);
-  if(buttons&&buttons.length){
-    var row=document.createElement('div');row.style.cssText='display:flex;gap:10px;';
+  if(!buttons||!buttons.length){
+    modal.setAttribute('data-esc','none');
+    var spin=document.createElement('span');spin.className='spinner spinner-lg';spin.setAttribute('aria-hidden','true');
+    box.classList.add('ui-dialog-center');box.insertBefore(spin,h);
+  }else{
+    var row=document.createElement('div');row.className='ui-dialog-actions';
     buttons.forEach(function(b,i){
       var el=document.createElement('button');el.type='button';el.textContent=b.label;
-      el.style.cssText='flex:1;padding:12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;'+(i===0?'border:none;background:#8B2010;color:#fff;':'border:1px solid rgba(255,255,255,.15);background:transparent;color:#fff;');
+      el.className='btn '+(i===0?'btn-primary':'btn-secondary');
+      if(/^close$/i.test(b.label))el.setAttribute('data-dialog-close','');
       el.addEventListener('click',function(){modal.remove();if(b.onClick)b.onClick();});
       row.appendChild(el);
     });
@@ -5041,29 +5184,21 @@ function payuPollDecision(result,ctx){
 // END payuPollDecision
 
 function showPayuWaitingDialog(order,state){
-  if(!document.getElementById('vyPayuSpinStyle')){
-    var st=document.createElement('style');st.id='vyPayuSpinStyle';
-    st.textContent='@keyframes vyPayuSpin{to{transform:rotate(360deg)}}';
-    document.head.appendChild(st);
-  }
   var old=document.getElementById('paymentStatusModal');if(old)old.remove();
   var modal=document.createElement('div');
-  modal.id='paymentStatusModal';modal.setAttribute('role','dialog');
-  modal.style.cssText='position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px;';
-  var box=document.createElement('div');
-  box.style.cssText='width:100%;max-width:360px;background:#111;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:22px;font-family:"DM Sans",sans-serif;text-align:center;';
-  var spin=document.createElement('div');
-  spin.style.cssText='width:34px;height:34px;margin:0 auto 14px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:#e50914;animation:vyPayuSpin 1s linear infinite;';
-  var h=document.createElement('div');h.style.cssText='font-size:17px;font-weight:800;margin-bottom:6px;';h.textContent='Complete your payment in the PayU window';
-  var amt=document.createElement('div');amt.style.cssText='font-size:22px;font-weight:800;margin:6px 0;';amt.textContent='₹'+Number(order.amount||0).toFixed(2);
-  var p=document.createElement('div');p.id='payuWaitingText';p.style.cssText='font-size:12px;line-height:1.5;color:rgba(255,255,255,.6);margin-bottom:16px;';
+  modal.id='paymentStatusModal';
+  modal.className='ui-dialog-backdrop';
+  modal.setAttribute('data-esc','none'); // Esc must not cancel a payment by accident
+  var box=document.createElement('div');box.className='ui-dialog ui-dialog-center';
+  var spin=document.createElement('span');spin.className='spinner spinner-lg';spin.setAttribute('aria-hidden','true');
+  var h=document.createElement('div');h.className='ui-dialog-title';h.textContent='Complete your payment in the PayU window';
+  var amt=document.createElement('div');amt.className='ui-dialog-amount';amt.textContent='₹'+Number(order.amount||0).toFixed(2);
+  var p=document.createElement('div');p.id='payuWaitingText';p.className='ui-dialog-text';p.setAttribute('aria-live','assertive');
   p.textContent='This page updates by itself when PayU confirms. Keep it open.';
-  var row=document.createElement('div');row.style.cssText='display:flex;gap:10px;';
-  var focusBtn=document.createElement('button');focusBtn.type='button';focusBtn.textContent='Show PayU window';
-  focusBtn.style.cssText='flex:1;padding:12px;border-radius:12px;border:none;background:#8B2010;color:#fff;font-size:13px;font-weight:700;cursor:pointer;';
+  var row=document.createElement('div');row.className='ui-dialog-actions';
+  var focusBtn=document.createElement('button');focusBtn.type='button';focusBtn.className='btn btn-primary';focusBtn.textContent='Show PayU window';
   focusBtn.addEventListener('click',function(){try{state.win.focus();}catch(_){}});
-  var cancelBtn=document.createElement('button');cancelBtn.type='button';cancelBtn.textContent='Cancel';
-  cancelBtn.style.cssText='flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#fff;font-size:13px;font-weight:700;cursor:pointer;';
+  var cancelBtn=document.createElement('button');cancelBtn.type='button';cancelBtn.className='btn btn-secondary';cancelBtn.textContent='Cancel';
   cancelBtn.addEventListener('click',function(){state.cancelled=true;try{state.win.close();}catch(_){}payuPollTick(state);});
   row.appendChild(focusBtn);row.appendChild(cancelBtn);
   box.appendChild(spin);box.appendChild(h);box.appendChild(amt);box.appendChild(p);box.appendChild(row);
@@ -7238,22 +7373,24 @@ async function doLogin(){
 //         which emails a short-lived signed link: /?reset_token=...
 // Step 2: opening that link shows "Set new password", which calls
 //         /auth/reset-password-by-token. The password is never changed without the token.
-var RESET_INPUT_STYLE='width:100%;box-sizing:border-box;margin-bottom:12px;padding:12px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#fff;font-size:13px;outline:none;font-family:\'DM Sans\',sans-serif;';
-var RESET_LABEL_STYLE='font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:1px;font-weight:700;display:block;margin-bottom:6px;';
+// Inputs and labels inside .ui-dialog are styled by the design system; these
+// stay as empty hooks for the callers that still pass them.
+var RESET_INPUT_STYLE='';
+var RESET_LABEL_STYLE='';
 
 function showPasswordModal(id,title,intro,fieldsHtml,submitLabel,onSubmit){
   var existing=document.getElementById(id);
   if(existing) existing.remove();
   var modal=document.createElement('div');
   modal.id=id;
-  modal.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px;';
-  modal.innerHTML='<div style="width:100%;max-width:390px;background:#111;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;box-shadow:0 18px 70px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
-    +'<div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">'+escapeHtml(title)+'</div>'
-    +'<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,.58);margin-bottom:16px;">'+escapeHtml(intro)+'</div>'
+  modal.className='ui-dialog-backdrop';
+  modal.innerHTML='<div class="ui-dialog">'
+    +'<div class="ui-dialog-title">'+escapeHtml(title)+'</div>'
+    +'<div class="ui-dialog-text">'+escapeHtml(intro)+'</div>'
     +fieldsHtml
-    +'<div style="display:flex;gap:10px;margin-top:4px;">'
-    +'<button data-cancel="1" style="flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Cancel</button>'
-    +'<button data-submit="1" style="flex:1;padding:12px;border-radius:12px;border:none;background:#8B2010;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:\'DM Sans\',sans-serif;">'+escapeHtml(submitLabel)+'</button>'
+    +'<div class="ui-dialog-actions">'
+    +'<button type="button" class="btn btn-secondary" data-cancel="1">Cancel</button>'
+    +'<button type="button" class="btn btn-primary" data-submit="1">'+escapeHtml(submitLabel)+'</button>'
     +'</div></div>';
   document.body.appendChild(modal);
   modal.addEventListener('click',function(e){if(e.target===modal||e.target.closest('[data-cancel]'))modal.remove();});
@@ -7686,11 +7823,180 @@ async function loadPublishedEvents(){
   }
 }
 
+// ── Design system: toasts, dialogs, states (docs/UI-AUDIT.md) ─────────────
+// Toasts: one live region, announced to screen readers (role=status).
+function toastRegion(){
+  var region=document.getElementById('toastRegion');
+  if(!region){
+    region=document.createElement('div');
+    region.id='toastRegion';
+    region.className='toast-region';
+    region.setAttribute('role','status');
+    region.setAttribute('aria-live','polite');
+    document.body.appendChild(region);
+  }
+  return region;
+}
 function showToast(msg){
+  var region=toastRegion();
   var t=document.createElement('div');
-  t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-weight:600;padding:12px 24px;border-radius:12px;z-index:9999;font-family:"DM Sans",sans-serif;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap;border:1px solid rgba(255,255,255,0.1);';
-  t.textContent=msg;document.body.appendChild(t);
-  setTimeout(function(){t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(function(){t.remove();},300);},2500);
+  t.className='toast';
+  t.textContent=msg;
+  region.appendChild(t);
+  while(region.children.length>3)region.removeChild(region.firstChild);
+  setTimeout(function(){t.classList.add('toast-leaving');setTimeout(function(){t.remove();},250);},3500);
+}
+
+// Dialogs: every fixed overlay with an id ending in "Modal" (static markup or
+// built in JS) gets role=dialog + aria-modal, a label from its title, linked
+// field labels, focus moved inside, Tab kept inside, Esc to close, and focus
+// returned to what opened it. data-esc="none" on the overlay disables Esc.
+var DIALOG_STACK=[];
+var DIALOG_FOCUSABLE='a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+function isDialogOverlay(el){
+  return !!(el&&el.nodeType===1&&/Modal$/.test(el.id||'')&&getComputedStyle(el).position==='fixed');
+}
+function isDialogShown(el){
+  return document.body.contains(el)&&getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden';
+}
+function dialogPanel(el){
+  return el.querySelector('.ui-dialog')||el.firstElementChild||el;
+}
+function linkDialogLabels(panel){
+  panel.querySelectorAll('label').forEach(function(label){
+    if(label.htmlFor||label.querySelector('input,select,textarea'))return;
+    var field=label.nextElementSibling;
+    if(field&&!/^(INPUT|SELECT|TEXTAREA)$/.test(field.tagName))field=field.querySelector('input,select,textarea');
+    if(!field)return;
+    if(!field.id)field.id='fld-'+Math.random().toString(36).slice(2,9);
+    label.htmlFor=field.id;
+  });
+}
+function dialogFocusables(panel){
+  return [].slice.call(panel.querySelectorAll(DIALOG_FOCUSABLE)).filter(function(n){return n.offsetParent!==null||n===document.activeElement;});
+}
+function activateDialog(el){
+  if(DIALOG_STACK.some(function(d){return d.el===el;}))return;
+  var panel=dialogPanel(el);
+  if(!panel.getAttribute('role'))panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-modal','true');
+  if(!panel.getAttribute('aria-labelledby')){
+    var title=panel.querySelector('.ui-dialog-title,h1,h2,h3,[data-dialog-title]');
+    if(title){
+      if(!title.id)title.id='dlg-'+Math.random().toString(36).slice(2,9);
+      panel.setAttribute('aria-labelledby',title.id);
+    }
+  }
+  linkDialogLabels(panel);
+  DIALOG_STACK.push({el:el,panel:panel,opener:document.activeElement});
+  setTimeout(function(){
+    if(!isDialogShown(el)||panel.contains(document.activeElement))return;
+    var target=panel.querySelector('input:not([type="hidden"]):not([disabled]),select,textarea')||dialogFocusables(panel)[0];
+    if(!target){panel.setAttribute('tabindex','-1');target=panel;}
+    target.focus();
+  },60);
+}
+function deactivateDialog(el){
+  var index=-1;
+  DIALOG_STACK.forEach(function(d,i){if(d.el===el)index=i;});
+  if(index<0)return;
+  var entry=DIALOG_STACK.splice(index,1)[0];
+  var opener=entry.opener;
+  if(opener&&document.body.contains(opener)&&typeof opener.focus==='function'
+     &&(!document.activeElement||document.activeElement===document.body||!document.body.contains(document.activeElement)||entry.el.contains(document.activeElement))){
+    opener.focus();
+  }
+}
+function closeTopDialog(){
+  var top=DIALOG_STACK[DIALOG_STACK.length-1];
+  if(!top||top.el.getAttribute('data-esc')==='none')return false;
+  var closer=top.panel.querySelector('[data-cancel],[data-dialog-close],[aria-label="Close"]');
+  if(!closer){
+    closer=[].slice.call(top.panel.querySelectorAll('button,[onclick]')).find(function(b){
+      return /^(✕|×|x|cancel|close|not now)$/i.test((b.textContent||'').trim());
+    });
+  }
+  if(closer){closer.click();}
+  else if(top.el.hasAttribute('data-static-dialog')){top.el.style.display='none';}
+  else{top.el.remove();}
+  if(isDialogShown(top.el)===false)deactivateDialog(top.el);
+  return true;
+}
+document.addEventListener('keydown',function(e){
+  var top=DIALOG_STACK[DIALOG_STACK.length-1];
+  if(!top)return;
+  if(!isDialogShown(top.el)){deactivateDialog(top.el);return;}
+  if(e.key==='Escape'){if(closeTopDialog())e.preventDefault();return;}
+  if(e.key!=='Tab')return;
+  var items=dialogFocusables(top.panel);
+  if(!items.length){e.preventDefault();top.panel.focus();return;}
+  var first=items[0],last=items[items.length-1];
+  if(!top.panel.contains(document.activeElement)){e.preventDefault();first.focus();return;}
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+},true);
+(function watchDialogs(){
+  function sync(el){if(isDialogShown(el))activateDialog(el);else deactivateDialog(el);}
+  // Dialogs written in the page: shown/hidden by style or class changes.
+  var attrObserver=new MutationObserver(function(records){records.forEach(function(r){sync(r.target);});});
+  function watchStatic(){
+    document.querySelectorAll('[id$="Modal"]').forEach(function(el){
+      if(el.hasAttribute('data-static-dialog')||!isDialogOverlay(el))return;
+      el.setAttribute('data-static-dialog','');
+      attrObserver.observe(el,{attributes:true,attributeFilter:['style','class']});
+      sync(el);
+    });
+  }
+  // Dialogs built in JS: appended to / removed from <body>.
+  new MutationObserver(function(records){
+    records.forEach(function(r){
+      r.addedNodes.forEach(function(n){if(isDialogOverlay(n)&&isDialogShown(n))activateDialog(n);});
+      r.removedNodes.forEach(function(n){if(n.nodeType===1)deactivateDialog(n);});
+    });
+  }).observe(document.body,{childList:true});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',watchStatic);else watchStatic();
+})();
+
+// Shared screen states. kind: 'loading' | 'empty' | 'error'.
+// options: { icon, title, text, actionLabel, onAction } — text only (textContent).
+function uiState(container,kind,options){
+  if(!container)return null;
+  options=options||{};
+  var box=document.createElement('div');
+  box.className='ui-state ui-state-'+kind;
+  if(kind==='error')box.setAttribute('role','alert');
+  if(kind==='loading'){
+    box.setAttribute('aria-busy','true');
+    var spin=document.createElement('span');spin.className='spinner spinner-lg';spin.setAttribute('aria-hidden','true');
+    box.appendChild(spin);
+  }else if(options.icon){
+    var icon=document.createElement('div');icon.className='ui-state-icon';icon.setAttribute('aria-hidden','true');icon.textContent=options.icon;
+    box.appendChild(icon);
+  }
+  var title=options.title||(kind==='loading'?'Loading…':kind==='error'?'Something went wrong':'Nothing here yet');
+  var h=document.createElement('div');h.className='ui-state-title';h.textContent=title;box.appendChild(h);
+  if(options.text){var t=document.createElement('div');t.className='ui-state-text';t.textContent=options.text;box.appendChild(t);}
+  var label=options.actionLabel||(kind==='error'&&options.onAction?'Try again':'');
+  if(label&&options.onAction){
+    var btn=document.createElement('button');btn.type='button';btn.className='btn '+(kind==='error'?'btn-primary':'btn-secondary');
+    btn.textContent=label;btn.addEventListener('click',options.onAction);box.appendChild(btn);
+  }
+  container.replaceChildren(box);
+  return box;
+}
+// Placeholder blocks while a list loads.
+function uiSkeleton(container,count,variant){
+  if(!container)return;
+  var wrap=document.createElement('div');
+  wrap.setAttribute('aria-busy','true');
+  var label=document.createElement('span');label.className='sr-only';label.textContent='Loading';wrap.appendChild(label);
+  for(var i=0;i<(count||3);i++){
+    var block=document.createElement('span');
+    block.className='skeleton '+(variant==='line'?'skeleton-line':'skeleton-card');
+    block.setAttribute('aria-hidden','true');
+    wrap.appendChild(block);
+  }
+  container.replaceChildren(wrap);
 }
 
 // INIT
@@ -7915,6 +8221,8 @@ var admPanelTitles = {
 function admShowToast(msg){
   var t = document.getElementById('admToast');
   if(!t) return;
+  t.setAttribute('role','status');
+  t.setAttribute('aria-live','polite');
   t.textContent = msg;
   t.style.display = 'block';
   clearTimeout(t._timer);

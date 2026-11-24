@@ -76,3 +76,20 @@ test("staff login updates the address to #page-staff-dashboard (it kept #page-lo
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   assert.match(html, /function enterStaffPanel\(\)\{[^]*?history\.replaceState\(\{vyberaPage:'page-staff-dashboard'\},'','#page-staff-dashboard'\);/);
 });
+
+test("design system: tokens in one block, legacy names point to them, a11y basics present", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  const ds = html.slice(html.indexOf('<style id="design-system">'), html.indexOf("</style>", html.indexOf('<style id="design-system">')));
+  for (const token of ["--c-primary", "--c-accent", "--c-text", "--c-text-2", "--c-text-muted", "--c-surface", "--c-border", "--c-success", "--c-warning", "--c-danger", "--c-focus", "--fs-12", "--sp-4", "--r-md", "--sh-md", "--dur", "--tap"]) {
+    assert.match(ds, new RegExp(`${token}:`), token);
+  }
+  assert.ok(html.indexOf('<style id="design-system">') < html.indexOf('<style data-platform="app"'), "APK-only styles still come after and can override");
+  assert.match(html, /--muted: var\(--c-text-muted\);/);
+  assert.match(html, /--neon: var\(--c-accent\);/);
+  assert.match(ds, /:focus-visible\{\s*outline:2px solid var\(--c-focus\)!important/);
+  assert.match(ds, /@media \(prefers-reduced-motion:reduce\)/);
+  assert.match(html, /region\.setAttribute\('role','status'\);\s*region\.setAttribute\('aria-live','polite'\);/);
+  assert.match(html, /if\(e\.key==='Escape'\)\{if\(closeTopDialog\(\)\)e\.preventDefault\(\);return;\}/);
+  assert.match(html, /panel\.setAttribute\('aria-modal','true'\);/);
+  assert.doesNotMatch(html, /RESET_(INPUT|LABEL)_STYLE_OLD/);
+});
