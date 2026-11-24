@@ -30,3 +30,12 @@ test("L1: rate limited per IP", async () => {
   assert.equal(last.status, 429);
   await server.db.query("DELETE FROM rate_limit_hits");
 });
+
+test("L14: /admin is a bookmarkable address for the admin login (redirects to /#admin)", async () => {
+  const res = await fetch(`${server.baseUrl}/admin`, { redirect: "manual" });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/#admin");
+  // API routes under /admin/ are not affected.
+  const api = await fetch(`${server.baseUrl}/admin/session`);
+  assert.equal(api.status, 401);
+});

@@ -38,3 +38,10 @@ test("login: errors stay on the form; admin login is not on the public form but 
   assert.match(html, /id="adminRoleBtn" data-login-role="admin"[^>]*style="display:none;/);
   assert.match(html, /var ADMIN_LOGIN_LINK=window\.location\.hash==='#admin';\s*if\(history&&history\.replaceState\)/);
 });
+
+test("L14: /#admin works in an open tab, beats other saved sessions, and admin sign-out returns to it", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  assert.match(html, /addEventListener\('hashchange',function\(\)\{\s*if\(window\.location\.hash!=='#admin'\)return;/);
+  assert.match(html, /if\(await restoreAdminSession\(\)\)return true;[^]*?if\(ADMIN_LOGIN_LINK\)\{openAdminLogin\(\);return true;\}\s*if\(await restoreStaffSession\(\)\)/);
+  assert.match(html, /function admSignOut\(\)\{[^}]*openAdminLogin\(\);/);
+});

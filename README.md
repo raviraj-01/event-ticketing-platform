@@ -69,7 +69,7 @@ npm run seed-demo -- --admin-email=you+admin@x.com  # or choose it
 
 Creates an admin, an approved organizer, a free and a paid live event, a staff member with 10 tickets of the paid event, and a buyer with a verified phone. Insert-only: existing rows are kept as they are, so running it again is safe. The passwords are written to `demo-credentials.local.txt` (git-ignored), never printed. Admin login still needs the emailed 6-digit code.
 
-Admin login is not on the public sign-in form: open `http://localhost:3003/#admin`. The 6-digit admin code is emailed, so use an admin whose inbox you can read. Your own super admin: set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD` in `.env` and restart (created once, only if that email has no super admin yet). Without SMTP and with `ADMIN_OTP_DEV_MODE=true` (never in production) the code is shown on screen instead.
+Admin login is not on the public sign-in form: open `http://localhost:3003/admin` (bookmark it; same as `/#admin`). Signing out of the admin panel returns there. The 6-digit admin code is emailed, so use an admin whose inbox you can read. Your own super admin: set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD` in `.env` and restart (created once, only if that email has no super admin yet). Without SMTP and with `ADMIN_OTP_DEV_MODE=true` (never in production) the code is shown on screen instead.
 
 Checking a new `.env` against an old one without showing any value: `node scripts/compare-env.js .env path/to/old.env`.
 

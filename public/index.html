@@ -2674,6 +2674,7 @@ window.addEventListener('popstate',function(event){
     if(history&&history.replaceState)history.replaceState({vyberaPage:'page-admin'},'','#page-admin');
     return;
   }
+  if(window.location.hash==='#admin')return; // handled by the hashchange listener (admin login)
   var pageId=event.state&&event.state.vyberaPage;
   if(!pageId||!document.getElementById(pageId)){goBack();return;}
   var existingIndex=pageHistory.lastIndexOf(pageId);
@@ -4617,6 +4618,8 @@ async function restoreCreatorSession(){
 async function restoreSavedSession(){
   try{
     if(await restoreAdminSession())return true;
+    // /#admin: show the admin login, not a buyer/organizer/staff session saved in this browser.
+    if(ADMIN_LOGIN_LINK){openAdminLogin();return true;}
     if(await restoreStaffSession())return true;
     if(await restoreCreatorSession())return true;
     return await restoreBuyerSession();
@@ -6634,16 +6637,27 @@ function showLoginError(message){
   box.style.display=message?'block':'none';
 }
 
-// Admin login is not offered on the public form; it opens from /#admin.
-// (The admin password, emailed code and lockout are the protection, not this.)
-function openAdminLoginFromLink(){
-  if(!ADMIN_LOGIN_LINK)return;
+// Admin login is not offered on the public form; it opens from /#admin (or
+// /admin, which redirects there). The admin password, emailed code and lockout
+// are the protection, not this.
+function openAdminLogin(){
   var btn=document.getElementById('adminRoleBtn');if(btn)btn.style.display='';
+  document.body.classList.remove('on-splash');
   showPage('page-login');
   if(typeof switchAuthTab==='function')switchAuthTab('signin');
   selectLoginRole('admin');
 }
+function openAdminLoginFromLink(){
+  if(ADMIN_LOGIN_LINK&&!hasSession('admin'))openAdminLogin();
+}
 window.addEventListener('load',openAdminLoginFromLink);
+// Typing /#admin into a tab that is already open does not reload the page.
+window.addEventListener('hashchange',function(){
+  if(window.location.hash!=='#admin')return;
+  ADMIN_LOGIN_LINK=true;
+  if(hasSession('admin')&&STORE.currentAdmin){enterAdminPanel();return;}
+  openAdminLogin();
+});
 
 async function postLogin(path,body){
   var resp=await fetch(apiUrl(path),{
@@ -7513,9 +7527,8 @@ function admSignOut(){
   STORE.currentAdmin = null;
   localStorage.removeItem('VYBERA_ADMIN_TOKEN');
   localStorage.removeItem('VYBERA_ADMIN_PROFILE');
-  document.body.classList.remove('on-splash');
-  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
-  var s = document.getElementById('page-splash'); if(s) s.classList.add('active');
+  // Back to the admin login (not the buyer start page), ready to sign in again.
+  openAdminLogin();
 }
 
 // ── SIDEBAR ──

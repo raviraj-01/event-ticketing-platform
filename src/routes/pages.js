@@ -11,6 +11,9 @@ const { rateLimit } = require("../middleware/rateLimit");
 const router = express.Router();
 
 // OPEN HTML PAGE
+// Bookmarkable admin login: the app opens the sign-in form on the Admin role.
+router.get("/admin", (req, res) => res.redirect("/#admin"));
+
 router.get("/", (req, res) => {
   res.set(
     "Cache-Control",
