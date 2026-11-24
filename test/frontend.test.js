@@ -71,3 +71,8 @@ test("H19 instant check: only the order ID is stored at checkout, checked on loa
   assert.match(html, /<div id="pendingPaymentNotice" role="status"/);
   assert.match(html, /NEW_PAYMENT_OK_EVENT!==CURRENT_EVENT\.id\)\{\s*var inProgress=await fetchPendingOrder\(CURRENT_EVENT\.id\);\s*if\(inProgress\)\{[^]*?return;/);
 });
+
+test("staff login updates the address to #page-staff-dashboard (it kept #page-login)", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  assert.match(html, /function enterStaffPanel\(\)\{[^]*?history\.replaceState\(\{vyberaPage:'page-staff-dashboard'\},'','#page-staff-dashboard'\);/);
+});

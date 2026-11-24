@@ -6731,6 +6731,9 @@ function enterStaffPanel(){
   var sd=document.getElementById('page-staff-dashboard');
   if(sd){sd.classList.add('active');}
   pageHistory=['page-staff-dashboard'];
+  // The page is switched directly (not via showPage), so update the address too:
+  // it used to keep saying #page-login after a staff login.
+  if(history&&history.replaceState)history.replaceState({vyberaPage:'page-staff-dashboard'},'','#page-staff-dashboard');
   try{refreshStaffDashboard();}catch(err){console.error('Staff dashboard refresh failed:',err);}
   try{switchStaffTab('overview');}catch(err){console.error('Staff tab refresh failed:',err);}
 }
