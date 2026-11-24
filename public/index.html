@@ -1101,7 +1101,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
     <div id="panel-signin">
 
       <!-- M20: the password goes only to the selected role's login endpoint -->
-      <div role="group" aria-label="Sign in as" style="display:flex;gap:6px;margin-bottom:16px;padding:4px;border-radius:12px;background:rgba(255,255,255,0.04);"><button type="button" data-login-role="buyer" onclick="selectLoginRole('buyer')" aria-pressed="true" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--red);color:#fff;">Buyer</button><button type="button" data-login-role="creator" onclick="selectLoginRole('creator')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Organizer</button><button type="button" data-login-role="staff" onclick="selectLoginRole('staff')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Staff</button><button type="button" data-login-role="admin" onclick="selectLoginRole('admin')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Admin</button></div>
+      <div role="group" aria-label="Sign in as" style="display:flex;gap:6px;margin-bottom:16px;padding:4px;border-radius:12px;background:rgba(255,255,255,0.04);"><button type="button" data-login-role="buyer" onclick="selectLoginRole('buyer')" aria-pressed="true" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--red);color:#fff;">Buyer</button><button type="button" data-login-role="creator" onclick="selectLoginRole('creator')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Organizer</button><button type="button" data-login-role="staff" onclick="selectLoginRole('staff')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Staff</button><button type="button" id="adminRoleBtn" data-login-role="admin" onclick="selectLoginRole('admin')" aria-pressed="false" style="display:none;flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Admin</button></div>
 
       <div style="margin-bottom:16px;">
         <label id="siEmailLabel" style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Email or Phone</label>
@@ -1121,6 +1121,8 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
       <div id="siForgotWrap" style="text-align:right;margin-bottom:24px;">
         <span onclick="openForgotPasswordModal()" style="font-size:12px;color:rgba(229,9,20,0.8);cursor:pointer;letter-spacing:.2px;">Forgot password?</span>
       </div>
+
+      <div id="loginError" role="alert" style="display:none;margin:-12px 0 16px;padding:10px 12px;border-radius:10px;background:rgba(229,9,20,0.08);border:1px solid rgba(229,9,20,0.35);color:#e50914;font-size:13px;font-weight:600;text-align:center;"></div>
 
       <button id="loginBtn" onclick="doLogin()"
         style="width:100%;padding:15px;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--red);color:#fff;letter-spacing:.3px;box-shadow:0 4px 20px rgba(229,9,20,0.35);transition:all .2s;margin-bottom:24px;"
@@ -2680,6 +2682,9 @@ window.addEventListener('popstate',function(event){
   showPage(pageId);
   syncingBrowserHistory=false;
 });
+// /#admin opens the admin login (openAdminLoginFromLink). Read before the
+// line below replaces the hash with the start page.
+var ADMIN_LOGIN_LINK=window.location.hash==='#admin';
 if(history&&history.replaceState){
   history.replaceState({vyberaPage:pageHistory[pageHistory.length-1]},'','#'+encodeURIComponent(pageHistory[pageHistory.length-1]));
 }
@@ -6617,9 +6622,28 @@ function selectLoginRole(role){
     btn.setAttribute('aria-pressed',active?'true':'false');
   });
   var label=document.getElementById('siEmailLabel');if(label)label.textContent=LOGIN_ROLE_LABELS[role];
+  showLoginError('');
   // Email reset links exist for buyers, organizers and staff; admins are reset by a super admin (Q4).
   var forgot=document.getElementById('siForgotWrap');if(forgot)forgot.style.visibility=role==='admin'?'hidden':'visible';
 }
+
+// A failed login stays visible on the form (a toast alone was easy to miss).
+function showLoginError(message){
+  var box=document.getElementById('loginError');if(!box)return;
+  box.textContent=message||'';
+  box.style.display=message?'block':'none';
+}
+
+// Admin login is not offered on the public form; it opens from /#admin.
+// (The admin password, emailed code and lockout are the protection, not this.)
+function openAdminLoginFromLink(){
+  if(!ADMIN_LOGIN_LINK)return;
+  var btn=document.getElementById('adminRoleBtn');if(btn)btn.style.display='';
+  showPage('page-login');
+  if(typeof switchAuthTab==='function')switchAuthTab('signin');
+  selectLoginRole('admin');
+}
+window.addEventListener('load',openAdminLoginFromLink);
 
 async function postLogin(path,body){
   var resp=await fetch(apiUrl(path),{
@@ -6825,14 +6849,15 @@ async function doLogin(){
   var pwdEl=document.getElementById('siPassword');
   var id=emailEl?emailEl.value.trim():'';
   var pwd=pwdEl?pwdEl.value:'';
-  if(!id||!pwd){showToast('Enter your login and password');return;}
+  showLoginError('');
+  if(!id||!pwd){showLoginError('Enter your login and password');return;}
   var handlers={admin:loginAsAdmin,staff:loginAsStaff,creator:loginAsCreator,buyer:loginAsBuyer};
   setButtonBusy('loginBtn',true,'Signing in...','Sign In');
   try{
     await (handlers[LOGIN_ROLE]||loginAsBuyer)(id,pwd);
     emailEl.value='';pwdEl.value='';
   }catch(err){
-    showToast(err.message||'Login failed');
+    showLoginError(err.message||'Login failed');
   }finally{
     setButtonBusy('loginBtn',false,null,'Sign In');
   }
