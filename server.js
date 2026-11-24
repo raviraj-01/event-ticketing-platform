@@ -11,6 +11,7 @@ const { pool, dbSsl } = require("./src/db/pool");
 const { initDb } = require("./src/db/initDb");
 const { pruneRateLimitHits } = require("./src/middleware/rateLimit");
 const { expireStaleOrders } = require("./src/services/orders");
+const { reconcilePayuOrders } = require("./src/services/payuReconcile");
 const app = require("./src/app");
 const { tagServerLogsWithRequestId } = require("./src/middleware/requestId");
 
@@ -36,8 +37,17 @@ const PORT = process.env.PORT || 3003;
 async function start() {
   await runMigrations({ connectionString: process.env.DATABASE_URL, ssl: dbSsl });
   await initDb();
+  // H19: ask PayU about orders whose browser never came back (paid but not
+  // confirmed). Once shortly after start, then with the housekeeping below.
+  const reconcile = () =>
+    reconcilePayuOrders(pool)
+      .then((results) => results.filter((r) => r.outcome !== "unchanged")
+        .forEach((r) => console.log(`PayU reconciliation: ${r.orderId} ${r.gatewayStatus} -> ${r.outcome}`)))
+      .catch((err) => console.error("PayU reconciliation failed:", err.message));
+  setTimeout(reconcile, 30 * 1000).unref();
   // Housekeeping every 5 minutes (correctness never depends on it).
   setInterval(() => {
+    reconcile();
     expireStaleOrders(pool).catch((err) => console.error("Order expiry failed:", err.message));
     pruneRateLimitHits(pool).catch((err) => console.error("Rate-limit prune failed:", err.message));
     pruneUsedSignupTokens(pool).catch((err) => console.error("Signup token prune failed:", err.message));

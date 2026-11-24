@@ -10,6 +10,7 @@ const {
   createOrder,
   OrderError,
   applyPayuResult,
+  recordPaymentResult,
   getOrderForBuyer,
   payablePhone,
 } = require("../services/orders");
@@ -25,42 +26,9 @@ const {
   isValidResponseHash,
 } = require("../services/payu");
 const { APP_BASE_URL } = require("../config");
+const { reconcilePayuOrders } = require("../services/payuReconcile");
 
 const router = express.Router();
-
-// Audit trail for the admin "payments" view. Only verified callbacks are
-// written, so nobody can overwrite a payment record by posting fake data (H9).
-const PAYMENT_STATUS_LABELS = {
-  paid: "Success",
-  already_paid: "Success",
-  paid_needs_refund: "Paid - needs refund",
-  failed: "Failed",
-  amount_mismatch: "Amount mismatch",
-};
-const recordPaymentCallback = async (body, orderId, outcome) => {
-  await pool.query(
-    `INSERT INTO payment_transactions (
-       txnid, booking_id, event_id, ticket_type, qty, buyer_email, amount,
-       gateway_payment_id, status, verified, error, updated_at
-     )
-     SELECT $1, o.id, o.event_id, o.tier_name, o.qty, $2, o.amount, $3, $4, TRUE, $5, NOW()
-     FROM orders o WHERE o.id = $6
-     ON CONFLICT (txnid) DO UPDATE SET
-       gateway_payment_id = COALESCE(EXCLUDED.gateway_payment_id, payment_transactions.gateway_payment_id),
-       status = EXCLUDED.status,
-       verified = TRUE,
-       error = EXCLUDED.error,
-       updated_at = NOW()`,
-    [
-      String(body.txnid || ""),
-      String(body.email || "") || null,
-      String(body.mihpayid || "") || null,
-      PAYMENT_STATUS_LABELS[outcome] || outcome,
-      outcome === "paid" || outcome === "already_paid" ? null : String(body.error_Message || outcome).slice(0, 200),
-      orderId,
-    ],
-  );
-};
 
 router.get("/config/public", (req, res) => {
   res.json({
@@ -128,7 +96,7 @@ const handlePayuCallback = (isSuccessUrl) => async (req, res) => {
         console.error("PayU callback not applied:", outcome, String(body.txnid || "").slice(0, 40));
       }
       if (orderId) {
-        await recordPaymentCallback(body, orderId, outcome).catch((err) =>
+        await recordPaymentResult(pool, body, orderId, outcome).catch((err) =>
           console.error("Payment audit write failed:", err.message),
         );
         target = `${APP_BASE_URL}/?payment=payu&order=${encodeURIComponent(orderId)}`;
@@ -141,6 +109,25 @@ const handlePayuCallback = (isSuccessUrl) => async (req, res) => {
 };
 router.post("/payments/payu/success", handlePayuCallback(true));
 router.post("/payments/payu/failure", handlePayuCallback(false));
+
+// H19: PayU's server-to-server webhook (PayU dashboard → Webhooks, URL
+// <APP_BASE_URL>/payments/payu/webhook). The payload is only a hint about
+// WHICH txnid changed: its status and hash are not trusted. We ask PayU's
+// verify API ourselves and apply that answer, so a forged webhook can at most
+// make us check an order. Always 200, so it reveals nothing about our orders.
+const webhookLimit = rateLimit({ name: "payu-webhook", windowSeconds: 600, max: 300, key: (req) => req.ip });
+router.post("/payments/payu/webhook", webhookLimit, async (req, res) => {
+  const txnid = String((req.body && req.body.txnid) || "").trim().slice(0, 64);
+  if (txnid) {
+    try {
+      const results = await reconcilePayuOrders(pool, { txnids: [txnid] });
+      for (const r of results) console.log(`PayU webhook: ${r.orderId} ${r.gatewayStatus} -> ${r.outcome}`);
+    } catch (err) {
+      console.error("PayU webhook check failed:", err.message);
+    }
+  }
+  res.json({ received: true });
+});
 
 // The buyer's own order and ticket. Someone else's order → 404, so order IDs
 // cannot be probed.

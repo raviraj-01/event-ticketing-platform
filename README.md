@@ -81,6 +81,7 @@ Checking a new `.env` against an old one without showing any value: `node script
 4. Serve the app over **https** (Render does). Session cookies are `Secure` when `APP_BASE_URL` starts with `https://`, and browsers drop them on plain http in production.
 5. If the frontend is served from another origin, list it in `CORS_ORIGINS`. The Android app's WebView origin `https://localhost` is allowed by default.
 6. Start command: `npm start`. Pending database migrations in `migrations/` run automatically before the server accepts requests.
+7. **PayU webhook:** in the PayU dashboard add a webhook for payment success/failure pointing to `https://<your-host>/payments/payu/webhook`. It is optional (the server also asks PayU every 5 minutes about orders whose browser never came back), but it confirms those payments within seconds. To check by hand: `npm run payu:reconcile` (or `npm run payu:reconcile -- <txnid>`).
 
 ## Tests
 

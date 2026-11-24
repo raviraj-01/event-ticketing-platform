@@ -4,10 +4,16 @@ const crypto = require("crypto");
 
 function getPayuConfig() {
   const env = String(process.env.PAYU_ENV || "test").toLowerCase();
+  const production = env === "production";
+  // H19: PayU's server-to-server status API (verify_payment). Tests point it at
+  // a local stub with PAYU_VERIFY_URL; never allowed in production.
+  const verifyOverride = process.env.NODE_ENV !== "production" ? process.env.PAYU_VERIFY_URL : "";
   return {
     key: process.env.PAYU_KEY || "",
     salt: process.env.PAYU_SALT || "",
-    action: env === "production" ? "https://secure.payu.in/_payment" : "https://test.payu.in/_payment",
+    action: production ? "https://secure.payu.in/_payment" : "https://test.payu.in/_payment",
+    verifyUrl: verifyOverride
+      || (production ? "https://info.payu.in/merchant/postservice.php?form=2" : "https://test.payu.in/merchant/postservice.php?form=2"),
   };
 }
 
@@ -54,8 +60,12 @@ function isValidResponseHash(body, salt) {
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
+// Hash for PayU's merchant API (verify_payment): key|command|var1|salt.
+const makeApiHash = (key, command, var1, salt) => sha512([key, command, var1, salt].join("|"));
+
 module.exports = {
   getPayuConfig,
+  makeApiHash,
   cleanPayuText,
   formatPayuAmount,
   makeRequestHash,

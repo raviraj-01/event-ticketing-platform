@@ -372,6 +372,42 @@ async function applyPayuResult(pool, body, { success }) {
   }
 }
 
+// Audit trail for the admin "payments" view. Written only for results that
+// were verified (callback hash, or PayU's verify API), so nobody can overwrite
+// a payment record by posting fake data (H9). `result` has txnid, email,
+// mihpayid and error_Message, as PayU names them.
+const PAYMENT_STATUS_LABELS = {
+  paid: "Success",
+  already_paid: "Success",
+  paid_needs_refund: "Paid - needs refund",
+  failed: "Failed",
+  amount_mismatch: "Amount mismatch",
+};
+async function recordPaymentResult(pool, result, orderId, outcome) {
+  await pool.query(
+    `INSERT INTO payment_transactions (
+       txnid, booking_id, event_id, ticket_type, qty, buyer_email, amount,
+       gateway_payment_id, status, verified, error, updated_at
+     )
+     SELECT $1, o.id, o.event_id, o.tier_name, o.qty, $2, o.amount, $3, $4, TRUE, $5, NOW()
+     FROM orders o WHERE o.id = $6
+     ON CONFLICT (txnid) DO UPDATE SET
+       gateway_payment_id = COALESCE(EXCLUDED.gateway_payment_id, payment_transactions.gateway_payment_id),
+       status = EXCLUDED.status,
+       verified = TRUE,
+       error = EXCLUDED.error,
+       updated_at = NOW()`,
+    [
+      String(result.txnid || ""),
+      String(result.email || "") || null,
+      String(result.mihpayid || "") || null,
+      PAYMENT_STATUS_LABELS[outcome] || outcome,
+      outcome === "paid" || outcome === "already_paid" ? null : String(result.error_Message || outcome).slice(0, 200),
+      orderId,
+    ],
+  );
+}
+
 // Order + its ticket, only for the buyer who owns it (null otherwise → caller sends 404).
 async function getOrderForBuyer(pool, orderId, userId) {
   const order = await pool.query("SELECT * FROM orders WHERE id = $1 AND user_id = $2", [orderId, userId]);
@@ -421,6 +457,7 @@ module.exports = {
   priceOrder,
   createOrder,
   applyPayuResult,
+  recordPaymentResult,
   getOrderForBuyer,
   withAvailability,
   expireStaleOrders,
