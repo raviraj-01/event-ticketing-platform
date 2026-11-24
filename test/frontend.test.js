@@ -33,7 +33,7 @@ test("L8: console warnings and errors are never silenced", () => {
 
 test("login: errors stay on the form; admin login is not on the public form but opens from /#admin", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
-  assert.match(html, /<div id="loginError" role="alert"/);
+  assert.match(html, /<div id="loginError" class="form-alert" role="alert"/);
   assert.match(html, /catch\(err\)\{\s*showLoginError\(err\.message/);
   assert.match(html, /id="adminRoleBtn" data-login-role="admin"[^>]*style="display:none;/);
   assert.match(html, /var ADMIN_LOGIN_LINK=window\.location\.hash==='#admin';\s*if\(history&&history\.replaceState\)/);
@@ -92,4 +92,18 @@ test("design system: tokens in one block, legacy names point to them, a11y basic
   assert.match(html, /if\(e\.key==='Escape'\)\{if\(closeTopDialog\(\)\)e\.preventDefault\(\);return;\}/);
   assert.match(html, /panel\.setAttribute\('aria-modal','true'\);/);
   assert.doesNotMatch(html, /RESET_(INPUT|LABEL)_STYLE_OLD/);
+});
+
+test("UI step 2 auth: no forced light-theme overrides; labelled fields; real buttons; organizer page sends its fields", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  assert.doesNotMatch(html, /body\.on-login #page-login/, "the !important light-theme block is gone");
+  for (const id of ["siEmail", "siPassword", "suFirst", "suLast", "suEmail", "suPhone", "suPassword", "suCity", "creatorLoginEmail", "creatorLoginPwd"]) {
+    assert.match(html, new RegExp(`<label[^>]*for="${id}"`), id);
+  }
+  assert.match(html, /<button type="button" class="input-action" onclick="togglePwd\('siPassword', this\)" aria-label="Show password"/);
+  assert.match(html, /id="termsCheck" class="toggle" role="switch" aria-checked="false"/);
+  assert.match(html, /onclick="creatorPageLogin\(\)"/);
+  assert.match(html, /async function creatorPageLogin\(\)\{[^]*?await loginAsCreator\(email,pwd\);/);
+  const signup = html.slice(html.indexOf("function doSignUp("), html.indexOf("setButtonBusy('signupBtn',true"));
+  assert.doesNotMatch(signup, /alert\(/, "sign-up problems show on the form");
 });

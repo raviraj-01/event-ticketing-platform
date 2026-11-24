@@ -578,6 +578,59 @@ textarea.form-input{resize:vertical;min-height:100px;}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}
   .spinner{animation-duration:1.2s!important;animation-iteration-count:infinite!important;} /* loading feedback is essential */
 }
+
+/* ── Small shared pieces used by the screens ── */
+.btn-lg{min-height:48px;font-size:var(--fs-16);}
+.link-btn{background:none;border:0;padding:0;min-height:var(--tap);display:inline-flex;align-items:center;font:600 var(--fs-14)/1.2 var(--font-sans);color:var(--c-primary);cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:transparent;transition:text-decoration-color var(--dur) var(--ease);}
+.link-btn:hover{text-decoration-color:currentColor;}
+.form-alert{margin:0 0 var(--sp-4);padding:10px 12px;border-radius:var(--r-md);background:var(--c-danger-subtle);border:1px solid rgb(185 28 28 / .25);color:var(--c-danger);font:600 var(--fs-14)/1.4 var(--font-sans);}
+.form-alert-warning{background:var(--c-warning-subtle);border-color:rgb(180 83 9 / .3);color:var(--c-warning-text);}
+.input-with-action{position:relative;}
+.input-with-action .form-input{padding-right:52px;}
+.input-action{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:var(--tap);height:var(--tap);border:0;background:transparent;color:var(--c-text-2);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.input-action svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.input-action[aria-pressed="true"]{color:var(--c-primary);}
+.segmented{display:flex;gap:4px;padding:4px;border-radius:var(--r-md);background:var(--c-surface-3);}
+.segmented>button{flex:1;min-height:var(--tap);border:0;border-radius:var(--r-sm);background:transparent;color:var(--c-text-2);font:600 var(--fs-14)/1 var(--font-sans);cursor:pointer;transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease);}
+.segmented>button:hover{color:var(--c-text);}
+.segmented>button.active,.segmented>button[aria-pressed="true"],.segmented>button[aria-selected="true"]{background:var(--c-surface);color:var(--c-text);box-shadow:var(--sh-sm);}
+.divider-text{display:flex;align-items:center;gap:12px;margin:var(--sp-6) 0 var(--sp-4);color:var(--c-text-muted);font-size:var(--fs-12);}
+.divider-text::before,.divider-text::after{content:"";flex:1;height:1px;background:var(--c-border);}
+
+/* ── Auth screens (splash, sign in / sign up, organizer sign in) ── */
+.auth-page{background:var(--c-surface);padding-bottom:0;}
+.auth-shell{position:relative;max-width:420px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding:0 var(--sp-6) var(--sp-8);}
+.auth-top{padding:var(--sp-4) 0;}
+.auth-head{text-align:center;padding:var(--sp-2) 0 var(--sp-6);}
+.auth-logo{height:96px;width:auto;object-fit:contain;margin-bottom:var(--sp-3);}
+.auth-title{font:400 var(--fs-36)/1.05 var(--font-display);letter-spacing:2px;color:var(--c-text);margin:0 0 6px;}
+.auth-sub{font-size:var(--fs-14);line-height:1.5;color:var(--c-text-2);margin:0;}
+.auth-tabs{margin-bottom:var(--sp-6);}
+.role-switch{margin-bottom:var(--sp-4);}
+.auth-body{flex:1;}
+.auth-forgot{display:flex;justify-content:flex-end;margin:-8px 0 var(--sp-2);}
+.auth-switch{text-align:center;font-size:var(--fs-14);color:var(--c-text-2);margin:var(--sp-4) 0 0;}
+.auth-fineprint{text-align:center;font-size:var(--fs-12);line-height:1.5;color:var(--c-text-muted);margin:var(--sp-2) 0 0;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3);}
+.phone-row{display:flex;gap:var(--sp-2);}
+.phone-row select{width:92px;flex-shrink:0;}
+.otp-row{display:flex;gap:var(--sp-2);margin-top:var(--sp-2);}
+.otp-input{flex:1;gap:var(--sp-2);}
+.otp-input .form-input{flex:1;}
+.strength-bars{display:flex;gap:4px;margin-top:var(--sp-2);}
+.strength-bars .psb{flex:1;height:4px;border-radius:var(--r-pill);background:var(--c-border);transition:background-color var(--dur) var(--ease);}
+.terms-row{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-2) 0 var(--sp-6);min-height:var(--tap);}
+.terms-row .toggle{border:0;padding:0;}
+.terms-row p{cursor:pointer;margin:0;font-size:var(--fs-14);line-height:1.5;color:var(--c-text-2);}
+.splash-shell{justify-content:space-between;}
+.splash-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:var(--sp-6);}
+.splash-tagline{font-size:var(--fs-16);line-height:1.6;color:var(--c-text-2);max-width:280px;margin:0;}
+.splash-actions{display:flex;flex-direction:column;gap:var(--sp-3);padding-bottom:var(--sp-8);width:100%;}
+@media (min-width:768px){
+  .auth-page{background:var(--c-surface-2);}
+  .auth-shell{min-height:auto;margin:48px auto;padding:var(--sp-6) var(--sp-8) var(--sp-8);background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-lg);box-shadow:var(--sh-md);}
+  .splash-shell{min-height:560px;}
+}
 </style>
 <!-- App-only styles: enabled by scripts/build-cordova.js (media="all"). -->
 <style data-platform="app" media="not all">
@@ -771,113 +824,6 @@ textarea.form-input{resize:vertical;min-height:100px;}
 }
 </style>
 <style>
-
-body.on-login,
-body.on-creator-login{
-  background:#fff;
-}
-body.on-login #page-login,
-body.on-creator-login #page-creator-login{
-  background:#fff!important;
-  color:#111!important;
-}
-body.on-login #page-login > div[style*="pointer-events:none"],
-body.on-creator-login #page-creator-login > div[style*="pointer-events:none"]{
-  display:none!important;
-}
-body.on-login #authHeroSub,
-body.on-login #page-login label,
-body.on-login #page-login p,
-body.on-login #page-login div:not(.back-btn):not([style*="background:var(--red)"]):not([style*="background:#8B2010"]),
-body.on-creator-login #page-creator-login label,
-body.on-creator-login #page-creator-login p,
-body.on-creator-login #page-creator-login div:not(.back-btn):not([style*="background:var(--red)"]):not([style*="background:#8B2010"]){
-  color:#5f6368!important;
-}
-body.on-login #authHeroTitle,
-body.on-creator-login #page-creator-login div[style*="Bebas Neue"]{
-  color:#111!important;
-}
-body.on-login #page-login button:not(#tab-signin):not(#loginBtn):not(#signupBtn):not(#sendOtpBtn):not(#verifyOtpBtn),
-body.on-creator-login #page-creator-login button:not(.cta-full){
-  background:#fff!important;
-  border-color:#dadce0!important;
-  color:#202124!important;
-}
-body.on-login #page-login .auth-tab{
-  display:block!important;
-  visibility:visible!important;
-  opacity:1!important;
-  background:transparent!important;
-  border-color:transparent!important;
-  color:#5f6368!important;
-}
-body.on-login #page-login .auth-tab.active{
-  background:var(--red)!important;
-  color:#fff!important;
-  box-shadow:0 2px 12px rgba(229,9,20,0.4)!important;
-}
-body.on-login #page-login .form-input,
-body.on-creator-login #page-creator-login .form-input{
-  background:#fff!important;
-  border-color:#dadce0!important;
-  color:#111!important;
-}
-body.on-login #page-login .form-input::placeholder,
-body.on-creator-login #page-creator-login .form-input::placeholder{
-  color:#8b8f97!important;
-}
-body.on-creator-login #creatorVerificationMsg{
-  background:#fff7dd!important;
-  border-color:#f5d36a!important;
-  color:#7a4b00!important;
-}
-body.on-login #page-login span,
-body.on-login #page-login p span,
-body.on-creator-login #page-creator-login span,
-body.on-creator-login #page-creator-login p span {
-  color: inherit !important;
-}
-body.on-login #page-login span[style*="color:rgba(229,9,20"],
-body.on-login #page-login p span[style*="color:rgba(229,9,20"],
-body.on-creator-login #page-creator-login span[style*="color:rgba(229,9,20"],
-body.on-creator-login #page-creator-login p span[style*="color:rgba(229,9,20"] {
-  color: var(--red) !important;
-}
-body.on-login #page-login div[style*="background:rgba(255,255,255,0.08)"],
-body.on-creator-login #page-creator-login div[style*="background:rgba(255,255,255,0.08)"] {
-  background: rgba(0,0,0,0.08) !important;
-}
-body.on-login #page-login .psb[style*="background:rgba(255,255,255,0.1)"] {
-  background: rgba(0,0,0,0.1) !important;
-}
-body.on-login #page-login #pwdStrengthLabel {
-  color: #5f6368 !important;
-}
-/* Fix OR divider lines & text on white login background */
-body.on-login #page-login div[style*="background:rgba(255,255,255,0.08)"] {
-  background: #dadce0 !important;
-}
-body.on-login #page-login span[style*="color:rgba(255,255,255,0.25)"] {
-  color: #80868b !important;
-}
-body.on-login #page-login button:not(#tab-signin):not(#loginBtn):not(#signupBtn):not(#sendOtpBtn):not(#verifyOtpBtn):not([onclick*="signInWithGoogle"]) {
-  background: #fff !important;
-  border-color: #dadce0 !important;
-  color: #202124 !important;
-}
-body.on-login #page-login button[onclick*="signInWithGoogle"],
-body.on-login #page-login button[onclick*="signInWithGoogle"] * {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-body.on-login #page-login button[onclick*="signInWithGoogle"] {
-  background: #f1f3f4 !important;
-  border: 1px solid #dadce0 !important;
-  color: #3c4043 !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12) !important;
-}
 .location-sheet-backdrop{
   position:fixed;
   inset:0;
@@ -1198,173 +1144,139 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 
 
 <!-- SPLASH -->
-<div class="page active" id="page-splash" style="padding-bottom:0;background:#ffffff;overflow:hidden;min-height:100vh;" data-default="true">
-
-<div style="position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;padding:0 28px;max-width:420px;margin:0 auto;">
-
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:24px;">
-    <img src="assets/blak-ticket-name.jpeg" class="vylogo entry-logo" alt="BLAK Tickets"/>
-    <p style="font-size:13px;color:rgba(0,0,0,0.45);line-height:1.7;max-width:260px;">India's most cinematic event discovery &amp; booking platform.</p>
+<div class="page active auth-page" id="page-splash" data-default="true">
+  <div class="auth-shell splash-shell">
+    <div class="splash-hero">
+      <img src="assets/blak-ticket-name.jpeg" class="vylogo entry-logo" alt="BLAK Tickets"/>
+      <p class="splash-tagline">India's most cinematic event discovery &amp; booking platform.</p>
+    </div>
+    <div class="splash-actions">
+      <button type="button" class="btn btn-primary btn-block btn-lg" onclick="showPage('page-login')">Get Started</button>
+      <button type="button" class="btn btn-secondary btn-block btn-lg" onclick="signInWithGoogle()">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Continue with Google
+      </button>
+      <button type="button" class="btn btn-quiet btn-block btn-lg" onclick="quickLogin()">Continue as Guest</button>
+      <p class="auth-fineprint">By continuing you agree to our Terms &amp; Privacy Policy.</p>
+    </div>
   </div>
-
-  <div class="splash-actions" style="padding-bottom:44px;display:flex;flex-direction:column;gap:11px;">
-    <button onclick="showPage('page-login')" style="width:100%;padding:16px;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:#8B2010;color:#fff;">Get Started</button>
-    <button onclick="signInWithGoogle()" style="width:100%;padding:14px;border-radius:14px;border:1px solid rgba(0,0,0,0.15);background:#fff;color:#202124;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;">
-      <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-      Continue with Google
-    </button>
-    <button onclick="quickLogin()" style="width:100%;padding:15px;border-radius:14px;border:1px solid rgba(0,0,0,0.12);background:transparent;color:rgba(0,0,0,0.45);font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Continue as Guest</button>
-    <div style="text-align:center;font-size:11px;color:rgba(0,0,0,0.25);">By continuing you agree to our <span style="color:rgba(0,0,0,0.4);cursor:pointer;">Terms</span> &amp; <span style="color:rgba(0,0,0,0.4);cursor:pointer;">Privacy</span></div>
-  </div>
-
-</div>
 </div>
 
 <!-- LOGIN -->
-<div class="page" id="page-login" style="padding-bottom:0;overflow:hidden;background:#000;background:linear-gradient(180deg,#000 0%,rgba(80,15,8,0.6) 100%);min-height:100vh;">
+<div class="page auth-page" id="page-login">
+<div class="auth-shell">
 
-<!-- Subtle static bg glows -->
-<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;">
-  <div style="position:absolute;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(179,0,36,0.14) 0%,transparent 70%);top:-80px;right:-60px;"></div>
-  <div style="position:absolute;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(120,0,20,0.10) 0%,transparent 70%);bottom:60px;left:-60px;"></div>
-</div>
-
-<div style="position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;max-width:420px;margin:0 auto;">
-
-  <!-- Back -->
-  <div style="padding:16px 20px;">
-    <div class="back-btn" onclick="showPage('page-splash')"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+  <div class="auth-top">
+    <button type="button" class="back-btn" onclick="showPage('page-splash')" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></button>
   </div>
 
-  <!-- Logo + Title -->
-  <div style="padding:8px 28px 28px;text-align:center;">
-    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo" style="height:110px;width:auto;object-fit:contain;margin-bottom:12px;" alt="BLAK Tickets"/>
-    <div id="authHeroTitle" style="font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:3px;color:#fff;margin-bottom:4px;">WELCOME BACK</div>
-    <div id="authHeroSub" style="font-size:13px;color:rgba(255,255,255,0.45);letter-spacing:.3px;">Sign in to continue</div>
+  <div class="auth-head">
+    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo auth-logo" alt="BLAK Tickets"/>
+    <h1 id="authHeroTitle" class="auth-title">WELCOME BACK</h1>
+    <p id="authHeroSub" class="auth-sub">Sign in to continue</p>
   </div>
 
-  <!-- Toggle pill -->
-  <div style="margin:0 28px 28px;display:flex;background:rgba(255,255,255,0.06);border-radius:50px;padding:3px;border:1px solid rgba(255,255,255,0.08);">
-    <button class="auth-tab active" id="tab-signin" onclick="switchAuthTab('signin')"
-      style="flex:1;padding:9px 0;border:none;border-radius:50px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;letter-spacing:.3px;transition:all .3s;background:var(--red);color:#fff;box-shadow:0 2px 12px rgba(229,9,20,0.4);">
-      Sign In
-    </button>
-    <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')"
-      style="flex:1;padding:9px 0;border:none;border-radius:50px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;letter-spacing:.3px;transition:all .3s;background:transparent;color:rgba(255,255,255,0.4);">
-      Sign Up
-    </button>
+  <div class="segmented auth-tabs" role="tablist" aria-label="Sign in or sign up">
+    <button type="button" class="auth-tab active" id="tab-signin" role="tab" aria-selected="true" aria-controls="panel-signin" onclick="switchAuthTab('signin')">Sign In</button>
+    <button type="button" class="auth-tab" id="tab-signup" role="tab" aria-selected="false" aria-controls="panel-signup" onclick="switchAuthTab('signup')">Sign Up</button>
   </div>
 
-  <!-- Form area -->
-  <div style="flex:1;padding:0 28px 40px;overflow-y:auto;">
+  <div class="auth-body">
 
     <!-- ── SIGN IN ── -->
-    <div id="panel-signin">
+    <div id="panel-signin" role="tabpanel" aria-labelledby="tab-signin">
 
       <!-- M20: the password goes only to the selected role's login endpoint -->
-      <div role="group" aria-label="Sign in as" style="display:flex;gap:6px;margin-bottom:16px;padding:4px;border-radius:12px;background:rgba(255,255,255,0.04);"><button type="button" data-login-role="buyer" onclick="selectLoginRole('buyer')" aria-pressed="true" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--red);color:#fff;">Buyer</button><button type="button" data-login-role="creator" onclick="selectLoginRole('creator')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Organizer</button><button type="button" data-login-role="staff" onclick="selectLoginRole('staff')" aria-pressed="false" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Staff</button><button type="button" id="adminRoleBtn" data-login-role="admin" onclick="selectLoginRole('admin')" aria-pressed="false" style="display:none;flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">Admin</button></div>
-
-      <div style="margin-bottom:16px;">
-        <label id="siEmailLabel" style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Email or Phone</label>
-        <input id="siEmail" type="text" placeholder="you@email.com" class="form-input"
-          style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 16px;font-size:14px;"/>
+      <div class="segmented role-switch" role="group" aria-label="Sign in as">
+        <button type="button" data-login-role="buyer" onclick="selectLoginRole('buyer')" aria-pressed="true" class="active">Buyer</button>
+        <button type="button" data-login-role="creator" onclick="selectLoginRole('creator')" aria-pressed="false">Organizer</button>
+        <button type="button" data-login-role="staff" onclick="selectLoginRole('staff')" aria-pressed="false">Staff</button>
+        <button type="button" id="adminRoleBtn" data-login-role="admin" onclick="selectLoginRole('admin')" aria-pressed="false" style="display:none;">Admin</button>
       </div>
 
-      <div style="margin-bottom:8px;">
-        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Password</label>
-        <div style="position:relative;">
-          <input id="siPassword" type="password" placeholder="Enter password" class="form-input"
-            style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 44px 14px 16px;font-size:14px;"/>
-          <span onclick="togglePwd('siPassword')" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:15px;opacity:.5;">👁</span>
+      <div class="field">
+        <label id="siEmailLabel" class="field-label" for="siEmail">Email or Phone</label>
+        <input id="siEmail" type="text" placeholder="you@email.com" class="form-input" autocomplete="username"/>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="siPassword">Password</label>
+        <div class="input-with-action">
+          <input id="siPassword" type="password" placeholder="Enter password" class="form-input" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin();"/>
+          <button type="button" class="input-action" onclick="togglePwd('siPassword', this)" aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
       </div>
 
-      <div id="siForgotWrap" style="text-align:right;margin-bottom:24px;">
-        <span onclick="openForgotPasswordModal()" style="font-size:12px;color:rgba(229,9,20,0.8);cursor:pointer;letter-spacing:.2px;">Forgot password?</span>
+      <div id="siForgotWrap" class="auth-forgot">
+        <button type="button" class="link-btn" onclick="openForgotPasswordModal()">Forgot password?</button>
       </div>
 
-      <div id="loginError" role="alert" style="display:none;margin:-12px 0 16px;padding:10px 12px;border-radius:10px;background:rgba(229,9,20,0.08);border:1px solid rgba(229,9,20,0.35);color:#e50914;font-size:13px;font-weight:600;text-align:center;"></div>
+      <div id="loginError" class="form-alert" role="alert" style="display:none;"></div>
 
-      <button id="loginBtn" onclick="doLogin()"
-        style="width:100%;padding:15px;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--red);color:#fff;letter-spacing:.3px;box-shadow:0 4px 20px rgba(229,9,20,0.35);transition:all .2s;margin-bottom:24px;"
-        onmouseover="this.style.opacity='.88';this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1';this.style.transform=''">
-        Sign In
+      <button id="loginBtn" type="button" class="btn btn-primary btn-block btn-lg" onclick="doLogin()">Sign In</button>
+
+      <div class="divider-text"><span>or</span></div>
+
+      <button type="button" class="btn btn-secondary btn-block" onclick="signInWithGoogle()">
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Continue with Google
       </button>
 
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-        <div style="flex:1;height:1px;background:rgba(255,255,255,0.08);"></div>
-        <span style="font-size:12px;color:rgba(255,255,255,0.25);letter-spacing:.5px;">or</span>
-        <div style="flex:1;height:1px;background:rgba(255,255,255,0.08);"></div>
-      </div>
-
-      <!-- Social row -->
-      <div style="display:flex;gap:10px;margin-bottom:28px;">
-        <button onclick="signInWithGoogle()" style="flex:1;padding:12px;border-radius:12px;border:1px solid #dadce0;background:#f1f3f4;color:#3c4043;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,0.12);" onmouseover="this.style.background='#e8eaed';this.style.boxShadow='0 2px 6px rgba(0,0,0,0.16)'" onmouseout="this.style.background='#f1f3f4';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.12)'">
-          <svg width="15" height="15" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-          Continue with Google
-        </button>
-        
-      </div>
-
-      <p style="text-align:center;font-size:13px;color:rgba(255,255,255,0.35);">No account? <span onclick="switchAuthTab('signup')" style="color:rgba(229,9,20,0.85);cursor:pointer;font-weight:600;">Create one</span></p>
+      <p class="auth-switch">No account? <button type="button" class="link-btn" onclick="switchAuthTab('signup')">Create one</button></p>
     </div>
 
     <!-- ── SIGN UP ── -->
-    <div id="panel-signup" style="display:none;">
+    <div id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" style="display:none;">
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-        <div>
-          <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">First Name</label>
-          <input id="suFirst" type="text" placeholder="Arjun" class="form-input" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 16px;font-size:14px;"/>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="suFirst">First name</label>
+          <input id="suFirst" type="text" placeholder="Arjun" class="form-input" autocomplete="given-name"/>
         </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Last Name</label>
-          <input id="suLast" type="text" placeholder="Mehta" class="form-input" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 16px;font-size:14px;"/>
+        <div class="field">
+          <label class="field-label" for="suLast">Last name</label>
+          <input id="suLast" type="text" placeholder="Mehta" class="form-input" autocomplete="family-name"/>
         </div>
       </div>
 
-      <div style="margin-bottom:14px;">
-        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Email</label>
-        <input id="suEmail" type="email" placeholder="you@email.com" class="form-input" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 16px;font-size:14px;"/>
+      <div class="field">
+        <label class="field-label" for="suEmail">Email</label>
+        <input id="suEmail" type="email" placeholder="you@email.com" class="form-input" autocomplete="email"/>
       </div>
 
-      <div style="margin-bottom:14px;">
-        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Phone</label>
-        <div style="display:flex;gap:8px;">
-          <select id="suCountryCode" class="form-input" style="width:84px;flex-shrink:0;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 8px;font-size:13px;">
+      <div class="field">
+        <label class="field-label" for="suPhone">Phone</label>
+        <div class="phone-row">
+          <select id="suCountryCode" class="form-input" aria-label="Country code">
             <option>+91</option><option>+1</option><option>+44</option><option>+971</option>
           </select>
-          <input id="suPhone" type="tel" placeholder="98765 43210" class="form-input" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 16px;font-size:14px;"/>
+          <input id="suPhone" type="tel" placeholder="98765 43210" class="form-input" autocomplete="tel-national"/>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button id="sendOtpBtn" type="button" onclick="sendSignupOtp()" style="padding:10px 14px;border:none;border-radius:10px;background:rgba(0,212,212,0.12);color:var(--neon);font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Verify</button>
-          <div id="otpInputWrap" style="display:none;flex:1;gap:8px;">
-            <input id="signupOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Enter OTP" class="form-input" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:10px;padding:10px 12px;font-size:13px;"/>
-            <button id="verifyOtpBtn" type="button" onclick="verifySignupOtp()" style="padding:10px 14px;border:none;border-radius:10px;background:var(--red);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Submit</button>
+        <div class="otp-row">
+          <button id="sendOtpBtn" type="button" class="btn btn-secondary" onclick="sendSignupOtp()">Verify</button>
+          <div id="otpInputWrap" class="otp-input" style="display:none;">
+            <input id="signupOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Enter OTP" class="form-input" aria-label="One-time code" autocomplete="one-time-code"/>
+            <button id="verifyOtpBtn" type="button" class="btn btn-primary" onclick="verifySignupOtp()">Submit</button>
           </div>
         </div>
-        <div id="signupOtpMsg" style="display:none;font-size:11px;margin-top:8px;"></div>
+        <div id="signupOtpMsg" class="field-hint" aria-live="polite" style="display:none;"></div>
       </div>
 
-      <div style="margin-bottom:14px;">
-        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">Password</label>
-        <div style="position:relative;">
-          <input id="suPassword" type="password" placeholder="Min 8 characters" class="form-input" oninput="checkPasswordStrength(this.value)"
-            style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 44px 14px 16px;font-size:14px;"/>
-          <span onclick="togglePwd('suPassword')" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:15px;opacity:.5;">👁</span>
+      <div class="field">
+        <label class="field-label" for="suPassword">Password</label>
+        <div class="input-with-action">
+          <input id="suPassword" type="password" placeholder="Min 8 characters" class="form-input" autocomplete="new-password" oninput="checkPasswordStrength(this.value)"/>
+          <button type="button" class="input-action" onclick="togglePwd('suPassword', this)" aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
-        <div style="display:flex;gap:3px;margin-top:8px;" id="pwdStrengthBars">
-          <div class="psb" style="flex:1;height:2px;border-radius:2px;background:rgba(255,255,255,0.1);transition:background .2s;"></div>
-          <div class="psb" style="flex:1;height:2px;border-radius:2px;background:rgba(255,255,255,0.1);transition:background .2s;"></div>
-          <div class="psb" style="flex:1;height:2px;border-radius:2px;background:rgba(255,255,255,0.1);transition:background .2s;"></div>
-          <div class="psb" style="flex:1;height:2px;border-radius:2px;background:rgba(255,255,255,0.1);transition:background .2s;"></div>
+        <div class="strength-bars" id="pwdStrengthBars" aria-hidden="true">
+          <div class="psb"></div><div class="psb"></div><div class="psb"></div><div class="psb"></div>
         </div>
-        <div id="pwdStrengthLabel" style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;"></div>
+        <div id="pwdStrengthLabel" class="field-hint" aria-live="polite"></div>
       </div>
 
-      <div style="margin-bottom:20px;">
-        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px;">City</label>
-        <select id="suCity" class="form-input" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:14px;padding:14px 16px;font-size:14px;">
+      <div class="field">
+        <label class="field-label" for="suCity">City</label>
+        <select id="suCity" class="form-input">
           <option value="">Select your city</option>
           <option>Bangalore</option><option>Mumbai</option><option>Delhi</option>
           <option>Pune</option><option>Hyderabad</option><option>Chennai</option>
@@ -1372,23 +1284,20 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
         </select>
       </div>
 
-      <!-- Terms -->
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
-        <div id="termsCheck" onclick="this.classList.toggle('on')" class="toggle" style="width:36px;height:20px;flex-shrink:0;"></div>
-        <p style="font-size:12px;color:rgba(255,255,255,0.35);line-height:1.5;margin:0;">I agree to the <span style="color:rgba(229,9,20,0.8);cursor:pointer;">Terms</span> &amp; <span style="color:rgba(229,9,20,0.8);cursor:pointer;">Privacy Policy</span></p>
+      <div class="terms-row">
+        <button type="button" id="termsCheck" class="toggle" role="switch" aria-checked="false" aria-labelledby="termsText" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on')?'true':'false');"></button>
+        <p id="termsText" onclick="document.getElementById('termsCheck').click()">I agree to the Terms &amp; Privacy Policy</p>
       </div>
 
-      <button id="signupBtn" onclick="doSignUp()"
-        style="width:100%;padding:15px;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--red);color:#fff;letter-spacing:.3px;box-shadow:0 4px 20px rgba(229,9,20,0.35);transition:all .2s;margin-bottom:24px;"
-        onmouseover="this.style.opacity='.88';this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1';this.style.transform=''">
-        Create Account
-      </button>
+      <div id="signupError" class="form-alert" role="alert" style="display:none;"></div>
 
-      <p style="text-align:center;font-size:13px;color:rgba(255,255,255,0.35);">Already have an account? <span onclick="switchAuthTab('signin')" style="color:rgba(229,9,20,0.85);cursor:pointer;font-weight:600;">Sign In</span></p>
+      <button id="signupBtn" type="button" class="btn btn-primary btn-block btn-lg" onclick="doSignUp()">Create Account</button>
+
+      <p class="auth-switch">Already have an account? <button type="button" class="link-btn" onclick="switchAuthTab('signin')">Sign In</button></p>
     </div>
 
-  </div><!-- /form area -->
-</div><!-- /max-width wrapper -->
+  </div>
+</div>
 </div>
 
 <!-- LOCATION PICKER -->
@@ -1979,24 +1888,34 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 </div>
 
 <!-- CREATOR LOGIN GATE -->
-<div class="page" id="page-creator-login" style="padding-bottom:0;background:#000;background:linear-gradient(180deg,#000 0%,rgba(80,15,8,0.6) 100%);min-height:100vh;">
-<div style="display:flex;flex-direction:column;min-height:100vh;">
-<div style="padding:18px 16px;display:flex;align-items:center;justify-content:space-between;">
-<div class="back-btn" onclick="goBack()"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
-<div style="width:36px;"></div>
+<div class="page auth-page" id="page-creator-login">
+<div class="auth-shell">
+  <div class="auth-top">
+    <button type="button" class="back-btn" onclick="goBack()" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></button>
+  </div>
+  <div class="auth-head">
+    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo auth-logo" alt="BLAK Tickets"/>
+    <h1 class="auth-title">ORGANIZER SIGN IN</h1>
+    <p class="auth-sub">Sign in with your organizer account to manage events, track analytics and scan tickets.</p>
+  </div>
+  <div class="auth-body">
+    <div id="creatorVerificationMsg" class="form-alert form-alert-warning" role="status" style="display:none;"></div>
+    <div class="field">
+      <label class="field-label" for="creatorLoginEmail">Organizer email</label>
+      <input class="form-input" id="creatorLoginEmail" type="email" placeholder="you@yourbrand.com" autocomplete="email"/>
+    </div>
+    <div class="field">
+      <label class="field-label" for="creatorLoginPwd">Password</label>
+      <div class="input-with-action">
+        <input class="form-input" id="creatorLoginPwd" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')creatorPageLogin();"/>
+        <button type="button" id="creatorPwdEyeBtn" class="input-action" onclick="toggleCreatorPassword()" aria-label="Show password" title="Show password"><svg id="creatorPwdEyeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <div id="creatorLoginError" class="form-alert" role="alert" style="display:none;"></div>
+    <button type="button" id="creatorPageLoginBtn" class="btn btn-primary btn-block btn-lg" onclick="creatorPageLogin()">Sign in as organizer</button>
+    <p class="auth-switch">Not an organizer yet? <button type="button" class="link-btn" onclick="showCreatorApplyModal()">Apply for an organizer account</button></p>
+  </div>
 </div>
-<div style="padding:24px;flex:1;">
-<div style="background:linear-gradient(135deg,rgba(229,9,20,.1),rgba(123,47,190,.1));border-radius:20px;padding:28px 20px;text-align:center;margin-bottom:28px;border:1px solid rgba(229,9,20,.2);">
-<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo" style="height:68px;width:auto;object-fit:contain;margin-bottom:12px;" alt="BLAK Tickets"/>
-<div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;margin-bottom:8px;">Creator Dashboard</div>
-<div style="font-size:13px;color:var(--grey);">Sign in with your creator account to manage events, track analytics, and scan tickets.</div>
-</div>
-<div id="creatorVerificationMsg" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:12px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.28);color:#fde68a;font-size:12px;line-height:1.45;"></div>
-<div style="margin-bottom:16px;"><label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:block;">Creator Email</label><input class="form-input" id="creatorLoginEmail" type="email" placeholder="creator@yourbrand.com" autocomplete="email"/></div>
-<div style="margin-bottom:16px;"><label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:block;">Password</label><div style="position:relative;"><input class="form-input" id="creatorLoginPwd" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginAsCreator();" style="padding-right:48px;"/><button type="button" id="creatorPwdEyeBtn" onclick="toggleCreatorPassword()" aria-label="Show password" title="Show password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:0;background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;"><svg id="creatorPwdEyeIcon" viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
-<button class="cta-full" style="margin-bottom:16px;" onclick="loginAsCreator()">Sign In as Creator →</button>
-<p style="text-align:center;font-size:13px;color:var(--grey);">Not a creator yet? <span onclick="showCreatorApplyModal()" style="color:var(--red);cursor:pointer;font-weight:600;">Apply for Creator Access</span></p>
-</div></div>
 </div>
 
 <!-- CREATOR DASHBOARD -->
@@ -2954,18 +2873,14 @@ function switchAuthTab(tab){
   var tsu=document.getElementById('tab-signup');
   var ht=document.getElementById('authHeroTitle');
   var hs=document.getElementById('authHeroSub');
-  if(tsi) tsi.classList.toggle('active',tab==='signin');
-  if(tsu) tsu.classList.toggle('active',tab==='signup');
+  if(tsi){tsi.classList.toggle('active',tab==='signin');tsi.setAttribute('aria-selected',tab==='signin'?'true':'false');}
+  if(tsu){tsu.classList.toggle('active',tab==='signup');tsu.setAttribute('aria-selected',tab==='signup'?'true':'false');}
   if(tab==='signin'){
     if(si)si.style.display='block';if(su)su.style.display='none';
-    if(tsi){tsi.style.background='var(--red)';tsi.style.color='#fff';tsi.style.boxShadow='0 2px 12px rgba(229,9,20,0.4)';}
-    if(tsu){tsu.style.background='transparent';tsu.style.color='rgba(255,255,255,0.4)';tsu.style.boxShadow='none';}
     if(ht)ht.textContent='WELCOME BACK';
     if(hs)hs.textContent='Sign in to continue';
   } else {
     if(si)si.style.display='none';if(su)su.style.display='block';
-    if(tsu){tsu.style.background='var(--red)';tsu.style.color='#fff';tsu.style.boxShadow='0 2px 12px rgba(229,9,20,0.4)';}
-    if(tsi){tsi.style.background='transparent';tsi.style.color='rgba(255,255,255,0.4)';tsi.style.boxShadow='none';}
     if(ht)ht.textContent='JOIN BLAK TICKETS';
     if(hs)hs.textContent='Create your account';
   }
@@ -2980,18 +2895,18 @@ async function doSignUp(){
   var password=document.getElementById('suPassword');
   var terms=document.getElementById('termsCheck');
   var phoneInfo=normalizeSignupPhone();
-  if(!first||!first.value.trim()){alert('Please enter your first name');return;}
-  if(!email||!email.value.trim()){alert('Please enter your email');return;}
-  if(!phone||!phone.value.trim()){alert('Please enter your phone number');return;}
-  if(phoneInfo.countryCode==='+91' && phoneInfo.number.length!==10){alert('Please enter a valid 10-digit Indian mobile number');return;}
+  if(!first||!first.value.trim()){showSignupError('Please enter your first name');return;}
+  if(!email||!email.value.trim()){showSignupError('Please enter your email');return;}
+  if(!phone||!phone.value.trim()){showSignupError('Please enter your phone number');return;}
+  if(phoneInfo.countryCode==='+91' && phoneInfo.number.length!==10){showSignupError('Please enter a valid 10-digit Indian mobile number');return;}
   if(!signupOtpState.verified || signupOtpState.identifier!==phoneInfo.identifier || !signupOtpState.accessToken){
-    alert('Please verify your phone number with OTP first');
+    showSignupError('Please verify your phone number with OTP first');
     return;
   }
-  if(!city||!city.value){alert('Please select your city');return;}
-  if(!password||!password.value){alert('Please enter a password');return;}
-  if(password.value.length<8){alert('Password must be at least 8 characters');return;}
-  if(!terms||!terms.classList.contains('on')){alert('Please accept the Terms of Service');return;}
+  if(!city||!city.value){showSignupError('Please select your city');return;}
+  if(!password||!password.value){showSignupError('Please enter a password');return;}
+  if(password.value.length<8){showSignupError('Password must be at least 8 characters');return;}
+  if(!terms||!terms.classList.contains('on')){showSignupError('Please accept the Terms of Service');return;}
   setButtonBusy('signupBtn',true,'Creating account...','Create Account');
   try{
     var resp = await fetch(apiUrl('/signup'), {
@@ -3035,7 +2950,20 @@ async function doSignUp(){
     setButtonBusy('signupBtn',false,null,'Create Account');
   }
 }
-function togglePwd(id){var el=document.getElementById(id);if(el)el.type=el.type==='password'?'text':'password';}
+// Sign-up problems stay on the form (they used to be browser alert() boxes).
+function showSignupError(message){
+  var box=document.getElementById('signupError');
+  if(!box){alert(message);return;}
+  box.textContent=message||'';
+  box.style.display=message?'block':'none';
+  if(message)box.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function togglePwd(id,btn){
+  var el=document.getElementById(id);if(!el)return;
+  var show=el.type==='password';
+  el.type=show?'text':'password';
+  if(btn){btn.setAttribute('aria-pressed',show?'true':'false');btn.setAttribute('aria-label',show?'Hide password':'Show password');}
+}
 function normalizeSignupPhone(){
   var cc=document.getElementById('suCountryCode');
   var phone=document.getElementById('suPhone');
@@ -3047,7 +2975,7 @@ function setSignupOtpMsg(msg, ok){
   var el=document.getElementById('signupOtpMsg');
   if(!el) return;
   el.style.display='block';
-  el.style.color=ok?'#4ade80':'#eab308';
+  el.style.color=ok?'var(--c-success)':'var(--c-warning-text)';
   el.textContent=msg;
 }
 function setSignupOtpBusy(btnId, busy, text){
@@ -3116,10 +3044,10 @@ function checkPasswordStrength(val){
   if(!bars.length)return;
   var score=0;
   if(val.length>=8)score++;if(/[A-Z]/.test(val))score++;if(/[0-9]/.test(val))score++;if(/[^A-Za-z0-9]/.test(val))score++;
-  var cols=['#E50914','#f97316','#eab308','#4ade80'];
+  var cols=['var(--c-danger)','var(--c-warning)','var(--c-warning)','var(--c-success)'];
   var lbls=['Weak','Fair','Good','Strong'];
-  bars.forEach(function(b,i){b.style.background=i<score?cols[score-1]:'rgba(255,255,255,0.1)';});
-  if(label){label.textContent=val.length>0?(lbls[score-1]||''):'';label.style.color=score>0?cols[score-1]:'rgba(255,255,255,0.3)';}
+  bars.forEach(function(b,i){b.style.background=i<score?cols[score-1]:'';});
+  if(label){label.textContent=val.length>0?(lbls[score-1]||''):'';label.style.color=score>0?cols[score-1]:'';}
 }
 
 function quickLogin(){
@@ -3187,6 +3115,20 @@ function promptCreatorLogin(){
     return;
   }
   showPage('page-creator-login');
+}
+// Organizer sign-in page: read the two fields (the button used to call
+// loginAsCreator() without them, so it always failed).
+async function creatorPageLogin(){
+  var email=((document.getElementById('creatorLoginEmail')||{}).value||'').trim();
+  var pwd=(document.getElementById('creatorLoginPwd')||{}).value||'';
+  var box=document.getElementById('creatorLoginError');
+  function show(msg){if(box){box.textContent=msg||'';box.style.display=msg?'block':'none';}}
+  show('');
+  if(!email||!pwd){show('Enter your organizer email and password');return;}
+  setButtonBusy('creatorPageLoginBtn',true,'Signing in...','Sign in as organizer');
+  try{await loginAsCreator(email,pwd);}
+  catch(err){show(err.message||'Login failed');}
+  finally{setButtonBusy('creatorPageLoginBtn',false,null,'Sign in as organizer');}
 }
 function toggleCreatorPassword(){
   var input=document.getElementById('creatorLoginPwd');
@@ -4248,7 +4190,7 @@ function calculateCouponDiscount(subtotal){
 function setCouponMsg(msg,ok){
   var el=document.getElementById('couponMsg');if(!el)return;
   el.style.display='block';
-  el.style.color=ok?'#4ade80':'#eab308';
+  el.style.color=ok?'var(--c-success)':'var(--c-warning-text)';
   el.textContent=msg;
 }
 
@@ -7108,11 +7050,7 @@ function selectLoginRole(role){
   LOGIN_ROLE=role;
   document.querySelectorAll('[data-login-role]').forEach(function(btn){
     var active=btn.getAttribute('data-login-role')===role;
-    // Inline !important: the login page's light theme forces every button to
-    // white with !important, and only an inline !important can override that.
-    btn.style.setProperty('background',active?'var(--red)':'transparent','important');
-    btn.style.setProperty('color',active?'#fff':'inherit','important');
-    btn.style.setProperty('border-color',active?'var(--red)':'transparent','important');
+    btn.classList.toggle('active',active);
     btn.setAttribute('aria-pressed',active?'true':'false');
   });
   var label=document.getElementById('siEmailLabel');if(label)label.textContent=LOGIN_ROLE_LABELS[role];
