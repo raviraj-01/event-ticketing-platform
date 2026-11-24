@@ -221,11 +221,12 @@ test("instant check: paid at PayU, browser never returned, buyer reloads -> tick
   assert.equal(first.body.order.status, "paid");
   assert.ok(first.body.booking && first.body.booking.qrImage, "ticket with QR in the response");
 
-  // Several reloads at once: the per-order limit lets at most one through per 15 s.
+  // Several reloads / polls at once: all answered, same ticket.
   const burst = await Promise.all([1, 2, 3].map(() => check(buyer, start.orderId)));
-  assert.ok(burst.every((r) => r.status === 429 || r.status === 200), JSON.stringify(burst.map((r) => r.status)));
-  // Later reloads (limit window passed): same ticket, never a second one.
-  await server.db.query("DELETE FROM rate_limit_hits WHERE bucket LIKE 'order-check-%'");
+  assert.deepEqual(burst.map((r) => r.status), [200, 200, 200]);
+  assert.ok(burst.every((r) => r.body.booking.id === first.body.booking.id));
+  // Later reloads (throttle window passed): same ticket, never a second one.
+  await server.db.query("DELETE FROM rate_limit_hits WHERE bucket LIKE 'order-check-%' OR bucket LIKE 'payu-check-%'");
   const later = await check(buyer, start.orderId);
   assert.equal(later.status, 200);
   assert.equal(later.body.booking.id, first.body.booking.id);
@@ -244,23 +245,36 @@ test("instant check: owner only (404 for anyone else or an unknown ID), login re
   assert.equal((await orderRow(start.orderId)).status, "pending");
 });
 
-test("instant check: limited per order (15 s) and per buyer (20 per 10 min)", async () => {
+test("instant check is pollable: PayU is asked at most once per 15 s per order and 45 times per 10 min per buyer", async () => {
   const eventId = await fx.createEvent({ creatorId: creator.id });
   const buyer = await fx.createBuyer();
   const start = await startCheckout(buyer, eventId);
   stub.state.answers[start.txnid] = { ...success(start), status: "pending", unmappedstatus: "initiated" };
-  const first = await check(buyer, start.orderId);
-  assert.deepEqual([first.status, first.body.order.status], [200, "pending"]);
-  const second = await check(buyer, start.orderId);
-  assert.equal(second.status, 429);
-  assert.ok(Number(second.headers.get("retry-after")) <= 15);
+  const asksPayu = () => stub.state.calls.filter((c) => c.var1.split("|").includes(start.txnid)).length;
 
-  await server.db.query("DELETE FROM rate_limit_hits WHERE bucket LIKE 'order-check-%'");
-  const windowStart = new Date(Math.floor(Date.now() / 600000) * 600000);
-  await server.db.query(
-    "INSERT INTO rate_limit_hits (bucket, window_start, hits) VALUES ($1, $2, 20)",
-    [`order-check-user:${buyer.id}`, windowStart],
-  );
+  const first = await check(buyer, start.orderId);
+  assert.deepEqual([first.status, first.body.order.status, first.body.checkedWithPayu], [200, "pending", true]);
+  // A page polling every 4 s: answered from our database, PayU not asked again.
+  const polls = [];
+  for (let i = 0; i < 4; i++) polls.push(await check(buyer, start.orderId));
+  assert.ok(polls.every((r) => r.status === 200 && r.body.checkedWithPayu === false && r.body.order.status === "pending"));
+  assert.equal(asksPayu(), 1);
+
+  // A browser callback that lands meanwhile is visible on the next poll, without asking PayU.
+  await server.db.query("UPDATE orders SET status = 'expired' WHERE id = $1", [start.orderId]);
+  assert.equal((await check(buyer, start.orderId)).body.order.status, "expired");
+  assert.equal(asksPayu(), 1);
+
+  // Per-buyer cap on PayU calls: still answered, PayU not asked.
+  await server.db.query("DELETE FROM rate_limit_hits WHERE bucket LIKE 'payu-check-order%'");
+  const tenMinutes = new Date(Math.floor(Date.now() / 600000) * 600000);
+  await server.db.query("INSERT INTO rate_limit_hits (bucket, window_start, hits) VALUES ($1, $2, 45) ON CONFLICT (bucket, window_start) DO UPDATE SET hits = 45", [`payu-check-user:${buyer.id}`, tenMinutes]);
+  const capped = await check(buyer, start.orderId);
+  assert.deepEqual([capped.status, capped.body.checkedWithPayu], [200, false]);
+  assert.equal(asksPayu(), 1);
+
+  // Request cap per buyer (300 per 10 min, ~2x a 4 s poll): 429.
+  await server.db.query("INSERT INTO rate_limit_hits (bucket, window_start, hits) VALUES ($1, $2, 300) ON CONFLICT (bucket, window_start) DO UPDATE SET hits = 300", [`order-check-user:${buyer.id}`, tenMinutes]);
   assert.equal((await check(buyer, start.orderId)).status, 429);
 });
 

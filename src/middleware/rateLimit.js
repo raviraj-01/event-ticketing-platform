@@ -39,6 +39,26 @@ function createRateLimiter(pool) {
   };
 }
 
+// The same counter, used inside a handler: true while `id` is within `max`
+// per window, false once over it (fails open on a database error, like the
+// middleware). For throttling one expensive step instead of the whole request.
+async function consumeRateLimit(pool, { name, windowSeconds, max, id }) {
+  const windowMs = windowSeconds * 1000;
+  const windowStart = new Date(Math.floor(Date.now() / windowMs) * windowMs);
+  try {
+    const result = await pool.query(
+      `INSERT INTO rate_limit_hits (bucket, window_start, hits) VALUES ($1, $2, 1)
+       ON CONFLICT (bucket, window_start) DO UPDATE SET hits = rate_limit_hits.hits + 1
+       RETURNING hits`,
+      [`${name}:${id}`, windowStart],
+    );
+    return result.rows[0].hits <= max;
+  } catch (err) {
+    console.error(`Rate limit check failed (${name}):`, err.message);
+    return true;
+  }
+}
+
 // Old windows are useless after a day; called from a periodic cleanup.
 async function pruneRateLimitHits(pool) {
   await pool.query("DELETE FROM rate_limit_hits WHERE window_start < NOW() - INTERVAL '1 day'");
@@ -47,4 +67,4 @@ async function pruneRateLimitHits(pool) {
 // The shared limiter used by the routes.
 const rateLimit = createRateLimiter(db.pool);
 
-module.exports = { createRateLimiter, pruneRateLimitHits, rateLimit };
+module.exports = { createRateLimiter, consumeRateLimit, pruneRateLimitHits, rateLimit };

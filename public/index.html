@@ -4260,11 +4260,14 @@ function submitPayUFormInAppBrowser(action, fields){
     console.error('PayU app browser load failed:',event);
   });
   browser.addEventListener('exit',function(){
-    if(!completed)resetPayButton();
+    if(completed)return;
+    resetPayButton();
+    // Closed before PayU sent us back (or PayU's last page failed): ask now.
+    resumePendingPaymentCheck();
   });
 }
 
-function submitPayUForm(action, fields){
+function submitPayUForm(action, fields, targetName){
   if(!action) throw new Error('PayU checkout URL is missing');
   var checkoutUrl;
   try {
@@ -4281,6 +4284,7 @@ function submitPayUForm(action, fields){
   form.action=checkoutUrl.href;
   form.acceptCharset='UTF-8';
   form.style.display='none';
+  if(targetName)form.target=targetName;
   Object.keys(fields||{}).forEach(function(key){
     var input=document.createElement('input');
     input.type='hidden';
@@ -4322,18 +4326,6 @@ function askAndSaveBuyerPhone(){
 
 async function payWithPayU(){
   if(!CURRENT_EVENT){ showToast('Select an event first'); return; }
-  // A payment already in progress for this event? Asked from the server at
-  // the moment Pay is pressed (the notice on the page may still be loading).
-  if(isBuyerSignedIn()&&NEW_PAYMENT_OK_EVENT!==CURRENT_EVENT.id){
-    var inProgress=await fetchPendingOrder(CURRENT_EVENT.id);
-    if(inProgress){
-      showPendingNotice(inProgress);
-      var notice=document.getElementById('pendingPaymentNotice');
-      if(notice)notice.scrollIntoView({behavior:'smooth',block:'center'});
-      showToast('You already have a payment in progress for this event');
-      return;
-    }
-  }
   var selected=document.querySelector('.ticket-option.selected');
   if(!selected){ showToast('Select an available ticket type'); return; }
   if(!isBuyerSignedIn()){
@@ -4343,9 +4335,27 @@ async function payWithPayU(){
     showToast('Log in or sign up to book tickets');
     return;
   }
+  // Paid tier on the web: open the PayU window now, synchronously inside the
+  // click, so popup blockers allow it. It is filled once the order exists.
+  // Blocked (null) -> full-page redirect as before. The app uses InAppBrowser.
+  var isPaidTier=Number(selected.getAttribute('data-price')||0)>0;
+  var payuWin=isPaidTier?openPayuWindow():null;
+  var handedOver=false;
   var btn=document.getElementById('payNowBtn');
-  if(btn){ btn.disabled=true; btn.textContent='Please wait...'; }
   try{
+    // A payment already in progress for this event? Asked from the server at
+    // the moment Pay is pressed (the notice on the page may still be loading).
+    if(NEW_PAYMENT_OK_EVENT!==CURRENT_EVENT.id){
+      var inProgress=await fetchPendingOrder(CURRENT_EVENT.id);
+      if(inProgress){
+        showPendingNotice(inProgress);
+        var notice=document.getElementById('pendingPaymentNotice');
+        if(notice)notice.scrollIntoView({behavior:'smooth',block:'center'});
+        showToast('You already have a payment in progress for this event');
+        return;
+      }
+    }
+    if(btn){ btn.disabled=true; btn.textContent='Please wait...'; }
     var orderBody=JSON.stringify({
       eventId:CURRENT_EVENT.id,
       tierName:selected.getAttribute('data-name'),
@@ -4370,13 +4380,23 @@ async function payWithPayU(){
     }
     if(!resp.ok) throw new Error(data.error||'Could not start booking');
     if(data.booking){ renderConfirmedBooking(data.booking); return; }
-    if(btn) btn.textContent='Redirecting to PayU...';
     rememberPendingOrder(data.order&&data.order.id);
     NEW_PAYMENT_OK_EVENT=null;
+    if(payuWin&&!payuWin.closed){
+      submitPayUForm(data.payment.action, data.payment.fields, PAYU_WINDOW_NAME);
+      handedOver=true;
+      resetPayButton();
+      waitForPayuWindow(data.order, payuWin);
+      return;
+    }
+    if(btn) btn.textContent='Redirecting to PayU...';
+    handedOver=true;
     submitPayUForm(data.payment.action, data.payment.fields);
   }catch(err){
     resetPayButton();
     showToast(err.message||'Payment could not start');
+  }finally{
+    if(!handedOver&&payuWin&&!payuWin.closed){try{payuWin.close();}catch(_){}}
   }
 }
 
@@ -4973,6 +4993,148 @@ function showPendingNotice(order){
   notice.style.display='block';
 }
 
+// ── PayU in its own window (the buyer's tab never leaves our site) ───────
+var PAYU_WINDOW_NAME='vybera_payu';
+var PAYU_POLL={intervalMs:4000,maxMs:15*60*1000,maxFinalAttempts:5};
+var PAYU_WAIT=null;
+
+function openPayuWindow(){
+  if(isNativeApp()||(window.cordova&&window.cordova.InAppBrowser))return null;
+  var win=null;
+  try{win=window.open('',PAYU_WINDOW_NAME,'popup=yes,width=520,height=760');}catch(_){win=null;}
+  if(!win)return null;
+  try{
+    win.document.title='Secure payment';
+    win.document.body.style.cssText='font-family:Arial,sans-serif;padding:32px;text-align:center;color:#333;';
+    win.document.body.textContent='Preparing your secure PayU payment…';
+  }catch(_){}
+  return win;
+}
+
+// Inside the PayU window, back on our return URL: tell the opener (same origin
+// only) and close. Returns true when handed over.
+function notifyPayuOpener(orderId){
+  try{
+    if(window.name!==PAYU_WINDOW_NAME||!window.opener||window.opener.closed)return false;
+    window.opener.postMessage({type:'vybera:payu-return',orderId:orderId||''},window.location.origin);
+    if(history&&history.replaceState)history.replaceState(history.state,'',location.pathname);
+    setTimeout(function(){window.close();},50);
+    return true;
+  }catch(_){return false;}
+}
+
+// BEGIN payuPollDecision (pure: unit-tested in test/payuPolling.test.js)
+// result: the /orders/:id/check answer, or null when the call failed.
+// ctx: { windowClosed, timedOut, cancelled, finalAttempts, maxFinalAttempts }
+function payuPollDecision(result,ctx){
+  var order=(result&&result.order)||{};
+  if(order.status==='paid'&&result.booking)return 'paid';
+  if(order.status==='paid_needs_refund')return 'refund';
+  if(order.status==='expired')return 'not_completed';
+  if(ctx.windowClosed||ctx.timedOut||ctx.cancelled){
+    // "Check once more": wait for an answer that really asked PayU, a few tries at most.
+    if(result&&result.checkedWithPayu)return 'not_completed';
+    return ctx.finalAttempts>=ctx.maxFinalAttempts?'not_completed':'check_again';
+  }
+  return 'keep_waiting';
+}
+// END payuPollDecision
+
+function showPayuWaitingDialog(order,state){
+  if(!document.getElementById('vyPayuSpinStyle')){
+    var st=document.createElement('style');st.id='vyPayuSpinStyle';
+    st.textContent='@keyframes vyPayuSpin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(st);
+  }
+  var old=document.getElementById('paymentStatusModal');if(old)old.remove();
+  var modal=document.createElement('div');
+  modal.id='paymentStatusModal';modal.setAttribute('role','dialog');
+  modal.style.cssText='position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px;';
+  var box=document.createElement('div');
+  box.style.cssText='width:100%;max-width:360px;background:#111;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:22px;font-family:"DM Sans",sans-serif;text-align:center;';
+  var spin=document.createElement('div');
+  spin.style.cssText='width:34px;height:34px;margin:0 auto 14px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:#e50914;animation:vyPayuSpin 1s linear infinite;';
+  var h=document.createElement('div');h.style.cssText='font-size:17px;font-weight:800;margin-bottom:6px;';h.textContent='Complete your payment in the PayU window';
+  var amt=document.createElement('div');amt.style.cssText='font-size:22px;font-weight:800;margin:6px 0;';amt.textContent='₹'+Number(order.amount||0).toFixed(2);
+  var p=document.createElement('div');p.id='payuWaitingText';p.style.cssText='font-size:12px;line-height:1.5;color:rgba(255,255,255,.6);margin-bottom:16px;';
+  p.textContent='This page updates by itself when PayU confirms. Keep it open.';
+  var row=document.createElement('div');row.style.cssText='display:flex;gap:10px;';
+  var focusBtn=document.createElement('button');focusBtn.type='button';focusBtn.textContent='Show PayU window';
+  focusBtn.style.cssText='flex:1;padding:12px;border-radius:12px;border:none;background:#8B2010;color:#fff;font-size:13px;font-weight:700;cursor:pointer;';
+  focusBtn.addEventListener('click',function(){try{state.win.focus();}catch(_){}});
+  var cancelBtn=document.createElement('button');cancelBtn.type='button';cancelBtn.textContent='Cancel';
+  cancelBtn.style.cssText='flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#fff;font-size:13px;font-weight:700;cursor:pointer;';
+  cancelBtn.addEventListener('click',function(){state.cancelled=true;try{state.win.close();}catch(_){}payuPollTick(state);});
+  row.appendChild(focusBtn);row.appendChild(cancelBtn);
+  box.appendChild(spin);box.appendChild(h);box.appendChild(amt);box.appendChild(p);box.appendChild(row);
+  modal.appendChild(box);document.body.appendChild(modal);
+}
+
+function waitForPayuWindow(order,win){
+  if(PAYU_WAIT){PAYU_WAIT.finished=true;clearInterval(PAYU_WAIT.timer);}
+  var state={order:order,orderId:order.id,win:win,startedAt:Date.now(),finalAttempts:0,busy:false,finished:false,cancelled:false};
+  PAYU_WAIT=state;
+  showPayuWaitingDialog(order,state);
+  state.timer=setInterval(function(){payuPollTick(state);},PAYU_POLL.intervalMs);
+}
+
+// The PayU window's return page (same origin) says it is back: check right away.
+window.addEventListener('message',function(event){
+  if(event.origin!==window.location.origin)return;
+  var data=event.data||{};
+  if(data.type!=='vybera:payu-return'||!PAYU_WAIT||PAYU_WAIT.finished)return;
+  if(PAYU_WAIT.win&&event.source!==PAYU_WAIT.win)return;
+  payuPollTick(PAYU_WAIT);
+});
+
+async function payuPollTick(state){
+  if(state.finished||state.busy)return;
+  state.busy=true;
+  var ctx={
+    windowClosed:!!(state.win&&state.win.closed),
+    timedOut:Date.now()-state.startedAt>PAYU_POLL.maxMs,
+    cancelled:state.cancelled,
+    finalAttempts:state.finalAttempts,
+    maxFinalAttempts:PAYU_POLL.maxFinalAttempts
+  };
+  var result=null;
+  try{
+    var resp=await fetch(apiUrl('/orders/'+encodeURIComponent(state.orderId)+'/check'),{method:'POST',headers:authHeaders('buyer',{'Content-Type':'application/json'}),body:'{}'});
+    var data=await readAuthResponse(resp);
+    if(resp.ok)result=data;
+  }catch(_){result=null;}
+  state.busy=false;
+  if(state.finished)return;
+  var decision=payuPollDecision(result,ctx);
+  if(decision==='keep_waiting')return;
+  if(decision==='check_again'){
+    state.finalAttempts+=1;
+    var t=document.getElementById('payuWaitingText');if(t)t.textContent='Checking your payment with PayU…';
+    return; // the next tick (4 s) asks again; PayU itself is asked at most every 15 s
+  }
+  finishPayuWait(state,decision,result);
+}
+
+function finishPayuWait(state,decision,result){
+  state.finished=true;
+  clearInterval(state.timer);
+  if(PAYU_WAIT===state)PAYU_WAIT=null;
+  try{if(state.win&&!state.win.closed)state.win.close();}catch(_){}
+  closePaymentStatusDialog();
+  var order=(result&&result.order)||state.order;
+  var close={label:'Close'};
+  var tryAgain={label:'Try again',onClick:function(){retryBookingFor(order);}};
+  if(decision==='paid'){forgetPendingOrder();renderConfirmedBooking(result.booking);return;}
+  if(decision==='refund'){
+    forgetPendingOrder();
+    showPaymentStatusDialog('Payment received, tickets sold out','Your payment arrived after the last tickets were sold. You will get a full refund.',[tryAgain,close]);
+    return;
+  }
+  if(order&&order.status==='expired')forgetPendingOrder();
+  // Still pending at PayU: the stored ID stays, so a late success is found on the next visit.
+  showPaymentStatusDialog('Payment not completed','PayU has not confirmed this payment, so no ticket was issued. If money was taken, it is confirmed or refunded automatically.',[tryAgain,close]);
+}
+
 // Back from PayU: the server already verified the payment in its callback and
 // redirected here with ?payment=payu&order=<id>. Ask the server for the result.
 async function completePayUReturn(orderIdFromApp){
@@ -4980,6 +5142,9 @@ async function completePayUReturn(orderIdFromApp){
   var fromUrl=params.get('payment')==='payu';
   var orderId=orderIdFromApp||(fromUrl?params.get('order'):'');
   if(!fromUrl&&!orderIdFromApp)return;
+  // Opened in our PayU window: hand the result to the tab that is waiting
+  // (same origin only) and close. Otherwise continue as a normal return.
+  if(fromUrl&&notifyPayuOpener(orderId))return;
   if(fromUrl&&history&&history.replaceState){
     history.replaceState(history.state,'',location.pathname+location.hash);
   }

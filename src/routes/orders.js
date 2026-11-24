@@ -14,7 +14,7 @@ const {
   getOrderForBuyer,
   payablePhone,
 } = require("../services/orders");
-const { rateLimit } = require("../middleware/rateLimit");
+const { rateLimit, consumeRateLimit } = require("../middleware/rateLimit");
 const { requireBuyer } = require("../middleware/auth");
 const { publicOrder } = require("../utils/serializers");
 const { ticketResponse } = require("../services/tickets");
@@ -148,40 +148,39 @@ router.get("/orders/pending", requireBuyer, async (req, res) => {
   }
 });
 
-// H19 (instant check): the buyer is back on the site with a checkout that has
-// not been confirmed (e.g. PayU's redirect back failed). Ask PayU about this
-// one order now, through the same path as the webhook and the poll, instead of
-// waiting up to 5 minutes. Owner only (404 otherwise, so IDs cannot be probed);
-// at most once per 15 seconds per order and 20 times per 10 minutes per buyer.
-const orderCheckLimits = [
-  rateLimit({ name: "order-check-user", windowSeconds: 600, max: 20, key: (req) => req.buyer && String(req.buyer.sub),
-    message: "Too many checks. Please wait a minute." }),
-  rateLimit({ name: "order-check-order", windowSeconds: 15, max: 1, key: (req) => String(req.params.orderId || ""),
-    message: "Still confirming. Please check again in a few seconds." }),
-];
-router.post("/orders/:orderId/check", requireBuyer, async (req, res, next) => {
-  // Ownership first, so the rate limiter never reveals whether an ID exists.
+// H19 (instant check): the buyer is back on the site, or is waiting while the
+// PayU window is open, with a checkout that is not confirmed yet. Returns the
+// order (and ticket) and, at most once per 15 seconds per order and 45 times
+// per 10 minutes per buyer, first asks PayU about it through the same path as
+// the webhook and the poll. Calls in between only read our database, so the
+// page can poll this every few seconds (a browser callback shows up at once)
+// without hammering PayU. Owner only: 404 otherwise, so IDs cannot be probed.
+const PAYU_CHECK = { perOrderSeconds: 15, perBuyerMax: 45, perBuyerWindowSeconds: 600 };
+const orderCheckLimit = rateLimit({ name: "order-check-user", windowSeconds: 600, max: 300,
+  key: (req) => req.buyer && String(req.buyer.sub), message: "Too many checks. Please wait a minute." });
+router.post("/orders/:orderId/check", requireBuyer, orderCheckLimit, async (req, res) => {
   try {
-    const owned = await pool.query("SELECT 1 FROM orders WHERE id = $1 AND user_id = $2", [String(req.params.orderId || ""), req.buyer.sub]);
-    if (!owned.rows.length) return res.status(404).json({ error: "Order not found" });
-    next();
-  } catch (err) {
-    console.error("Order check failed:", err);
-    res.status(500).json({ error: "Could not check your payment" });
-  }
-}, ...orderCheckLimits, async (req, res) => {
-  try {
-    const orderId = String(req.params.orderId);
+    const orderId = String(req.params.orderId || "");
     const current = await getOrderForBuyer(pool, orderId, req.buyer.sub);
+    if (!current) return res.status(404).json({ error: "Order not found" });
     const { order } = current;
+    let checkedWithPayu = false;
     if (order.payment_method === "payu" && ["pending", "expired"].includes(order.status)) {
-      const results = await reconcilePayuOrders(pool, { txnids: [order.txnid] });
-      for (const line of results.map(describeResult).filter(Boolean)) console.log(`(buyer check) ${line}`);
+      const orderAllowed = await consumeRateLimit(pool, { name: "payu-check-order", windowSeconds: PAYU_CHECK.perOrderSeconds, max: 1, id: orderId });
+      const buyerAllowed = orderAllowed && await consumeRateLimit(pool, {
+        name: "payu-check-user", windowSeconds: PAYU_CHECK.perBuyerWindowSeconds, max: PAYU_CHECK.perBuyerMax, id: String(req.buyer.sub),
+      });
+      if (orderAllowed && buyerAllowed) {
+        const results = await reconcilePayuOrders(pool, { txnids: [order.txnid] });
+        for (const line of results.map(describeResult).filter(Boolean)) console.log(`(buyer check) ${line}`);
+        checkedWithPayu = true;
+      }
     }
-    const result = await getOrderForBuyer(pool, orderId, req.buyer.sub);
+    const result = checkedWithPayu ? await getOrderForBuyer(pool, orderId, req.buyer.sub) : current;
     res.json({
       order: publicOrder(result.order),
       booking: result.booking ? await ticketResponse(result.booking) : null,
+      checkedWithPayu,
     });
   } catch (err) {
     console.error("Order check failed:", err);
