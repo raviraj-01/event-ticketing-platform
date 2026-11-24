@@ -26,6 +26,7 @@ test("seed-demo creates one of each account and both events", () => {
   }
   assert.ok(first.created.some((item) => item.startsWith(`event ${DEMO.freeEvent.id}`)));
   assert.ok(first.created.some((item) => item.startsWith(`event ${DEMO.paidEvent.id}`)));
+  assert.ok(first.created.some((item) => item.startsWith(`event ${DEMO.paidEvent2.id}`)));
 });
 
 test("seed-demo accounts can log in through the real routes", async () => {
@@ -77,7 +78,7 @@ test("running seed-demo again inserts nothing and changes no row", async () => {
   const second = await seedDemo(server.db, { adminEmail: ADMIN_EMAIL });
   assert.deepEqual(second.created, []);
   assert.deepEqual(second.credentials, []);
-  assert.equal(second.kept.length, 6);
+  assert.equal(second.kept.length, 7);
   assert.equal(await snapshot(), before);
 });
 

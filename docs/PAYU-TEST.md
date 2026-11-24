@@ -20,7 +20,7 @@ signed callbacks the automated tests generate.
 
 ## 2. Data
 
-`npm run seed-demo` creates everything needed: the paid event `Demo Live Night (paid)` with the tier **General** (₹100, 2 seats online) and the buyer `buyer@demo.local` with a verified phone. Passwords: `demo-credentials.local.txt`.
+`npm run seed-demo` creates everything needed: the paid event `Demo Live Night (paid)` with the tier **General** (₹100, 2 seats online, for the sold-out case), `Demo Club Night (paid)` (General ₹100, 10 seats, for repeat runs) and the buyer `buyer@demo.local` with a verified phone. Passwords: `demo-credentials.local.txt`.
 
 ## 3. Happy path
 

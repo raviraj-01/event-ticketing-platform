@@ -6,7 +6,7 @@
 // Creates, if they are not there yet:
 //   - one admin            (admin login needs the emailed code, so use an address you can read)
 //   - one approved organizer
-//   - one free event and one paid event, both live (approved)
+//   - one free event and two paid events, all live (approved)
 //   - one staff member of that organizer, assigned 10 tickets of the paid event
 //   - one buyer with a verified phone (paid checkout needs a phone, Q14)
 //
@@ -38,6 +38,13 @@ const DEMO = {
       { name: "General", price: 100, qty: 2, perks: "" },
       { name: "Staff Desk", price: 100, qty: 10, perks: "" },
     ],
+  },
+  // A second paid event with room, for repeating the PayU test (docs/PAYU-TEST.md).
+  paidEvent2: {
+    id: "EVT-DEMO-PAID-2",
+    name: "Demo Club Night (paid)",
+    capacity: 10,
+    tickets: [{ name: "General", price: 100, qty: 10, perks: "" }],
   },
   staff: { id: "STF-DEMO-1", name: "Demo Staff", loginId: "demo.staff", tier: "Staff Desk", qty: 10, commissionRate: 10 },
   buyer: { firstName: "Demo", lastName: "Buyer", email: "buyer@demo.local", countryCode: "+91", phone: "9000000002" },
@@ -100,7 +107,7 @@ async function seedDemo(pool, { adminEmail = DEMO.admin.email, now = new Date() 
     // Events: live (approved), 30 days from today in India.
     const eventDate = addDays(todayInIndia(now), 30);
     const newEvents = new Set();
-    for (const event of [DEMO.freeEvent, DEMO.paidEvent]) {
+    for (const event of [DEMO.freeEvent, DEMO.paidEvent, DEMO.paidEvent2]) {
       const exists = await client.query("SELECT 1 FROM creator_events WHERE id = $1", [event.id]);
       if (exists.rows.length) { kept.push(`event ${event.id}`); continue; }
       await client.query(
