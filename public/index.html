@@ -1834,7 +1834,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div class="page" id="page-creator">
 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
 <div><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo" onclick="openBuyerLandingFromCreator()" style="height:50px;width:auto;object-fit:contain;cursor:pointer;" alt="BLAK Tickets" title="Back to BLAK Tickets home"/><div style="font-size:13px;color:var(--grey);">Creator Mode 🎤</div><div style="font-size:20px;font-weight:700;">Dashboard</div></div>
-<div style="display:flex;gap:8px;"><button id="creatorRefreshBtn" onclick="refreshCreatorData(this)" style="padding:9px 12px;background:rgba(0,212,212,.1);border:1px solid rgba(0,212,212,.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Refresh</button><div class="icon-btn" onclick="showPage('page-notifications')"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div></div>
+<div style="display:flex;gap:8px;"><button id="creatorLogoutBtn" onclick="signOutCreator()" style="padding:9px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:var(--red);font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Log out</button><button id="creatorRefreshBtn" onclick="refreshCreatorData(this)" style="padding:9px 12px;background:rgba(0,212,212,.1);border:1px solid rgba(0,212,212,.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Refresh</button><div class="icon-btn" onclick="showPage('page-notifications')"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div></div>
 </div>
 <!-- NON-FINANCIAL KPIs -->
 <div class="kpi-grid">
@@ -6408,13 +6408,39 @@ function enterStaffPanel(){
   try{switchStaffTab('overview');}catch(err){console.error('Staff tab refresh failed:',err);}
 }
 
+// After a role signs out, show the sign-in form with that role selected.
+function openRoleLogin(role){
+  document.body.classList.remove('on-splash');
+  showPage('page-login');
+  if(typeof switchAuthTab==='function')switchAuthTab('signin');
+  selectLoginRole(role);
+  pageHistory=['page-login'];
+}
+
 function performStaffSignOut(){
   logoutSession('staff');
   STORE.currentStaff=null;
   localStorage.removeItem('VYBERA_STAFF_TOKEN');
   localStorage.removeItem('VYBERA_STAFF_PROFILE');
-  document.body.classList.remove('on-splash');
-  showPage('page-splash');
+  openRoleLogin('staff');
+}
+
+// Organizer sign-out: ends only the organizer session (a buyer login in the
+// same browser stays) and returns to the organizer sign-in form.
+function performCreatorSignOut(){
+  logoutSession('creator');
+  STORE.creatorProfile=null;
+  localStorage.removeItem('VYBERA_CREATOR_TOKEN');
+  localStorage.removeItem('VYBERA_CREATOR_PROFILE');
+  document.body.classList.remove('creator-mode');
+  var nav=document.getElementById('creatorNavBar');if(nav)nav.style.display='none';
+  var financeSection=document.getElementById('financeSection');if(financeSection)financeSection.style.display='none';
+  var financeLock=document.getElementById('financeLock');if(financeLock)financeLock.style.display='block';
+  openRoleLogin('creator');
+}
+
+function signOutCreator(){
+  confirmSignOut(performCreatorSignOut);
 }
 
 function signOutStaff(){

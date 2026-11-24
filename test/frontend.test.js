@@ -45,3 +45,10 @@ test("L14: /#admin works in an open tab, beats other saved sessions, and admin s
   assert.match(html, /if\(await restoreAdminSession\(\)\)return true;[^]*?if\(ADMIN_LOGIN_LINK\)\{openAdminLogin\(\);return true;\}\s*if\(await restoreStaffSession\(\)\)/);
   assert.match(html, /function admSignOut\(\)\{[^}]*openAdminLogin\(\);/);
 });
+
+test("L15: organizer dashboard has a Log out button; organizer and staff sign-out return to their sign-in form", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  assert.match(html, /<button id="creatorLogoutBtn" onclick="signOutCreator\(\)"/);
+  assert.match(html, /function performCreatorSignOut\(\)\{[^]*?logoutSession\('creator'\);[^]*?openRoleLogin\('creator'\);\s*\}/);
+  assert.match(html, /function performStaffSignOut\(\)\{[^]*?logoutSession\('staff'\);[^]*?openRoleLogin\('staff'\);\s*\}/);
+});
