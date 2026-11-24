@@ -58,3 +58,16 @@ test("L16: a login ends the other roles' sessions, so a refresh cannot switch to
   assert.match(html, /async function saveSession\(role,data\)\{[^]*?await endOtherRoleSessions\(role\);[^]*?\n\}/);
   assert.match(html, /async function endOtherRoleSessions\(keepRole\)\{[^]*?r!==keepRole&&hasSession\(r\)[^]*?await logoutSession\(r\);/);
 });
+
+test("H19 instant check: only the order ID is stored at checkout, checked on load, cleared when final", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  assert.match(html, /rememberPendingOrder\(data\.order&&data\.order\.id\);\s*NEW_PAYMENT_OK_EVENT=null;\s*submitPayUForm\(/);
+  assert.match(html, /function rememberPendingOrder\(orderId\)\{if\(orderId\)localStorage\.setItem\(PENDING_ORDER_KEY,String\(orderId\)\);\}/);
+  assert.match(html, /restoreSavedSession\(\)\.then\(resumePendingPaymentCheck\)/);
+  assert.match(html, /'\/orders\/'\+encodeURIComponent\(orderId\)\+'\/check'/);
+  for (const status of ["paid", "paid_needs_refund", "expired"]) {
+    assert.match(html, new RegExp(`order\.status==='${status}'[^\n]*\{[^]{0,40}forgetPendingOrder\(\)`), status);
+  }
+  assert.match(html, /<div id="pendingPaymentNotice" role="status"/);
+  assert.match(html, /NEW_PAYMENT_OK_EVENT!==CURRENT_EVENT\.id\)\{\s*var inProgress=await fetchPendingOrder\(CURRENT_EVENT\.id\);\s*if\(inProgress\)\{[^]*?return;/);
+});

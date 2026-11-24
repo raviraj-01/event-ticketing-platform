@@ -1535,6 +1535,14 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div style="margin-left:8px;font-size:17px;font-weight:700;">Book Tickets</div>
 </div>
 <div style="padding:4px 16px 0;font-size:13px;color:var(--grey)">Select an event to book tickets</div>
+<div id="pendingPaymentNotice" role="status" style="display:none;margin:12px 16px 0;padding:14px;border-radius:14px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.45);">
+  <div style="font-size:14px;font-weight:700;margin-bottom:4px;">You have a payment in progress</div>
+  <div id="pendingPaymentText" style="font-size:12px;line-height:1.5;color:var(--grey);margin-bottom:10px;"></div>
+  <div style="display:flex;gap:8px;">
+    <button type="button" id="pendingPaymentCheckBtn" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--red);color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Check payment status</button>
+    <button type="button" id="pendingPaymentNewBtn" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--glass-border);background:transparent;color:inherit;font-size:12px;font-weight:700;cursor:pointer;">Start a new payment</button>
+  </div>
+</div>
 <div class="step-indicator">
 <div class="step active" id="bstep-ind-1"><div class="step-dot">1</div><div class="step-label">Ticket</div></div>
 <div class="step" id="bstep-ind-2"><div class="step-dot">2</div><div class="step-label">Qty</div></div>
@@ -2651,6 +2659,7 @@ function showPage(id,navBtn){
   var page=document.getElementById(id);
   if(!page){ console.warn('Missing page:', id); return; }
   page.classList.add('active');
+  if(id==='page-booking'&&typeof refreshPendingPaymentNotice==='function')refreshPendingPaymentNotice();
   if(pageHistory[pageHistory.length-1]!==id)pageHistory.push(id);
   pushBrowserRoute(id);
   if(navBtn){document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));navBtn.classList.add('active');}
@@ -4313,6 +4322,18 @@ function askAndSaveBuyerPhone(){
 
 async function payWithPayU(){
   if(!CURRENT_EVENT){ showToast('Select an event first'); return; }
+  // A payment already in progress for this event? Asked from the server at
+  // the moment Pay is pressed (the notice on the page may still be loading).
+  if(isBuyerSignedIn()&&NEW_PAYMENT_OK_EVENT!==CURRENT_EVENT.id){
+    var inProgress=await fetchPendingOrder(CURRENT_EVENT.id);
+    if(inProgress){
+      showPendingNotice(inProgress);
+      var notice=document.getElementById('pendingPaymentNotice');
+      if(notice)notice.scrollIntoView({behavior:'smooth',block:'center'});
+      showToast('You already have a payment in progress for this event');
+      return;
+    }
+  }
   var selected=document.querySelector('.ticket-option.selected');
   if(!selected){ showToast('Select an available ticket type'); return; }
   if(!isBuyerSignedIn()){
@@ -4350,6 +4371,8 @@ async function payWithPayU(){
     if(!resp.ok) throw new Error(data.error||'Could not start booking');
     if(data.booking){ renderConfirmedBooking(data.booking); return; }
     if(btn) btn.textContent='Redirecting to PayU...';
+    rememberPendingOrder(data.order&&data.order.id);
+    NEW_PAYMENT_OK_EVENT=null;
     submitPayUForm(data.payment.action, data.payment.fields);
   }catch(err){
     resetPayButton();
@@ -4832,6 +4855,124 @@ function renderProfileBookingHistory(){
   });
 }
 
+// ── Payment in progress (H19 instant check) ───────────────────────────────
+// Only the order ID is stored, when PayU checkout starts. If the browser does
+// not come back from PayU (or comes back without a result), the next page load
+// asks the server to check that order with PayU right away.
+var PENDING_ORDER_KEY='VYBERA_PENDING_ORDER';
+var PENDING_NOTICE_ORDER=null;
+var NEW_PAYMENT_OK_EVENT=null; // the buyer chose "Start a new payment" for this event
+function rememberPendingOrder(orderId){if(orderId)localStorage.setItem(PENDING_ORDER_KEY,String(orderId));}
+function forgetPendingOrder(){
+  localStorage.removeItem(PENDING_ORDER_KEY);
+  PENDING_NOTICE_ORDER=null;
+  var notice=document.getElementById('pendingPaymentNotice');if(notice)notice.style.display='none';
+}
+
+// Small status dialog. Text only (textContent), no HTML built from data.
+function showPaymentStatusDialog(title,message,buttons){
+  var old=document.getElementById('paymentStatusModal');if(old)old.remove();
+  var modal=document.createElement('div');
+  modal.id='paymentStatusModal';
+  modal.setAttribute('role','dialog');
+  modal.style.cssText='position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px;';
+  var box=document.createElement('div');
+  box.style.cssText='width:100%;max-width:360px;background:#111;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;font-family:"DM Sans",sans-serif;';
+  var h=document.createElement('div');h.style.cssText='font-size:18px;font-weight:800;margin-bottom:8px;';h.textContent=title;
+  var p=document.createElement('div');p.style.cssText='font-size:13px;line-height:1.5;color:rgba(255,255,255,.65);margin-bottom:16px;';p.textContent=message;
+  box.appendChild(h);box.appendChild(p);
+  if(buttons&&buttons.length){
+    var row=document.createElement('div');row.style.cssText='display:flex;gap:10px;';
+    buttons.forEach(function(b,i){
+      var el=document.createElement('button');el.type='button';el.textContent=b.label;
+      el.style.cssText='flex:1;padding:12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;'+(i===0?'border:none;background:#8B2010;color:#fff;':'border:1px solid rgba(255,255,255,.15);background:transparent;color:#fff;');
+      el.addEventListener('click',function(){modal.remove();if(b.onClick)b.onClick();});
+      row.appendChild(el);
+    });
+    box.appendChild(row);
+  }
+  modal.appendChild(box);document.body.appendChild(modal);
+  return modal;
+}
+function closePaymentStatusDialog(){var m=document.getElementById('paymentStatusModal');if(m)m.remove();}
+
+function retryBookingFor(order){
+  if(order&&order.eventId&&typeof openById==='function'){openById(order.eventId);showPage('page-booking');}
+}
+
+async function checkPendingPayment(orderId){
+  showPaymentStatusDialog('Confirming your payment…','Checking with PayU. This takes a few seconds.',[]);
+  var close={label:'Close'};
+  var again={label:'Check again',onClick:function(){checkPendingPayment(orderId);}};
+  try{
+    var resp=await fetch(apiUrl('/orders/'+encodeURIComponent(orderId)+'/check'),{method:'POST',headers:authHeaders('buyer',{'Content-Type':'application/json'}),body:'{}'});
+    var data=await readAuthResponse(resp);
+    if(resp.status===404||resp.status===401){forgetPendingOrder();closePaymentStatusDialog();return;}
+    if(resp.status===429){showPaymentStatusDialog('Still confirming…',data.error||'Please check again in a few seconds.',[again,close]);return;}
+    if(!resp.ok)throw new Error(data.error||'Could not check your payment');
+    var order=data.order||{};
+    if(order.status==='paid'&&data.booking){forgetPendingOrder();closePaymentStatusDialog();renderConfirmedBooking(data.booking);return;}
+    if(order.status==='paid_needs_refund'){
+      forgetPendingOrder();
+      showPaymentStatusDialog('Payment received, tickets sold out','Your payment arrived after the last tickets were sold. You will get a full refund.',[close]);
+      return;
+    }
+    if(order.status==='expired'){
+      forgetPendingOrder();
+      showPaymentStatusDialog('Payment not completed','PayU has not confirmed a payment for this order, so no ticket was issued. If money was taken, it is confirmed or refunded automatically.',
+        [{label:'Try again',onClick:function(){retryBookingFor(order);}},close]);
+      return;
+    }
+    showPaymentStatusDialog('Payment not completed yet','PayU has not confirmed this payment yet. If you just paid, check again in a moment.',[again,close]);
+  }catch(err){
+    showPaymentStatusDialog('Could not check your payment',err.message||'Please try again.',[again,close]);
+  }
+}
+
+// On page load (after the session is restored): a stored checkout that never came back.
+async function resumePendingPaymentCheck(){
+  var orderId=localStorage.getItem(PENDING_ORDER_KEY);
+  if(!orderId||!hasSession('buyer'))return;
+  await checkPendingPayment(orderId);
+}
+
+// The buyer's payment in progress for an event (seat hold active), or null.
+async function fetchPendingOrder(eventId){
+  try{
+    var resp=await fetch(apiUrl('/orders/pending?eventId='+encodeURIComponent(eventId)),{headers:authHeaders('buyer')});
+    var data=await readAuthResponse(resp);
+    var order=resp.ok&&data.order;
+    return order&&order.eventId===eventId?order:null;
+  }catch(err){console.error('Pending payment lookup failed:',err);return null;}
+}
+
+// Booking page: show the buyer's payment in progress for this event, if any.
+async function refreshPendingPaymentNotice(){
+  var notice=document.getElementById('pendingPaymentNotice');
+  if(!notice)return;
+  if(!CURRENT_EVENT||!hasSession('buyer')){PENDING_NOTICE_ORDER=null;notice.style.display='none';return;}
+  var eventId=CURRENT_EVENT.id;
+  var order=await fetchPendingOrder(eventId);
+  if(!CURRENT_EVENT||CURRENT_EVENT.id!==eventId)return; // the buyer moved to another event meanwhile
+  if(!order||NEW_PAYMENT_OK_EVENT===eventId){PENDING_NOTICE_ORDER=null;notice.style.display='none';return;}
+  showPendingNotice(order);
+}
+
+function showPendingNotice(order){
+  var notice=document.getElementById('pendingPaymentNotice');
+  if(!notice)return;
+  PENDING_NOTICE_ORDER=order;
+  var until=order.expiresAt?new Date(order.expiresAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'';
+  document.getElementById('pendingPaymentText').textContent=order.tierName+' × '+order.qty+', ₹'+Number(order.amount).toFixed(2)
+    +'. Your seat is held'+(until?' until '+until:'')+'. Check its status before paying again, so you are not charged twice.';
+  document.getElementById('pendingPaymentCheckBtn').onclick=function(){rememberPendingOrder(order.id);checkPendingPayment(order.id);};
+  document.getElementById('pendingPaymentNewBtn').onclick=function(){
+    NEW_PAYMENT_OK_EVENT=order.eventId;PENDING_NOTICE_ORDER=null;notice.style.display='none';
+    showToast('Starting a new payment releases the earlier seat hold');
+  };
+  notice.style.display='block';
+}
+
 // Back from PayU: the server already verified the payment in its callback and
 // redirected here with ?payment=payu&order=<id>. Ask the server for the result.
 async function completePayUReturn(orderIdFromApp){
@@ -4854,6 +4995,7 @@ async function completePayUReturn(orderIdFromApp){
     var data=await readAuthResponse(resp);
     if(!resp.ok)throw new Error(data.error||'Could not load your order');
     var status=data.order&&data.order.status;
+    if(status!=='pending'&&localStorage.getItem(PENDING_ORDER_KEY)===orderId)forgetPendingOrder();
     if(status==='paid'&&data.booking){ renderConfirmedBooking(data.booking); return; }
     if(status==='paid_needs_refund'){
       showToast('Payment received, but the tickets sold out while you were paying. You will get a full refund.');
@@ -7412,7 +7554,7 @@ setTimeout(loadPublishedEvents, 150);
 setTimeout(function(){
   var params=new URLSearchParams(location.search);
   if(params.get('payment')||params.get('ticket')||sessionStorage.getItem('VYBERA_PAYMENT_SUCCESS_ACTIVE')==='1')return;
-  restoreSavedSession();
+  restoreSavedSession().then(resumePendingPaymentCheck).catch(function(err){console.error('Pending payment check failed:',err);});
 },180);
 setTimeout(enableVyberaLogoNavigation,0);
 setTimeout(function(){

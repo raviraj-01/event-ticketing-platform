@@ -129,6 +129,66 @@ router.post("/payments/payu/webhook", webhookLimit, async (req, res) => {
   res.json({ received: true });
 });
 
+// H19 (instant check): the buyer's payment in progress for an event, if any
+// (PayU checkout started, seat hold still active). The booking page shows it
+// instead of letting the buyer start a second checkout blindly.
+router.get("/orders/pending", requireBuyer, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM orders
+       WHERE user_id = $1 AND event_id = $2 AND payment_method = 'payu'
+         AND status = 'pending' AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [req.buyer.sub, String(req.query.eventId || "")],
+    );
+    res.json({ order: result.rows[0] ? publicOrder(result.rows[0]) : null });
+  } catch (err) {
+    console.error("Pending order lookup failed:", err);
+    res.status(500).json({ error: "Could not load your payment" });
+  }
+});
+
+// H19 (instant check): the buyer is back on the site with a checkout that has
+// not been confirmed (e.g. PayU's redirect back failed). Ask PayU about this
+// one order now, through the same path as the webhook and the poll, instead of
+// waiting up to 5 minutes. Owner only (404 otherwise, so IDs cannot be probed);
+// at most once per 15 seconds per order and 20 times per 10 minutes per buyer.
+const orderCheckLimits = [
+  rateLimit({ name: "order-check-user", windowSeconds: 600, max: 20, key: (req) => req.buyer && String(req.buyer.sub),
+    message: "Too many checks. Please wait a minute." }),
+  rateLimit({ name: "order-check-order", windowSeconds: 15, max: 1, key: (req) => String(req.params.orderId || ""),
+    message: "Still confirming. Please check again in a few seconds." }),
+];
+router.post("/orders/:orderId/check", requireBuyer, async (req, res, next) => {
+  // Ownership first, so the rate limiter never reveals whether an ID exists.
+  try {
+    const owned = await pool.query("SELECT 1 FROM orders WHERE id = $1 AND user_id = $2", [String(req.params.orderId || ""), req.buyer.sub]);
+    if (!owned.rows.length) return res.status(404).json({ error: "Order not found" });
+    next();
+  } catch (err) {
+    console.error("Order check failed:", err);
+    res.status(500).json({ error: "Could not check your payment" });
+  }
+}, ...orderCheckLimits, async (req, res) => {
+  try {
+    const orderId = String(req.params.orderId);
+    const current = await getOrderForBuyer(pool, orderId, req.buyer.sub);
+    const { order } = current;
+    if (order.payment_method === "payu" && ["pending", "expired"].includes(order.status)) {
+      const results = await reconcilePayuOrders(pool, { txnids: [order.txnid] });
+      for (const line of results.map(describeResult).filter(Boolean)) console.log(`(buyer check) ${line}`);
+    }
+    const result = await getOrderForBuyer(pool, orderId, req.buyer.sub);
+    res.json({
+      order: publicOrder(result.order),
+      booking: result.booking ? await ticketResponse(result.booking) : null,
+    });
+  } catch (err) {
+    console.error("Order check failed:", err);
+    res.status(500).json({ error: "Could not check your payment" });
+  }
+});
+
 // The buyer's own order and ticket. Someone else's order → 404, so order IDs
 // cannot be probed.
 router.get("/orders/:orderId", requireBuyer, async (req, res) => {

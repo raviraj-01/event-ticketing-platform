@@ -205,3 +205,79 @@ test("H19 webhook: the posted status is ignored, PayU's verify answer decides", 
   const unknown = await api(server.baseUrl, "POST", "/payments/payu/webhook", { form: { txnid: "TXN-does-not-exist" } });
   assert.deepEqual([unknown.status, unknown.body], [200, { received: true }]);
 });
+
+// ── Instant check when the buyer comes back (POST /orders/:id/check) ──
+
+const check = (buyer, orderId) => api(server.baseUrl, "POST", `/orders/${encodeURIComponent(orderId)}/check`, { token: buyer.token, json: {} });
+
+test("instant check: paid at PayU, browser never returned, buyer reloads -> ticket at once; repeated reloads, one ticket", async () => {
+  const eventId = await fx.createEvent({ creatorId: creator.id });
+  const buyer = await fx.createBuyer();
+  const start = await startCheckout(buyer, eventId); // fresh order: the poll would not even look at it yet
+  stub.state.answers[start.txnid] = success(start);
+
+  const first = await check(buyer, start.orderId);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.order.status, "paid");
+  assert.ok(first.body.booking && first.body.booking.qrImage, "ticket with QR in the response");
+
+  // Several reloads at once: the per-order limit lets at most one through per 15 s.
+  const burst = await Promise.all([1, 2, 3].map(() => check(buyer, start.orderId)));
+  assert.ok(burst.every((r) => r.status === 429 || r.status === 200), JSON.stringify(burst.map((r) => r.status)));
+  // Later reloads (limit window passed): same ticket, never a second one.
+  await server.db.query("DELETE FROM rate_limit_hits WHERE bucket LIKE 'order-check-%'");
+  const later = await check(buyer, start.orderId);
+  assert.equal(later.status, 200);
+  assert.equal(later.body.booking.id, first.body.booking.id);
+  assert.equal((await bookings(start.orderId)).length, 1);
+});
+
+test("instant check: owner only (404 for anyone else or an unknown ID), login required", async () => {
+  const eventId = await fx.createEvent({ creatorId: creator.id });
+  const owner = await fx.createBuyer();
+  const other = await fx.createBuyer();
+  const start = await startCheckout(owner, eventId);
+  assert.equal((await check(other, start.orderId)).status, 404);
+  assert.equal((await check(owner, "ORD-does-not-exist")).status, 404);
+  const anonymous = await api(server.baseUrl, "POST", `/orders/${start.orderId}/check`, { json: {} });
+  assert.equal(anonymous.status, 401);
+  assert.equal((await orderRow(start.orderId)).status, "pending");
+});
+
+test("instant check: limited per order (15 s) and per buyer (20 per 10 min)", async () => {
+  const eventId = await fx.createEvent({ creatorId: creator.id });
+  const buyer = await fx.createBuyer();
+  const start = await startCheckout(buyer, eventId);
+  stub.state.answers[start.txnid] = { ...success(start), status: "pending", unmappedstatus: "initiated" };
+  const first = await check(buyer, start.orderId);
+  assert.deepEqual([first.status, first.body.order.status], [200, "pending"]);
+  const second = await check(buyer, start.orderId);
+  assert.equal(second.status, 429);
+  assert.ok(Number(second.headers.get("retry-after")) <= 15);
+
+  await server.db.query("DELETE FROM rate_limit_hits WHERE bucket LIKE 'order-check-%'");
+  const windowStart = new Date(Math.floor(Date.now() / 600000) * 600000);
+  await server.db.query(
+    "INSERT INTO rate_limit_hits (bucket, window_start, hits) VALUES ($1, $2, 20)",
+    [`order-check-user:${buyer.id}`, windowStart],
+  );
+  assert.equal((await check(buyer, start.orderId)).status, 429);
+});
+
+test("payment in progress: the booking page can see the buyer's pending checkout for that event only", async () => {
+  const eventId = await fx.createEvent({ creatorId: creator.id });
+  const otherEventId = await fx.createEvent({ creatorId: creator.id });
+  const buyer = await fx.createBuyer();
+  const pending = (id, who = buyer) => api(server.baseUrl, "GET", `/orders/pending?eventId=${id}`, { token: who.token });
+
+  assert.equal((await pending(eventId)).body.order, null);
+  const start = await startCheckout(buyer, eventId);
+  const found = await pending(eventId);
+  assert.deepEqual([found.body.order.id, found.body.order.status], [start.orderId, "pending"]);
+  assert.equal((await pending(otherEventId)).body.order, null);
+  assert.equal((await pending(eventId, await fx.createBuyer())).body.order, null, "not visible to other buyers");
+
+  stub.state.answers[start.txnid] = success(start);
+  await check(buyer, start.orderId);
+  assert.equal((await pending(eventId)).body.order, null, "gone once paid");
+});
