@@ -107,3 +107,12 @@ test("UI step 2 auth: no forced light-theme overrides; labelled fields; real but
   const signup = html.slice(html.indexOf("function doSignUp("), html.indexOf("setButtonBusy('signupBtn',true"));
   assert.doesNotMatch(signup, /alert\(/, "sign-up problems show on the form");
 });
+
+test("UI: no text under 12px outside the APK-only blocks; clickable non-buttons are keyboard-usable", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  const web = html.split(/<style data-platform="app" media="not all">[\s\S]*?<\/style>/).join("");
+  const tiny = [...web.matchAll(/font-size:\s*([0-9.]+)px/g)].map((m) => Number(m[1])).filter((n) => n < 12);
+  assert.deepEqual(tiny, [], `font sizes under 12px: ${tiny.join(",")}`);
+  assert.match(html, /function makeClickablesAccessible\(root\)\{[^]*?el\.setAttribute\('tabindex','0'\);/);
+  assert.match(html, /if\(e\.key!=='Enter'&&e\.key!==' '\)return;/);
+});
