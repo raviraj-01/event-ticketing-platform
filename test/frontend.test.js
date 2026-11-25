@@ -152,3 +152,14 @@ test("UI step 3 organizer: no black pages, light organizer nav with desktop top 
   assert.match(html, /<input id="scannerPayload" class="form-input" aria-label="Ticket QR value"/);
   assert.match(html, /--c-text-muted:#6B6B73;/);
 });
+
+test("UI step 3 staff: light staff panel, tabs by class + aria-selected, 44px buttons", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  const tag = html.match(/<div class="page" id="page-staff-dashboard"[^>]*>/)[0];
+  assert.doesNotMatch(tag, /background:#000/);
+  assert.match(html, /<div class="staff-tabs" role="tablist" aria-label="Staff sections">/);
+  assert.match(html, /b\.classList\.toggle\('active',a\);\s*b\.setAttribute\('aria-selected',a\?'true':'false'\);/);
+  assert.doesNotMatch(html, /b\.style\.color=a\?'#00D4D4'/);
+  assert.match(html, /#page-staff-dashboard button,#page-staff-qr button\{min-height:var\(--tap\);\}/);
+  assert.match(html, /<input aria-label="Your sell link"/);
+});
