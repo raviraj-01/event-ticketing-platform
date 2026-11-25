@@ -53,7 +53,7 @@ body.guest-mode #profileCreatedEventsItem{display:none !important;}
 .sub-header .back-btn img{display:none!important;}
 .sec-header{display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin-bottom:12px;}
 .sec-title{font-size:17px;font-weight:700;}
-.sec-more{color:var(--grey);font-size:13px;cursor:pointer;}
+.sec-more{color:var(--c-text-2);font-size:var(--fs-14);cursor:pointer;min-height:var(--tap);display:inline-flex;align-items:center;}
 .hscroll-wrap{overflow-x:auto;padding:0 16px 8px;scroll-snap-type:x mandatory;scrollbar-width:none;}
 .hscroll-wrap::-webkit-scrollbar{display:none;}
 .hscroll{display:flex;gap:12px;}
@@ -288,12 +288,12 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .supp-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
 #page-creator{padding:16px 16px 110px;}
 .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
-.kpi-card{background:var(--bg2);border:1px solid var(--glass-border);border-radius:16px;padding:16px;}
-.kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
-.kpi-value{font-family:"Space Mono",monospace;font-size:24px;font-weight:700;}
-.kpi-trend{font-size:12px;margin-top:4px;}
+.kpi-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-md);padding:16px;box-shadow:var(--sh-sm);}
+.kpi-label{font-size:var(--fs-12);font-weight:600;color:var(--c-text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.kpi-value{font:700 var(--fs-28)/1.2 var(--font-sans);font-variant-numeric:tabular-nums;color:var(--c-text);}
+.kpi-trend{font-size:var(--fs-12);margin-top:4px;color:var(--c-text-2);}
 .trend-up{color:#4ade80;}
-.chart-card{background:var(--bg2);border:1px solid var(--glass-border);border-radius:16px;padding:16px;margin-bottom:12px;}
+.chart-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-md);padding:16px;margin-bottom:12px;box-shadow:var(--sh-sm);}
 .chart-title{font-size:14px;font-weight:700;margin-bottom:16px;}
 .line-chart{height:110px;}
 .line-chart svg{width:100%;height:100%;}
@@ -310,8 +310,8 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .pb-fill{height:100%;border-radius:4px;background:var(--red);}
 .ce-meta{font-size:12px;color:var(--grey);display:flex;justify-content:space-between;}
 .ce-actions{display:flex;gap:6px;margin-top:8px;}
-.ce-btn{flex:1;padding:5px;border-radius:8px;border:1px solid var(--glass-border);background:var(--glass);color:var(--grey);font-size:12px;cursor:pointer;font-family:"DM Sans",sans-serif;}
-.finance-lock{background:var(--bg2);border:1px solid var(--glass-border);border-radius:20px;padding:32px 20px;text-align:center;margin-bottom:20px;}
+.ce-btn{flex:1;padding:5px;border-radius:8px;border:1px solid var(--glass-border);background:var(--glass);color:var(--grey);font-size:12px;cursor:pointer;font-family:"DM Sans",sans-serif;min-height:var(--tap);}
+.finance-lock{background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:var(--r-lg);padding:32px 20px;text-align:center;margin-bottom:20px;}
 #page-create{padding:0 0 110px;}
 .create-header{padding:18px 16px;display:flex;align-items:center;gap:12px;}
 .create-progress{height:3px;background:var(--bg3);margin:0 16px 24px;border-radius:2px;}
@@ -320,12 +320,12 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .create-step.active{display:block;animation:fadeUp .3s ease;}
 .create-step-title{font-family:"Bebas Neue",sans-serif;font-size:28px;letter-spacing:2px;margin-bottom:4px;}
 .create-step-sub{font-size:13px;color:var(--grey);margin-bottom:24px;}
-.venue-map-modal{position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.88);backdrop-filter:blur(10px);display:none;align-items:flex-end;justify-content:center;}
+.venue-map-modal{position:fixed;inset:0;z-index:9500;background:var(--c-overlay);backdrop-filter:blur(6px);display:none;align-items:flex-end;justify-content:center;}
 .venue-map-modal.open{display:flex;}
-.venue-map-sheet{width:100%;max-width:480px;background:#0b0b0b;border:1px solid var(--glass-border);border-radius:22px 22px 0 0;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;}
+.venue-map-sheet{width:100%;max-width:480px;background:var(--c-surface);color:var(--c-text);border:1px solid var(--c-border);border-radius:var(--r-lg) var(--r-lg) 0 0;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--sh-lg);}
 .venue-map-header{padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--glass-border);}
 .venue-map-title{font-size:16px;font-weight:800;flex:1;}
-.venue-map-close{width:36px;height:36px;border-radius:10px;border:1px solid var(--glass-border);background:var(--bg2);color:var(--white);font-size:20px;cursor:pointer;}
+.venue-map-close{width:var(--tap);height:var(--tap);border-radius:var(--r-md);border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text);font-size:20px;cursor:pointer;}
 .venue-map-search{padding:12px 16px;display:grid;grid-template-columns:1fr auto;gap:8px;}
 .venue-map-canvas{position:relative;height:360px;background:#111;overflow:hidden;touch-action:none;border-top:1px solid var(--glass-border);border-bottom:1px solid var(--glass-border);}
 .venue-tile-layer{position:absolute;inset:0;}
@@ -333,9 +333,9 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .venue-map-pin{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);font-size:34px;text-shadow:0 4px 12px rgba(0,0,0,.7);pointer-events:none;display:none;}
 .venue-map-hint{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px;color:#fff;font-size:12px;text-align:center;pointer-events:none;}
 .venue-map-controls{position:absolute;right:12px;top:12px;display:grid;gap:8px;}
-.venue-map-ctrl{width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(10,10,10,.84);color:#fff;font-size:20px;font-weight:800;cursor:pointer;}
-.venue-map-footer{padding:14px 16px 18px;display:grid;gap:10px;background:#0b0b0b;}
-.venue-map-selected{min-height:18px;font-size:12px;color:var(--neon);text-align:center;}
+.venue-map-ctrl{width:var(--tap);height:var(--tap);border-radius:var(--r-md);border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text);font-size:20px;font-weight:800;cursor:pointer;box-shadow:var(--sh-sm);}
+.venue-map-footer{padding:14px 16px 18px;display:grid;gap:10px;background:var(--c-surface);}
+.venue-map-selected{min-height:18px;font-size:var(--fs-12);color:var(--c-accent);text-align:center;}
 .venue-map-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .upload-zone{border:2px dashed var(--glass-border);border-radius:20px;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;transition:all .3s;}
 .upload-zone:hover{border-color:var(--red);background:var(--red-dim);}
@@ -344,7 +344,7 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .cat-opt.selected{border-color:var(--red);background:var(--red-dim);}
 .cat-opt-icon{font-size:20px;margin-bottom:4px;}
 .cat-opt-label{font-size:12px;font-weight:500;}
-.tier-card{background:var(--bg2);border:1px solid var(--glass-border);border-radius:14px;padding:14px;margin-bottom:10px;}
+.tier-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-md);padding:14px;margin-bottom:10px;}
 .tier-header{display:flex;justify-content:space-between;margin-bottom:8px;}
 .tier-name{font-size:15px;font-weight:700;}
 .tier-price{font-family:"Space Mono",monospace;font-size:14px;color:var(--neon);}
@@ -359,12 +359,12 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .vis-info span{font-size:12px;color:var(--grey);}
 .vis-radio{margin-left:auto;width:18px;height:18px;border-radius:50%;border:2px solid var(--muted);transition:all .2s;}
 .vis-opt.selected .vis-radio{border-color:var(--red);background:var(--red);}
-.staff-flow-card{background:var(--bg2);border:1px solid var(--glass-border);border-radius:14px;padding:14px;margin-bottom:12px;}
+.staff-flow-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-md);padding:14px;margin-bottom:12px;}
 .staff-flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .staff-flow-note{font-size:12px;color:var(--grey);line-height:1.5;margin-top:8px;}
 .staff-flow-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}
-.staff-flow-badge.creator{background:rgba(139,32,16,.15);color:#e87461;border:1px solid rgba(139,32,16,.28);}
-.staff-flow-badge.staff{background:rgba(0,212,212,.1);color:#00D4D4;border:1px solid rgba(0,212,212,.25);}
+.staff-flow-badge.creator{background:var(--c-primary-subtle);color:var(--c-primary);border:1px solid rgba(139,32,16,.28);}
+.staff-flow-badge.staff{background:var(--c-accent-subtle);color:var(--c-accent);border:1px solid rgba(15,118,110,.35);}
 #page-scanner{padding:0;}
 .scanner-wrap{height:100vh;background:#000;display:flex;flex-direction:column;}
 .scanner-vf{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
@@ -378,17 +378,17 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);animation:scanMove 2s ease-in-out infinite;}
 @keyframes scanMove{0%,100%{top:10px;}50%{top:calc(100% - 10px);}}
 .scanner-controls{padding:20px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;}
-.scan-ctrl-btn{padding:10px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--glass-border);color:var(--white);font-family:"DM Sans",sans-serif;font-size:13px;font-weight:500;cursor:pointer;}
+.scan-ctrl-btn{min-height:var(--tap);padding:0 16px;border-radius:var(--r-md);background:var(--c-surface);border:1px solid var(--c-border-strong);color:var(--c-text);font:600 var(--fs-14)/1 var(--font-sans);cursor:pointer;}
 .scan-result{margin:0 16px 20px;border-radius:16px;padding:16px;display:flex;align-items:center;gap:12px;}
-.scan-valid{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);}
-.scan-used{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);}
-.scan-invalid{background:rgba(229,9,20,.1);border:1px solid rgba(229,9,20,.3);}
+.scan-valid{background:var(--c-success-subtle);border:1px solid rgba(21,128,61,.3);}
+.scan-used{background:var(--c-warning-subtle);border:1px solid rgba(180,83,9,.3);}
+.scan-invalid{background:var(--c-danger-subtle);border:1px solid rgba(185,28,28,.3);}
 .scan-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
 .scan-info p{font-size:14px;font-weight:700;}
 .scan-info span{font-size:12px;color:var(--grey);}
 #page-revenue{padding:0 0 110px;}
 .rev-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
-.rev-card{background:var(--bg2);border:1px solid var(--glass-border);border-radius:14px;padding:14px;}
+.rev-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-md);padding:14px;box-shadow:var(--sh-sm);}
 .rev-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
 .rev-value{font-family:"Space Mono",monospace;font-size:20px;font-weight:700;}
 .payout-table{background:var(--bg2);border-radius:14px;overflow:hidden;border:1px solid var(--glass-border);}
@@ -428,10 +428,10 @@ textarea.form-input{resize:vertical;min-height:100px;}
    (--bg, --red, --muted …) point here; new code uses the --c-* names.
    ══════════════════════════════════════════════════════════════════════ */
 :root{
-  /* colour (light) — contrast on white: primary 9.1, accent 5.5, text 17.7, text-2 7.7, muted 4.8 */
+  /* colour (light) — contrast on white: primary 9.1, accent 5.5, text 17.7, text-2 7.7, muted 5.3 (≥4.6 on every tinted surface) */
   --c-primary:#8B2010; --c-primary-hover:#74190C; --c-primary-subtle:#FBEDEA; --c-on-primary:#FFFFFF;
   --c-accent:#0F766E; --c-accent-subtle:#E6F4F2;
-  --c-text:#18181B; --c-text-2:#52525B; --c-text-muted:#71717A; --c-text-inverse:#FFFFFF;
+  --c-text:#18181B; --c-text-2:#52525B; --c-text-muted:#6B6B73; --c-text-inverse:#FFFFFF;
   --c-surface:#FFFFFF; --c-surface-2:#F7F7F8; --c-surface-3:#EFEFF1;
   --c-border:#E4E4E7; --c-border-strong:#D4D4D8;
   --c-success:#15803D; --c-success-subtle:#DCFCE7;
@@ -686,6 +686,30 @@ body.creator-mode .buyer-nav{display:none!important;}
   #ticketsList,#notifList{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:0 16px;}
   #ticketsList>.ui-state,#notifList>.ui-state,#ticketsList>[aria-busy]{grid-column:1/-1;}
   .qr-ring{width:280px;height:280px;}
+}
+
+/* ── Organizer screens ── */
+.creator-nav-logo{display:none;}
+#creatorLogoutBtn,#creatorRefreshBtn{padding:0 12px;white-space:nowrap;}
+#staffManageList{display:flex;flex-direction:column;gap:10px;}
+.creator-nav-links{display:flex;flex:1;justify-content:space-around;gap:4px;}
+.org-eyebrow{font-size:var(--fs-12);font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--c-text-2);margin-top:4px;}
+.org-title{font:700 var(--fs-22)/1.2 var(--font-sans);color:var(--c-text);margin:2px 0 0;}
+#page-creator .kpi-value[style*="--c-accent"],#creatorKpiActive{color:var(--c-accent);}
+.scanner-wrap,.scanner-vf{color:#fff;} /* camera view stays dark */
+@media (min-width:1024px){
+  body.creator-mode .creator-nav{top:0;bottom:auto;height:64px;padding:0 max(24px,calc(50% - 560px));justify-content:space-between;align-items:center;border-top:0;border-bottom:1px solid var(--c-border);box-shadow:var(--sh-sm);}
+  .creator-nav-logo{display:block;height:40px;width:auto;object-fit:contain;cursor:pointer;}
+  .creator-nav-links{flex:0 0 auto;}
+  .creator-nav .nav-btn{flex-direction:row;gap:8px;min-height:var(--tap);padding:0 14px;font-size:var(--fs-14);}
+  .creator-nav .nav-btn svg{width:18px;height:18px;}
+  body.creator-mode{padding-top:64px;}
+  #page-creator,#page-create,#page-scanner,#page-revenue,#page-staff-manage{max-width:1120px;margin:0 auto;}
+  #page-creator>div:first-child .vylogo{display:none;}
+  .kpi-grid,.rev-grid{grid-template-columns:repeat(4,1fr);gap:16px;}
+  #page-create .create-step{max-width:720px;margin-left:auto;margin-right:auto;}
+  #staffManageList{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px;}
+  #staffManageList>.ui-state,#staffManageList>div[style*="text-align:center"]{grid-column:1/-1;}
 }
 </style>
 <!-- App-only styles: enabled by scripts/build-cordova.js (media="all"). -->
@@ -1988,20 +2012,20 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <!-- CREATOR DASHBOARD -->
 <div class="page" id="page-creator">
 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-<div><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo" onclick="openBuyerLandingFromCreator()" style="height:50px;width:auto;object-fit:contain;cursor:pointer;" alt="BLAK Tickets" title="Back to BLAK Tickets home"/><div style="font-size:13px;color:var(--grey);">Creator Mode 🎤</div><div style="font-size:20px;font-weight:700;">Dashboard</div></div>
-<div style="display:flex;gap:8px;"><button id="creatorLogoutBtn" onclick="signOutCreator()" style="padding:9px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:var(--red);font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Log out</button><button id="creatorRefreshBtn" onclick="refreshCreatorData(this)" style="padding:9px 12px;background:rgba(0,212,212,.1);border:1px solid rgba(0,212,212,.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Refresh</button><div class="icon-btn" onclick="showPage('page-notifications')"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div></div>
+<div><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo" onclick="openBuyerLandingFromCreator()" style="height:50px;width:auto;object-fit:contain;cursor:pointer;" alt="BLAK Tickets" title="Back to BLAK Tickets home"/><div class="org-eyebrow">Organizer</div><h1 class="org-title">Dashboard</h1></div>
+<div style="display:flex;gap:8px;"><button type="button" id="creatorLogoutBtn" class="btn btn-secondary" onclick="signOutCreator()">Log out</button><button type="button" id="creatorRefreshBtn" class="btn btn-secondary" onclick="refreshCreatorData(this)">Refresh</button><div class="icon-btn" onclick="showPage('page-notifications')"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div></div>
 </div>
 <!-- NON-FINANCIAL KPIs -->
 <div class="kpi-grid">
 <div class="kpi-card"><div class="kpi-label">🎟️ Tickets Sold</div><div class="kpi-value" id="creatorKpiSold">0</div><div class="kpi-trend" style="color:var(--muted)">No sales yet</div></div>
-<div class="kpi-card"><div class="kpi-label">📊 Active Events</div><div class="kpi-value" id="creatorKpiActive" style="color:var(--neon)">0</div><div class="kpi-trend" style="color:var(--muted)">No events yet</div></div>
+<div class="kpi-card"><div class="kpi-label">📊 Active Events</div><div class="kpi-value" id="creatorKpiActive" style="color:var(--c-accent)">0</div><div class="kpi-trend" style="color:var(--muted)">No events yet</div></div>
 <div class="kpi-card"><div class="kpi-label">✅ Check-ins Today</div><div class="kpi-value" id="creatorKpiCheckins">0</div><div class="kpi-trend" style="color:var(--muted)">No check-ins yet</div></div>
 <div class="kpi-card"><div class="kpi-label">📈 Conversion</div><div class="kpi-value" id="creatorKpiConversion">0%</div><div class="kpi-trend" style="color:var(--muted)">No sales yet</div></div>
 </div>
 <!-- STAFF MANAGEMENT QUICK ACCESS -->
-<div onclick="showPage('page-staff-manage')" style="margin-bottom:16px;padding:18px;background:linear-gradient(135deg,rgba(0,212,212,0.12),rgba(0,212,212,0.04));border:1px solid rgba(0,212,212,0.25);border-radius:16px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:all .2s;" onmouseover="this.style.background='linear-gradient(135deg,rgba(0,212,212,0.18),rgba(0,212,212,0.06))'" onmouseout="this.style.background='linear-gradient(135deg,rgba(0,212,212,0.12),rgba(0,212,212,0.04))'">
-  <div style="width:48px;height:68px;border-radius:14px;background:rgba(0,212,212,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00D4D4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<div onclick="showPage('page-staff-manage')" style="margin-bottom:16px;padding:18px;background:var(--c-accent-subtle);border:1px solid rgba(15,118,110,.35);border-radius:16px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:all .2s;" onmouseover="this.style.background='linear-gradient(135deg,rgba(0,212,212,0.18),rgba(0,212,212,0.06))'" onmouseout="this.style.background='linear-gradient(135deg,rgba(0,212,212,0.12),rgba(0,212,212,0.04))'">
+  <div style="width:48px;height:68px;border-radius:14px;background:var(--c-accent-subtle);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
       <circle cx="9" cy="7" r="4"/>
       <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
@@ -2011,11 +2035,11 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
   <div style="flex:1;min-width:0;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
       <span style="font-size:15px;font-weight:700;color:var(--white);">Manage Staff</span>
-      <span id="creatorStaffBadge" style="font-size:12px;color:#00D4D4;background:rgba(0,212,212,0.15);padding:2px 8px;border-radius:8px;font-weight:700;letter-spacing:.5px;">0</span>
+      <span id="creatorStaffBadge" style="font-size:12px;color:var(--c-accent);background:var(--c-accent-subtle);padding:2px 8px;border-radius:8px;font-weight:700;letter-spacing:.5px;">0</span>
     </div>
     <div style="font-size:12px;color:var(--grey);line-height:1.4;">Add team members and assign ticket blocks</div>
   </div>
-  <div style="color:#00D4D4;font-size:20px;flex-shrink:0;">›</div>
+  <div style="color:var(--c-accent);font-size:20px;flex-shrink:0;">›</div>
 </div>
 
 <!-- FINANCE LOCKED BY DEFAULT -->
@@ -2029,8 +2053,8 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div class="chart-card">
 <div class="chart-title">💰 Revenue — Last 30 Days</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-<div style="background:var(--bg3);border-radius:12px;padding:12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Gross Revenue</div><div id="creatorFinanceGross" style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:#4ade80;">₹0</div></div>
-<div style="background:var(--bg3);border-radius:12px;padding:12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Net Payout</div><div id="creatorFinanceNet" style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--neon);">₹0</div></div>
+<div style="background:var(--bg3);border-radius:12px;padding:12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Gross Revenue</div><div id="creatorFinanceGross" style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--c-success);">₹0</div></div>
+<div style="background:var(--bg3);border-radius:12px;padding:12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Net Payout</div><div id="creatorFinanceNet" style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--c-accent);">₹0</div></div>
 </div>
 <div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">No revenue data yet</div>
 <div style="margin-top:12px;"><button class="cta-full" style="font-size:13px;padding:10px;" onclick="openCreatorRevenue()">View Full Revenue →</button></div>
@@ -2041,34 +2065,22 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div class="chart-title">🎟️ Ticket Sales by Type</div>
 <div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No ticket sales yet</div>
 </div>
-<div class="sec-header"><span class="sec-title">Active Events</span><span class="sec-more" onclick="showPage('page-create')">+ New Event</span></div>
+<div class="sec-header"><span class="sec-title">Active Events</span><button type="button" class="link-btn" onclick="showPage('page-create')">+ New Event</button></div>
 <div class="hscroll-wrap"><div class="hscroll">
 <div style="min-width:200px;height:150px;border-radius:14px;background:var(--bg2);border:1px dashed var(--glass-border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;padding:16px;" onclick="showPage('page-create')"><div style="font-size:28px;opacity:.4">➕</div><div style="font-size:12px;color:var(--muted);text-align:center;">Create your first event</div></div>
 </div></div>
 </div>
 
 <!-- CREATOR NAV (shared across creator pages) -->
-<nav class="bottom-nav creator-nav" id="creatorNavBar" style="position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;z-index:200;background:#0a0a0a;border-top:1px solid rgba(255,255,255,0.08);display:none;">
-  <button class="nav-btn active" onclick="showCreatorPage('page-creator',this)">
-    <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-    Dashboard
-  </button>
-  <button class="nav-btn" onclick="showCreatorPage('page-create',this)">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-    Create
-  </button>
-  <button class="nav-btn" onclick="showCreatorPage('page-scanner',this)">
-    <svg viewBox="0 0 24 24"><path d="M3 9V5a2 2 0 0 1 2-2h4m10 4V5a2 2 0 0 0-2-2h-4m-6 16H5a2 2 0 0 1-2-2v-4m16 6h-2a2 2 0 0 0-2 2v0m-6-16h4m-4 8h4"/></svg>
-    Scanner
-  </button>
-  <button class="nav-btn" onclick="showCreatorPage('page-revenue',this)">
-    <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-    Revenue
-  </button>
-  <button class="nav-btn" onclick="showCreatorPage('page-staff-manage',this)">
-    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-    Staff
-  </button>
+<nav class="bottom-nav creator-nav" id="creatorNavBar" aria-label="Organizer" style="display:none;">
+  <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo creator-nav-logo" alt="BLAK Tickets" onclick="openBuyerLandingFromCreator()"/>
+  <div class="creator-nav-links">
+    <button type="button" class="nav-btn active" onclick="showCreatorPage('page-creator',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Dashboard</span></button>
+    <button type="button" class="nav-btn" onclick="showCreatorPage('page-create',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Create</span></button>
+    <button type="button" class="nav-btn" onclick="showCreatorPage('page-scanner',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9V5a2 2 0 0 1 2-2h4m10 4V5a2 2 0 0 0-2-2h-4m-6 16H5a2 2 0 0 1-2-2v-4m16 6h-2a2 2 0 0 0-2 2v0m-6-16h4m-4 8h4"/></svg><span>Scanner</span></button>
+    <button type="button" class="nav-btn" onclick="showCreatorPage('page-revenue',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Revenue</span></button>
+    <button type="button" class="nav-btn" onclick="showCreatorPage('page-staff-manage',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Staff</span></button>
+  </div>
 </nav>
 
 <!-- CREATE EVENT -->
@@ -2198,7 +2210,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <button class="cta-full" onclick="nextCStep(3)">Continue →</button>
 </div>
 <div class="create-step" id="cstep3"><div class="create-step-title">Venue</div><div class="create-step-sub">Where is your event happening?</div>
-<div id="venueMapPreview" onclick="selectVenueLocation()" style="background:linear-gradient(135deg,#101820,#182c36);border-radius:14px;height:160px;margin-bottom:16px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;border:1px solid var(--glass-border);font-size:13px;color:var(--muted);cursor:pointer;text-align:center;padding:12px;">📍 Tap to select location using Maps<div id="venueMapCoords" style="font-size:12px;color:var(--neon);"></div></div>
+<div id="venueMapPreview" onclick="selectVenueLocation()" style="background:linear-gradient(135deg,#101820,#182c36);border-radius:14px;height:160px;margin-bottom:16px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;border:1px solid var(--glass-border);font-size:13px;color:var(--muted);cursor:pointer;text-align:center;padding:12px;">📍 Tap to select location using Maps<div id="venueMapCoords" style="font-size:12px;color:var(--c-accent);"></div></div>
 <div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:block;">Venue Name</label><input class="form-input" id="evtVenue" type="text" placeholder="Venue name"/></div>
 <div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:block;">City</label><input class="form-input" id="evtCity" type="text" placeholder="City"/></div>
 <div style="margin-bottom:16px;"><label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:block;">Capacity</label><input class="form-input" id="evtCapacity" type="number" placeholder="Max attendees"/></div>
@@ -2211,9 +2223,9 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div style="margin-bottom:16px;">
   <div style="font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;">Quick Presets</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <button onclick="addPreset('free')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(74,222,128,.3);background:rgba(74,222,128,.08);color:#4ade80;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🆓 Free Event</button>
-    <button onclick="addPreset('paid')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(229,9,20,.3);background:rgba(229,9,20,.08);color:var(--red);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🎟️ General + VIP</button>
-    <button onclick="addPreset('concert')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(0,245,255,.3);background:rgba(0,245,255,.08);color:var(--neon);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🎵 Concert Tiers</button>
+    <button onclick="addPreset('free')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(21,128,61,.3);background:var(--c-success-subtle);color:var(--c-success);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🆓 Free Event</button>
+    <button onclick="addPreset('paid')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(139,32,16,.3);background:var(--c-primary-subtle);color:var(--red);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🎟️ General + VIP</button>
+    <button onclick="addPreset('concert')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(15,118,110,.35);background:var(--c-accent-subtle);color:var(--c-accent);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🎵 Concert Tiers</button>
     <button onclick="addPreset('conference')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(123,47,190,.3);background:rgba(123,47,190,.08);color:#a855f7;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">💻 Conference</button>
   </div>
 </div>
@@ -2462,299 +2474,299 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 </div>
 
 <!-- CREATOR: SCANNER PAGE -->
-<div class="page" id="page-scanner" style="background:#000;min-height:100vh;padding-bottom:80px;">
-  <div style="padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,0.06);">
+<div class="page" id="page-scanner" style="background:var(--c-surface);min-height:100vh;padding-bottom:80px;">
+  <div style="padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--c-border);">
     <div class="back-btn" onclick="goBackCreator()"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
-    <div style="font-size:16px;font-weight:700;color:#fff;">QR Scanner</div>
+    <div style="font-size:16px;font-weight:700;color:var(--c-text);">QR Scanner</div>
   </div>
   <div style="padding:24px;">
     <!-- Simulated QR scanner viewfinder -->
-    <div style="border-radius:20px;overflow:hidden;background:#111;aspect-ratio:1;max-width:320px;margin:0 auto 20px;position:relative;display:flex;align-items:center;justify-content:center;">
-      <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,212,212,0.05),rgba(139,32,16,0.05));"></div>
+    <div style="border-radius:20px;overflow:hidden;background:var(--c-surface-2);aspect-ratio:1;max-width:320px;margin:0 auto 20px;position:relative;display:flex;align-items:center;justify-content:center;">
+      <div style="position:absolute;inset:0;background:var(--c-accent-subtle);"></div>
       <!-- Corner brackets -->
-      <div style="position:absolute;top:20px;left:20px;width:30px;height:30px;border-top:3px solid #00D4D4;border-left:3px solid #00D4D4;border-radius:4px 0 0 0;"></div>
-      <div style="position:absolute;top:20px;right:20px;width:30px;height:30px;border-top:3px solid #00D4D4;border-right:3px solid #00D4D4;border-radius:0 4px 0 0;"></div>
-      <div style="position:absolute;bottom:20px;left:20px;width:30px;height:30px;border-bottom:3px solid #00D4D4;border-left:3px solid #00D4D4;border-radius:0 0 0 4px;"></div>
-      <div style="position:absolute;bottom:20px;right:20px;width:30px;height:30px;border-bottom:3px solid #00D4D4;border-right:3px solid #00D4D4;border-radius:0 0 4px 0;"></div>
+      <div style="position:absolute;top:20px;left:20px;width:30px;height:30px;border-top:3px solid var(--c-accent);border-left:3px solid var(--c-accent);border-radius:4px 0 0 0;"></div>
+      <div style="position:absolute;top:20px;right:20px;width:30px;height:30px;border-top:3px solid var(--c-accent);border-right:3px solid var(--c-accent);border-radius:0 4px 0 0;"></div>
+      <div style="position:absolute;bottom:20px;left:20px;width:30px;height:30px;border-bottom:3px solid var(--c-accent);border-left:3px solid var(--c-accent);border-radius:0 0 0 4px;"></div>
+      <div style="position:absolute;bottom:20px;right:20px;width:30px;height:30px;border-bottom:3px solid var(--c-accent);border-right:3px solid var(--c-accent);border-radius:0 0 4px 0;"></div>
       <!-- Scan line animation -->
       <div id="scanLine" style="position:absolute;left:20px;right:20px;height:2px;background:linear-gradient(90deg,transparent,#00D4D4,transparent);animation:scanAnim 2s linear infinite;"></div>
       <video id="scannerVideo" playsinline muted autoplay style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"></video>
       <div id="scannerLaunchOverlay" style="text-align:center;z-index:1;transition:opacity .2s ease;">
-        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:8px;">Point camera at ticket QR</div>
-        <button onclick="startQrCamera()" style="padding:10px 20px;background:#00D4D4;border:none;border-radius:20px;color:#000;font-weight:700;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;">Open Camera</button>
+        <div style="font-size:13px;color:var(--c-text-2);margin-bottom:8px;">Point camera at ticket QR</div>
+        <button type="button" class="btn btn-primary" onclick="startQrCamera()">Open Camera</button>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;"><input id="scannerPayload" placeholder="Paste QR value or booking ticket payload" style="flex:1;padding:11px 12px;background:#111;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:12px;outline:none;"/><button onclick="scanTypedQr()" style="padding:10px 14px;background:#8B2010;border:none;border-radius:10px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;">Validate</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;"><input id="scannerPayload" class="form-input" aria-label="Ticket QR value" placeholder="Paste QR value or booking ticket payload" style="flex:1;"/><button type="button" class="btn btn-primary" onclick="scanTypedQr()">Validate</button></div>
     <!-- Scan result -->
     <div id="scanResult" style="display:none;padding:16px;border-radius:14px;margin-bottom:16px;text-align:center;"></div>
     <!-- Gate counter -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
-      <div style="padding:14px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:12px;text-align:center;">
-        <div style="font-size:24px;font-weight:700;color:#4ade80;font-family:'Space Mono',monospace;" id="scanEntries">0</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:3px;">Entries</div>
+      <div style="padding:14px;background:var(--c-success-subtle);border:1px solid rgba(21,128,61,.3);border-radius:12px;text-align:center;">
+        <div style="font-size:24px;font-weight:700;color:var(--c-success);font-family:'Space Mono',monospace;" id="scanEntries">0</div>
+        <div style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Entries</div>
       </div>
-      <div style="padding:14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:12px;text-align:center;">
-        <div style="font-size:24px;font-weight:700;color:#ef4444;font-family:'Space Mono',monospace;" id="scanDupes">0</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:3px;">Duplicates</div>
+      <div style="padding:14px;background:var(--c-danger-subtle);border:1px solid rgba(185,28,28,.3);border-radius:12px;text-align:center;">
+        <div style="font-size:24px;font-weight:700;color:var(--c-danger);font-family:'Space Mono',monospace;" id="scanDupes">0</div>
+        <div style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Duplicates</div>
       </div>
-      <div style="padding:14px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.2);border-radius:12px;text-align:center;">
-        <div style="font-size:24px;font-weight:700;color:#eab308;font-family:'Space Mono',monospace;" id="scanInvalid">0</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:3px;">Invalid</div>
+      <div style="padding:14px;background:var(--c-warning-subtle);border:1px solid rgba(180,83,9,.3);border-radius:12px;text-align:center;">
+        <div style="font-size:24px;font-weight:700;color:var(--c-warning-text);font-family:'Space Mono',monospace;" id="scanInvalid">0</div>
+        <div style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Invalid</div>
       </div>
     </div>
     <!-- Recent scans -->
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600;">Recent Scans</div>
+    <div style="font-size:12px;color:var(--c-text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600;">Recent Scans</div>
     <div id="recentScans" style="display:flex;flex-direction:column;gap:6px;">
-      <div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;font-size:12px;color:rgba(255,255,255,0.3);text-align:center;">No scans yet</div>
+      <div style="padding:12px;background:var(--c-surface-2);border-radius:10px;font-size:12px;color:var(--c-text-muted);text-align:center;">No scans yet</div>
     </div>
   </div>
   <style>@keyframes scanAnim{0%{top:20px}50%{top:calc(100% - 22px)}100%{top:20px}}</style>
 </div>
 
 <!-- CREATOR: REVENUE PAGE -->
-<div class="page" id="page-revenue" style="background:#000;min-height:100vh;padding-bottom:80px;">
-  <div style="padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,0.06);">
+<div class="page" id="page-revenue" style="background:var(--c-surface);min-height:100vh;padding-bottom:80px;">
+  <div style="padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--c-border);">
     <div class="back-btn" onclick="goBackCreator()"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
-    <div style="font-size:16px;font-weight:700;color:#fff;flex:1;">Revenue & Analytics</div>
-    <button id="revenueRefreshBtn" onclick="refreshCreatorData(this)" style="padding:9px 12px;background:rgba(0,212,212,.1);border:1px solid rgba(0,212,212,.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Refresh</button>
+    <div style="font-size:16px;font-weight:700;color:var(--c-text);flex:1;">Revenue & Analytics</div>
+    <button type="button" id="revenueRefreshBtn" class="btn btn-secondary" onclick="refreshCreatorData(this)">Refresh</button>
   </div>
   <div style="padding:16px;">
     <!-- Revenue cards -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
       <div style="padding:16px;background:linear-gradient(135deg,rgba(139,32,16,0.2),rgba(139,32,16,0.05));border:1px solid rgba(139,32,16,0.3);border-radius:16px;">
-        <div style="font-size:12px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Gross Revenue</div>
-        <div id="revGross" style="font-size:22px;font-weight:700;color:#fff;font-family:'Space Mono',monospace;">₹0</div>
-        <div style="font-size:12px;color:#22c55e;margin-top:4px;">↑ from all events</div>
+        <div style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Gross Revenue</div>
+        <div id="revGross" style="font-size:22px;font-weight:700;color:var(--c-text);font-family:'Space Mono',monospace;">₹0</div>
+        <div style="font-size:12px;color:var(--c-success);margin-top:4px;">↑ from all events</div>
       </div>
-      <div style="padding:16px;background:linear-gradient(135deg,rgba(0,212,212,0.15),rgba(0,212,212,0.03));border:1px solid rgba(0,212,212,0.2);border-radius:16px;">
-        <div style="font-size:12px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Net Payout</div>
-        <div id="revNet" style="font-size:22px;font-weight:700;color:#00D4D4;font-family:'Space Mono',monospace;">₹0</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">After platform fee</div>
+      <div style="padding:16px;background:var(--c-accent-subtle);border:1px solid rgba(15,118,110,.35);border-radius:16px;">
+        <div style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Net Payout</div>
+        <div id="revNet" style="font-size:22px;font-weight:700;color:var(--c-accent);font-family:'Space Mono',monospace;">₹0</div>
+        <div style="font-size:12px;color:var(--c-text-muted);margin-top:4px;">After platform fee</div>
       </div>
-      <div style="padding:16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;">
-        <div style="font-size:12px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Tickets Sold</div>
-        <div id="revTickets" style="font-size:22px;font-weight:700;color:#fff;font-family:'Space Mono',monospace;">0</div>
+      <div style="padding:16px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:16px;">
+        <div style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Tickets Sold</div>
+        <div id="revTickets" style="font-size:22px;font-weight:700;color:var(--c-text);font-family:'Space Mono',monospace;">0</div>
       </div>
-      <div style="padding:16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;">
-        <div style="font-size:12px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Avg Ticket Price</div>
-        <div id="revAvg" style="font-size:22px;font-weight:700;color:#fff;font-family:'Space Mono',monospace;">₹0</div>
+      <div style="padding:16px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:16px;">
+        <div style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Avg Ticket Price</div>
+        <div id="revAvg" style="font-size:22px;font-weight:700;color:var(--c-text);font-family:'Space Mono',monospace;">₹0</div>
       </div>
     </div>
     <!-- Events revenue breakdown -->
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600;">Revenue by Event</div>
+    <div style="font-size:12px;color:var(--c-text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600;">Revenue by Event</div>
     <div id="revByEvent" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;"></div>
     <!-- Payout history -->
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600;">Payout Status</div>
-    <div style="padding:14px;background:rgba(255,255,255,0.04);border-radius:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
-        <span style="font-size:13px;color:#fff;">Pending Payout</span>
-        <span id="revPending" style="font-size:14px;font-weight:700;color:#eab308;font-family:'Space Mono',monospace;">₹0</span>
+    <div style="font-size:12px;color:var(--c-text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600;">Payout Status</div>
+    <div style="padding:14px;background:var(--c-surface-2);border-radius:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--c-border);">
+        <span style="font-size:13px;color:var(--c-text);">Pending Payout</span>
+        <span id="revPending" style="font-size:14px;font-weight:700;color:var(--c-warning-text);font-family:'Space Mono',monospace;">₹0</span>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
-        <span style="font-size:13px;color:#fff;">Payout Status</span>
-        <span id="revPayoutStatus" style="font-size:12px;font-weight:700;color:#eab308;">No payout due</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--c-border);">
+        <span style="font-size:13px;color:var(--c-text);">Payout Status</span>
+        <span id="revPayoutStatus" style="font-size:12px;font-weight:700;color:var(--c-warning-text);">No payout due</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
-        <span id="revFeeLabel" style="font-size:13px;color:#fff;">Platform fee</span>
-        <span id="revFee" style="font-size:14px;font-weight:700;color:#ef4444;font-family:'Space Mono',monospace;">₹0</span>
+        <span id="revFeeLabel" style="font-size:13px;color:var(--c-text);">Platform fee</span>
+        <span id="revFee" style="font-size:14px;font-weight:700;color:var(--c-danger);font-family:'Space Mono',monospace;">₹0</span>
       </div>
     </div>
     <!-- Staff performance -->
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;font-weight:600;">Top Staff Performance</div>
+    <div style="font-size:12px;color:var(--c-text-muted);text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;font-weight:600;">Top Staff Performance</div>
     <div id="revTopStaff" style="display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 
 <!-- CREATOR: STAFF MANAGE PAGE -->
-<div class="page" id="page-staff-manage" style="background:#000;min-height:100vh;padding-bottom:80px;">
-  <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.06);">
+<div class="page" id="page-staff-manage" style="background:var(--c-surface);min-height:100vh;padding-bottom:80px;">
+  <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--c-border);">
     <div style="display:flex;align-items:center;gap:12px;">
       <div class="back-btn" onclick="goBackCreator()"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
-      <div style="font-size:16px;font-weight:700;color:#fff;">Manage Staff</div>
+      <div style="font-size:16px;font-weight:700;color:var(--c-text);">Manage Staff</div>
     </div>
-    <button onclick="openAddStaffModal()" style="padding:8px 16px;background:#8B2010;border:none;border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">+ Add Staff</button>
+    <button type="button" class="btn btn-primary" onclick="openAddStaffModal()">+ Add Staff</button>
   </div>
   <!-- Staff stats -->
   <div style="padding:16px;">
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
-      <div style="padding:12px;background:rgba(255,255,255,0.04);border-radius:12px;text-align:center;">
-        <div id="staffMgmtTotal" style="font-size:20px;font-weight:700;color:#fff;font-family:'Space Mono',monospace;">0</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:3px;">Total Staff</div>
+      <div style="padding:12px;background:var(--c-surface-2);border-radius:12px;text-align:center;">
+        <div id="staffMgmtTotal" style="font-size:20px;font-weight:700;color:var(--c-text);font-family:'Space Mono',monospace;">0</div>
+        <div style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Total Staff</div>
       </div>
-      <div style="padding:12px;background:rgba(0,212,212,0.08);border-radius:12px;text-align:center;">
-        <div id="staffMgmtSold" style="font-size:20px;font-weight:700;color:#00D4D4;font-family:'Space Mono',monospace;">0</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:3px;">Tickets Sold</div>
+      <div style="padding:12px;background:var(--c-accent-subtle);border-radius:12px;text-align:center;">
+        <div id="staffMgmtSold" style="font-size:20px;font-weight:700;color:var(--c-accent);font-family:'Space Mono',monospace;">0</div>
+        <div style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Tickets Sold</div>
       </div>
-      <div style="padding:12px;background:rgba(34,197,94,0.08);border-radius:12px;text-align:center;">
-        <div id="staffMgmtRev" style="font-size:20px;font-weight:700;color:#4ade80;font-family:'Space Mono',monospace;">₹0</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:3px;">Staff Revenue</div>
+      <div style="padding:12px;background:var(--c-success-subtle);border-radius:12px;text-align:center;">
+        <div id="staffMgmtRev" style="font-size:20px;font-weight:700;color:var(--c-success);font-family:'Space Mono',monospace;">₹0</div>
+        <div style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Staff Revenue</div>
       </div>
     </div>
     <!-- Staff list -->
-    <div id="staffManageList" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div id="staffManageList"></div>
   </div>
 </div>
 
 <!-- CREATOR: APPLY MODAL (injected into body) -->
-<div id="creatorApplyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9000;align-items:flex-end;justify-content:center;">
-<div style="background:#111;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;">
+<div id="creatorApplyModal" style="display:none;position:fixed;inset:0;background:var(--c-overlay);backdrop-filter:blur(8px);z-index:9000;align-items:flex-end;justify-content:center;">
+<div style="background:var(--c-surface-2);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <span style="font-size:16px;font-weight:700;color:#fff;">Apply for Creator Access</span>
-    <span onclick="document.getElementById('creatorApplyModal').style.display='none'" style="color:rgba(255,255,255,.5);cursor:pointer;font-size:22px;">&#215;</span>
+    <span style="font-size:16px;font-weight:700;color:var(--c-text);">Apply for Creator Access</span>
+    <span onclick="document.getElementById('creatorApplyModal').style.display='none'" style="color:var(--c-text-2);cursor:pointer;font-size:22px;">&#215;</span>
   </div>
-  <div style="padding:14px;background:rgba(139,32,16,0.1);border:1px solid rgba(139,32,16,0.3);border-radius:12px;margin-bottom:16px;">
-    <div style="font-size:12px;color:rgba(255,255,255,0.7);">As a creator on BLAK Tickets you can publish events, sell tickets, manage staff and get paid directly.</div>
+  <div style="padding:14px;background:var(--c-primary-subtle);border:1px solid rgba(139,32,16,0.3);border-radius:12px;margin-bottom:16px;">
+    <div style="font-size:12px;color:var(--c-text);">As a creator on BLAK Tickets you can publish events, sell tickets, manage staff and get paid directly.</div>
   </div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Full Name / Brand Name</label>
-  <input id="applyName" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="e.g. Sunburn India"/></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Email</label>
-  <input id="applyEmail" type="email" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="creator@yourbrand.com"/></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Phone</label>
-  <input id="applyPhone" type="tel" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="+91 98765 43210"/></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Event Type</label>
-  <select id="applyCategory" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Full Name / Brand Name</label>
+  <input id="applyName" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="e.g. Sunburn India"/></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Email</label>
+  <input id="applyEmail" type="email" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="creator@yourbrand.com"/></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Phone</label>
+  <input id="applyPhone" type="tel" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="+91 98765 43210"/></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Event Type</label>
+  <select id="applyCategory" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
     <option>Music / Concert</option><option>Tech / Conference</option><option>Comedy / Standup</option>
     <option>Food & Drinks</option><option>Art / Culture</option><option>Sports</option><option>Other</option>
   </select></div>
-  <div style="margin-bottom:16px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">About Your Events</label>
-  <textarea id="applyAbout" rows="3" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;resize:none;box-sizing:border-box;outline:none;" placeholder="Tell us about the events you plan to host..."></textarea></div>
-  <div style="margin-bottom:16px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Creator Password</label>
-  <input id="applyPassword" type="password" autocomplete="new-password" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="At least 8 characters"/></div>
-  <div style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:10px;font-weight:600;">KYC Documents</div>
+  <div style="margin-bottom:16px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">About Your Events</label>
+  <textarea id="applyAbout" rows="3" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;resize:none;box-sizing:border-box;outline:none;" placeholder="Tell us about the events you plan to host..."></textarea></div>
+  <div style="margin-bottom:16px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Creator Password</label>
+  <input id="applyPassword" type="password" autocomplete="new-password" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="At least 8 characters"/></div>
+  <div style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:10px;font-weight:600;">KYC Documents</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-    <div style="padding:14px;background:rgba(255,255,255,0.04);border:1.5px dashed rgba(255,255,255,0.15);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
+    <div style="padding:14px;background:var(--c-surface-2);border:1.5px dashed var(--c-border);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
       <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;" onchange="applyDocSelected(this,'pan')"/>
       <div style="font-size:20px;margin-bottom:6px;">📄</div>
-      <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.7);">PAN Card</div>
-      <div id="applyPanLabel" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:3px;">Tap to upload</div>
+      <div style="font-size:12px;font-weight:600;color:var(--c-text);">PAN Card</div>
+      <div id="applyPanLabel" style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Tap to upload</div>
     </div>
-    <div style="padding:14px;background:rgba(255,255,255,0.04);border:1.5px dashed rgba(255,255,255,0.15);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
+    <div style="padding:14px;background:var(--c-surface-2);border:1.5px dashed var(--c-border);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
       <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;" onchange="applyDocSelected(this,'aadhaar')"/>
       <div style="font-size:20px;margin-bottom:6px;">🪪</div>
-      <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.7);">Aadhaar / ID</div>
-      <div id="applyAadhaarLabel" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:3px;">Tap to upload</div>
+      <div style="font-size:12px;font-weight:600;color:var(--c-text);">Aadhaar / ID</div>
+      <div id="applyAadhaarLabel" style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Tap to upload</div>
     </div>
-    <div style="padding:14px;background:rgba(255,255,255,0.04);border:1.5px dashed rgba(255,255,255,0.15);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
+    <div style="padding:14px;background:var(--c-surface-2);border:1.5px dashed var(--c-border);border-radius:12px;text-align:center;cursor:pointer;" onclick="this.querySelector('input').click()">
       <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;" onchange="applyDocSelected(this,'gst')"/>
       <div style="font-size:20px;margin-bottom:6px;">📄</div>
-      <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.7);">GST Certificate</div>
-      <div id="applyGSTLabel" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:3px;">Tap to upload</div>
+      <div style="font-size:12px;font-weight:600;color:var(--c-text);">GST Certificate</div>
+      <div id="applyGSTLabel" style="font-size:12px;color:var(--c-text-muted);margin-top:3px;">Tap to upload</div>
     </div>
   </div>
-  <div style="margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.04);border:1.5px dashed rgba(255,255,255,0.15);border-radius:12px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="this.querySelector('input').click()">
+  <div style="margin-bottom:16px;padding:14px;background:var(--c-surface-2);border:1.5px dashed var(--c-border);border-radius:12px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="this.querySelector('input').click()">
     <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;" onchange="applyDocSelected(this,'bank')"/>
     <div style="font-size:20px;">🏦</div>
-    <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.7);">Bank Details / Cancelled Cheque</div>
-    <div id="applyBankLabel" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:2px;">Tap to upload</div></div>
+    <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--c-text);">Bank Details / Cancelled Cheque</div>
+    <div id="applyBankLabel" style="font-size:12px;color:var(--c-text-muted);margin-top:2px;">Tap to upload</div></div>
   </div>
   <button id="submitCreatorApplicationBtn" onclick="submitCreatorApplication()" style="width:100%;padding:14px;background:linear-gradient(135deg,#8B2010,#c0392b);border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Submit Application &amp; KYC</button>
 </div>
 </div>
 
 <!-- ADD STAFF MODAL -->
-<div id="addStaffModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9000;align-items:flex-end;justify-content:center;">
-<div style="background:#111;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;">
+<div id="addStaffModal" style="display:none;position:fixed;inset:0;background:var(--c-overlay);backdrop-filter:blur(8px);z-index:9000;align-items:flex-end;justify-content:center;">
+<div style="background:var(--c-surface-2);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <span style="font-size:16px;font-weight:700;color:#fff;">Add Staff Member</span>
-    <span onclick="document.getElementById('addStaffModal').style.display='none'" style="color:rgba(255,255,255,.5);cursor:pointer;font-size:22px;">&#215;</span>
+    <span style="font-size:16px;font-weight:700;color:var(--c-text);">Add Staff Member</span>
+    <span onclick="document.getElementById('addStaffModal').style.display='none'" style="color:var(--c-text-2);cursor:pointer;font-size:22px;">&#215;</span>
   </div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Full Name</label>
-  <input id="addStaffName" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="e.g. Rahul Kumar"/></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Phone</label>
-  <input id="addStaffPhone" type="tel" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="+91 99999 00000"/></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Email</label>
-  <input id="addStaffEmail" type="email" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="staff@example.com"/></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Login ID</label>
-  <input id="addStaffId" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="e.g. rahul.staff"/></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Full Name</label>
+  <input id="addStaffName" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="e.g. Rahul Kumar"/></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Phone</label>
+  <input id="addStaffPhone" type="tel" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="+91 99999 00000"/></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Email</label>
+  <input id="addStaffEmail" type="email" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="staff@example.com"/></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Login ID</label>
+  <input id="addStaffId" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="e.g. rahul.staff"/></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-    <div><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Role</label>
-    <select id="addStaffRole" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
+    <div><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Role</label>
+    <select id="addStaffRole" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
       <option>Scanner</option><option>Ticket Seller</option><option>Gate Manager</option><option>Full Access</option>
     </select></div>
-    <div><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Assigned Gate</label>
-    <select id="addStaffGate" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
+    <div><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Assigned Gate</label>
+    <select id="addStaffGate" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
       <option value="">No gate</option><option value="A">Gate A</option><option value="B">Gate B</option>
       <option value="C">Gate C</option><option value="D">Gate D</option><option value="VIP">VIP Gate</option>
     </select></div>
   </div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Assign to Event</label>
-  <select id="addStaffEvent" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"><option value="">— Assign later —</option></select></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Ticket Allocation Type</label>
-  <select id="addStaffAllocationMode" onchange="updateStaffAllocationMode('addStaff')" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Assign to Event</label>
+  <select id="addStaffEvent" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"><option value="">— Assign later —</option></select></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Ticket Allocation Type</label>
+  <select id="addStaffAllocationMode" onchange="updateStaffAllocationMode('addStaff')" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
     <option value="creator_quota">Staff sells on behalf of Creator</option>
     
   </select>
   <div id="addStaffAllocationHelp" class="staff-flow-note">Buyer revenue is credited to the creator. Staff sees quota, sold, remaining, sales history and commission.</div></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Tickets to Assign</label>
-  <input id="addStaffTickets" type="number" value="50" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
-  <div id="addStaffCommissionWrap" style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Commission % (optional)</label>
-  <input id="addStaffCommission" type="number" min="0" max="100" value="0" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Tickets to Assign</label>
+  <input id="addStaffTickets" type="number" value="50" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
+  <div id="addStaffCommissionWrap" style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Commission % (optional)</label>
+  <input id="addStaffCommission" type="number" min="0" max="100" value="0" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
   <div id="addStaffOwnedPriceWrap" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-    <div><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Buy Price</label><input id="addStaffPurchasePrice" type="number" min="0" value="0" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
-    <div><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Resale Price</label><input id="addStaffResalePrice" type="number" min="0" value="0" style="width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
+    <div><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Buy Price</label><input id="addStaffPurchasePrice" type="number" min="0" value="0" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
+    <div><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Resale Price</label><input id="addStaffResalePrice" type="number" min="0" value="0" style="width:100%;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
   </div>
-  <div style="margin-bottom:16px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Temporary Password</label>
+  <div style="margin-bottom:16px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Temporary Password</label>
   <div style="display:flex;gap:8px;">
-  <input id="addStaffPwd" style="flex:1;padding:10px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="Auto-generated if blank"/>
-  <button onclick="var c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#';var p='';for(var i=0;i<10;i++)p+=c[Math.floor(Math.random()*c.length)];document.getElementById('addStaffPwd').value=p;" style="padding:10px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:rgba(255,255,255,.6);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Generate</button>
+  <input id="addStaffPwd" style="flex:1;padding:10px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;" placeholder="Auto-generated if blank"/>
+  <button onclick="var c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#';var p='';for(var i=0;i<10;i++)p+=c[Math.floor(Math.random()*c.length)];document.getElementById('addStaffPwd').value=p;" style="padding:10px 12px;background:var(--c-surface-3);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text-2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Generate</button>
   </div></div>
-  <div id="addStaffError" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.35);border-radius:10px;color:#fecaca;font-size:12px;font-weight:600;line-height:1.35;"></div>
+  <div id="addStaffError" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--c-danger-subtle);border:1px solid rgba(185,28,28,.3);border-radius:10px;color:#fecaca;font-size:12px;font-weight:600;line-height:1.35;"></div>
   <button id="addStaffSubmitBtn" onclick="confirmAddStaff()" style="width:100%;padding:14px;background:#8B2010;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Add Staff Member</button>
 </div>
 </div>
 
 <!-- ASSIGN MORE TICKETS MODAL -->
-<div id="assignMoreModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9000;align-items:flex-end;justify-content:center;">
-<div style="background:#111;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;">
+<div id="assignMoreModal" style="display:none;position:fixed;inset:0;background:var(--c-overlay);backdrop-filter:blur(8px);z-index:9000;align-items:flex-end;justify-content:center;">
+<div style="background:var(--c-surface-2);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div><div style="font-size:16px;font-weight:700;color:#fff;">Assign More Tickets</div><div id="assignMoreStaffName" style="font-size:12px;color:#00D4D4;margin-top:4px;"></div></div>
-    <span onclick="closeAssignMoreModal()" style="color:rgba(255,255,255,.5);cursor:pointer;font-size:22px;">&#215;</span>
+    <div><div style="font-size:16px;font-weight:700;color:var(--c-text);">Assign More Tickets</div><div id="assignMoreStaffName" style="font-size:12px;color:var(--c-accent);margin-top:4px;"></div></div>
+    <span onclick="closeAssignMoreModal()" style="color:var(--c-text-2);cursor:pointer;font-size:22px;">&#215;</span>
   </div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Event</label>
-  <select id="assignMoreEvent" onchange="refreshAssignMoreTiers()" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"></select></div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Ticket Tier</label>
-  <select id="assignMoreTier" onchange="refreshAssignMoreAvailable()" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"></select></div>
-  <div id="assignMoreAvailable" style="padding:10px 12px;margin-bottom:12px;background:rgba(0,212,212,.08);border:1px solid rgba(0,212,212,.2);border-radius:10px;color:#00D4D4;font-size:12px;">Select a ticket tier</div>
-  <div style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Allocation Type</label>
-  <select id="assignMoreMode" onchange="updateStaffAllocationMode('assignMore')" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Event</label>
+  <select id="assignMoreEvent" onchange="refreshAssignMoreTiers()" style="width:100%;padding:11px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"></select></div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Ticket Tier</label>
+  <select id="assignMoreTier" onchange="refreshAssignMoreAvailable()" style="width:100%;padding:11px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"></select></div>
+  <div id="assignMoreAvailable" style="padding:10px 12px;margin-bottom:12px;background:var(--c-accent-subtle);border:1px solid rgba(15,118,110,.35);border-radius:10px;color:var(--c-accent);font-size:12px;">Select a ticket tier</div>
+  <div style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Allocation Type</label>
+  <select id="assignMoreMode" onchange="updateStaffAllocationMode('assignMore')" style="width:100%;padding:11px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
     <option value="creator_quota">Staff sells on behalf of Creator</option>
     
   </select>
   <div id="assignMoreHelp" class="staff-flow-note">Buyer revenue goes to creator; staff commission is tracked separately.</div></div>
-  <div style="margin-bottom:18px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Tickets to Assign</label>
-  <input id="assignMoreQty" type="number" min="1" value="20" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
-  <div id="assignMoreCommissionWrap" style="margin-bottom:12px;"><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Commission % (optional)</label>
-  <input id="assignMoreCommission" type="number" min="0" max="100" value="0" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
+  <div style="margin-bottom:18px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Tickets to Assign</label>
+  <input id="assignMoreQty" type="number" min="1" value="20" style="width:100%;padding:11px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
+  <div id="assignMoreCommissionWrap" style="margin-bottom:12px;"><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Commission % (optional)</label>
+  <input id="assignMoreCommission" type="number" min="0" max="100" value="0" style="width:100%;padding:11px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
   <div id="assignMoreOwnedPriceWrap" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
-    <div><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Buy Price</label><input id="assignMorePurchasePrice" type="number" min="0" value="0" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
-    <div><label style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Resale Price</label><input id="assignMoreResalePrice" type="number" min="0" value="0" style="width:100%;padding:11px 12px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
+    <div><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Buy Price</label><input id="assignMorePurchasePrice" type="number" min="0" value="0" style="width:100%;padding:11px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
+    <div><label style="font-size:12px;color:var(--c-text-2);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Staff Resale Price</label><input id="assignMoreResalePrice" type="number" min="0" value="0" style="width:100%;padding:11px 12px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;outline:none;"/></div>
   </div>
   <button id="assignMoreSubmit" onclick="submitAssignMoreTickets()" style="width:100%;padding:14px;background:#8B2010;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Assign Tickets</button>
 </div>
 </div>
 
 <!-- FINANCE PIN MODAL -->
-<div id="financePinModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9000;align-items:flex-end;justify-content:center;">
-<div style="background:#111;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;">
+<div id="financePinModal" style="display:none;position:fixed;inset:0;background:var(--c-overlay);backdrop-filter:blur(8px);z-index:9000;align-items:flex-end;justify-content:center;">
+<div style="background:var(--c-surface-2);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-    <div style="font-size:16px;font-weight:700;color:#fff;">Unlock Finance</div>
-    <span onclick="closeFinancePinModal()" style="color:rgba(255,255,255,.5);cursor:pointer;font-size:22px;">&#215;</span>
+    <div style="font-size:16px;font-weight:700;color:var(--c-text);">Unlock Finance</div>
+    <span onclick="closeFinancePinModal()" style="color:var(--c-text-2);cursor:pointer;font-size:22px;">&#215;</span>
   </div>
-  <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:14px;">Enter your 4-digit finance PIN. If you have not set one yet, you will be asked to create it (with your account password).</div>
-  <input id="financePinInput" type="password" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="4-digit PIN" onkeydown="if(event.key==='Enter')submitFinancePin()" style="width:100%;padding:14px;background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'Space Mono',monospace;font-size:20px;letter-spacing:8px;text-align:center;box-sizing:border-box;outline:none;margin-bottom:16px;"/>
+  <div style="font-size:12px;color:var(--c-text-2);line-height:1.6;margin-bottom:14px;">Enter your 4-digit finance PIN. If you have not set one yet, you will be asked to create it (with your account password).</div>
+  <input id="financePinInput" type="password" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="4-digit PIN" onkeydown="if(event.key==='Enter')submitFinancePin()" style="width:100%;padding:14px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:'Space Mono',monospace;font-size:20px;letter-spacing:8px;text-align:center;box-sizing:border-box;outline:none;margin-bottom:16px;"/>
   <button id="financePinSubmit" onclick="submitFinancePin()" style="width:100%;padding:14px;background:#8B2010;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Unlock Finance</button>
 </div>
 </div>
 
 <!-- STAFF QR PAGE -->
-<div class="page" id="page-staff-qr" style="padding-bottom:80px;background:#000;">
-<div style="padding:16px;display:flex;align-items:center;gap:12px;"><div class="back-btn" onclick="showPage('page-staff-dashboard')"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#fff;">YOUR QR CODE</span></div>
+<div class="page" id="page-staff-qr" style="padding-bottom:80px;background:var(--c-surface);">
+<div style="padding:16px;display:flex;align-items:center;gap:12px;"><div class="back-btn" onclick="showPage('page-staff-dashboard')"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div><span style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--c-text);">YOUR QR CODE</span></div>
 <div style="padding:16px 24px;text-align:center;">
   <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Buyers scan this to open your selling page.</p>
   <div style="display:inline-block;padding:20px;background:#fff;border-radius:24px;">
     <img data-staff-qr-img style="width:200px;height:200px;display:block;object-fit:contain;" alt="Staff booking QR"/>
   </div>
-  <div id="staffQRLink" style="margin-top:20px;font-family:'Space Mono',monospace;font-size:12px;color:rgba(255,255,255,0.5);padding:10px;background:rgba(255,255,255,0.05);border-radius:10px;word-break:break-all;"></div>
+  <div id="staffQRLink" style="margin-top:20px;font-family:'Space Mono',monospace;font-size:12px;color:var(--c-text-2);padding:10px;background:var(--c-surface-2);border-radius:10px;word-break:break-all;"></div>
 </div>
 </div>
 
@@ -3530,7 +3542,7 @@ async function refreshCreatorStaffManageData(){
   if(creatorStaffRefreshRequest) return creatorStaffRefreshRequest;
   var list=document.getElementById('staffManageList');
   if(list&&!((STORE.staff||[]).length)){
-    list.innerHTML='<div style="padding:32px;text-align:center;color:rgba(255,255,255,.35);font-size:13px;">Loading staff...</div>';
+    list.innerHTML='<div style="padding:32px;text-align:center;color:var(--c-text-muted);font-size:13px;">Loading staff...</div>';
   }
   creatorStaffRefreshRequest=Promise.all([loadCreatorStaff(),loadCreatorEvents(),loadCreatorAnalytics().catch(function(){return null;})])
     .then(function(){
@@ -4122,7 +4134,7 @@ function updateEventReviewSection(ev){
   }
   header.textContent='⭐ Reviews ('+stats.avg.toFixed(1)+'/5)';
   body.innerHTML=stats.ratings.slice(-3).reverse().map(function(item){
-    return '<div style="padding:10px 0;border-bottom:1px solid var(--glass-border);"><div style="font-weight:700;color:#fff;">'+Number(item.rating).toFixed(1)+'/5</div><div style="color:var(--grey);font-size:13px;margin-top:4px;">'+(escapeHtml(item.review||'No written review'))+'</div></div>';
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--glass-border);"><div style="font-weight:700;color:var(--c-text);">'+Number(item.rating).toFixed(1)+'/5</div><div style="color:var(--grey);font-size:13px;margin-top:4px;">'+(escapeHtml(item.review||'No written review'))+'</div></div>';
   }).join('')+'<button class="btn-red" style="margin-top:12px;padding:9px 14px;" onclick="rateCurrentEvent()">Add Rating</button>';
 }
 
@@ -6029,8 +6041,8 @@ function refreshCreatorDashboard() {
           +'<div class="ce-body"><div class="ce-title">'+escapeHtml(ev.name)+'</div>'
           +'<div class="pb-wrap"><div class="pb-fill" style="width:'+pct+'%"></div></div>'
           +'<div class="ce-meta"><span>'+formatTicketCount(ev.bookingCount)+' sold</span><span>'+escapeHtml(ev.date)+'</span></div>'
-          +(ev.status==='pending'?'<div style="font-size:12px;color:#eab308;margin-top:4px;">Waiting for admin approval</div>':'')
-          +(ev.status==='rejected'?'<div style="font-size:12px;color:#ef4444;margin-top:4px;">Rejected: '+escapeHtml(ev.reviewNote||'no reason given')+'</div>':'')
+          +(ev.status==='pending'?'<div style="font-size:12px;color:var(--c-warning-text);margin-top:4px;">Waiting for admin approval</div>':'')
+          +(ev.status==='rejected'?'<div style="font-size:12px;color:var(--c-danger);margin-top:4px;">Rejected: '+escapeHtml(ev.reviewNote||'no reason given')+'</div>':'')
           +'<div class="ce-actions">'
           +'<button class="ce-btn" data-evid="'+escapeHtml(ev.id)+'">View</button>'
           +'<button class="ce-btn" data-scan="1">Scan</button>'
@@ -6133,7 +6145,7 @@ function resetCreateFlow(){
       venueMap.style.background='linear-gradient(135deg,#101820,#182c36)';
       venueMap.style.backgroundSize='';
       venueMap.style.backgroundPosition='';
-      venueMap.innerHTML='📍 Tap to select location using Maps<div id="venueMapCoords" style="font-size:12px;color:var(--neon);"></div>';
+      venueMap.innerHTML='📍 Tap to select location using Maps<div id="venueMapCoords" style="font-size:12px;color:var(--c-accent);"></div>';
     }
     var tl = document.getElementById('tiersList');
     if(tl){ tl.innerHTML=''; buildTierRow('General Admission', 0, 100, 'Standard entry'); }
@@ -6452,7 +6464,7 @@ function setVenueCoordinates(latitude,longitude){
     map.style.backgroundImage='linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)), url('+JSON.stringify(draftEvent.venueMapImage)+')';
     map.style.backgroundSize='cover';
     map.style.backgroundPosition='center';
-    map.innerHTML='<div style="font-size:22px;">📍</div><div style="font-weight:700;color:#fff;">Location selected</div><div id="venueMapCoords" style="font-size:12px;color:var(--neon);">'+escapeHtml(draftEvent.latitude)+', '+escapeHtml(draftEvent.longitude)+'</div><div style="font-size:12px;color:var(--muted);">Tap to change location</div>';
+    map.innerHTML='<div style="font-size:22px;">📍</div><div style="font-weight:700;color:var(--c-text);">Location selected</div><div id="venueMapCoords" style="font-size:12px;color:var(--c-accent);">'+escapeHtml(draftEvent.latitude)+', '+escapeHtml(draftEvent.longitude)+'</div><div style="font-size:12px;color:var(--muted);">Tap to change location</div>';
   }
   showToast('Venue location selected');
 }
@@ -6501,16 +6513,16 @@ function setAmPm(val){
   evtAmPm = val;
   var am = document.getElementById('btnAM');
   var pm = document.getElementById('btnPM');
-  if(am) am.style.cssText = 'flex:1;border:none;cursor:pointer;font-size:14px;font-weight:700;font-family:"DM Sans",sans-serif;transition:all .2s;background:'+(val==='AM'?'var(--red);color:#fff':'transparent;color:var(--muted)')+';';
-  if(pm) pm.style.cssText = 'flex:1;border:none;cursor:pointer;font-size:14px;font-weight:700;font-family:"DM Sans",sans-serif;transition:all .2s;background:'+(val==='PM'?'var(--red);color:#fff':'transparent;color:var(--muted)')+';';
+  if(am) am.style.cssText = 'flex:1;border:none;cursor:pointer;font-size:14px;font-weight:700;font-family:"DM Sans",sans-serif;transition:all .2s;background:'+(val==='AM'?'var(--red);color:var(--c-text)':'transparent;color:var(--muted)')+';';
+  if(pm) pm.style.cssText = 'flex:1;border:none;cursor:pointer;font-size:14px;font-weight:700;font-family:"DM Sans",sans-serif;transition:all .2s;background:'+(val==='PM'?'var(--red);color:var(--c-text)':'transparent;color:var(--muted)')+';';
 }
 
 function setEndAmPm(val){
   evtEndAmPm = val;
   var am = document.getElementById('btnEndAM');
   var pm = document.getElementById('btnEndPM');
-  if(am) am.style.cssText = 'flex:1;border:none;cursor:pointer;font-size:13px;font-weight:700;font-family:"DM Sans",sans-serif;transition:all .2s;background:'+(val==='AM'?'var(--red);color:#fff':'transparent;color:var(--muted)')+';';
-  if(pm) pm.style.cssText = 'flex:1;border:none;cursor:pointer;font-size:13px;font-weight:700;font-family:"DM Sans",sans-serif;transition:all .2s;background:'+(val==='PM'?'var(--red);color:#fff':'transparent;color:var(--muted)')+';';
+  if(am) am.style.cssText = 'flex:1;border:none;cursor:pointer;font-size:13px;font-weight:700;font-family:"DM Sans",sans-serif;transition:all .2s;background:'+(val==='AM'?'var(--red);color:var(--c-text)':'transparent;color:var(--muted)')+';';
+  if(pm) pm.style.cssText = 'flex:1;border:none;cursor:pointer;font-size:13px;font-weight:700;font-family:"DM Sans",sans-serif;transition:all .2s;background:'+(val==='PM'?'var(--red);color:var(--c-text)':'transparent;color:var(--muted)')+';';
 }
 
 
@@ -6568,7 +6580,7 @@ function buildTierRow(name, price, qty, perks){
   grid1.innerHTML='<div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Tier Name</label>'
     +'<input class="form-input tier-name-inp" type="text" value="'+escapeHtml(name)+'" placeholder="e.g. General"/></div>'
     +'<div class="price-inp-wrap"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">'
-    +'Price (₹) '+(price===0?'<span style="color:#4ade80;font-size:12px;">[FREE]</span>':'')+'</label>'
+    +'Price (₹) '+(price===0?'<span style="color:var(--c-success);font-size:12px;">[FREE]</span>':'')+'</label>'
     +'<input class="form-input tier-price-inp" type="number" value="'+escapeHtml(price)+'" min="0" placeholder="0 = Free" '+(price===0?'disabled style="opacity:.4"':'')+' /></div>';
   row.appendChild(grid1);
 
@@ -6601,7 +6613,7 @@ function toggleFreePrice(toggleEl){
   var label = row.querySelector('.price-inp-wrap label');
   if(toggleEl.classList.contains('on')){
     if(priceInp){ priceInp.value=0; priceInp.disabled=true; priceInp.style.opacity='.4'; }
-    if(label) label.innerHTML='Price (₹) <span style="color:#4ade80;font-size:12px;">[FREE]</span>';
+    if(label) label.innerHTML='Price (₹) <span style="color:var(--c-success);font-size:12px;">[FREE]</span>';
   } else {
     if(priceInp){ priceInp.disabled=false; priceInp.style.opacity='1'; priceInp.value=''; priceInp.focus(); }
     if(label) label.innerHTML='Price (₹)';
@@ -11571,7 +11583,7 @@ function refreshStaffManagePage(){
   var sold=document.getElementById('staffMgmtSold'); if(sold) sold.textContent=formatTicketCount(displaySold);
   var rev=document.getElementById('staffMgmtRev'); if(rev) rev.textContent='\u20b9'+displayRev.toLocaleString('en-IN');
   if(!staffList.length){
-    list.innerHTML='<div style="padding:40px;text-align:center;background:rgba(255,255,255,0.03);border-radius:14px;"><div style="font-size:32px;margin-bottom:10px;">\u{1F465}</div><div style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:14px;">No staff added yet</div><button onclick="openAddStaffModal()" style="padding:10px 24px;background:#8B2010;border:none;border-radius:20px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">+ Add First Staff</button></div>';
+    list.innerHTML='<div style="padding:40px;text-align:center;background:var(--c-surface-2);border-radius:14px;"><div style="font-size:32px;margin-bottom:10px;">\u{1F465}</div><div style="font-size:14px;color:var(--c-text-2);margin-bottom:14px;">No staff added yet</div><button onclick="openAddStaffModal()" style="padding:10px 24px;background:#8B2010;border:none;border-radius:20px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">+ Add First Staff</button></div>';
     return;
   }
   list.innerHTML='';
@@ -11582,26 +11594,26 @@ function refreshStaffManagePage(){
     var evName=''; if(assignments.length>0){ var ev=STORE.events.find(function(e){return e.id===assignments[0].eventId;}); evName=ev?ev.name:''; }
     var pct=ss.assigned>0?Math.round(ss.sold/ss.assigned*100):0;
     var card=document.createElement('div');
-    card.style.cssText='padding:16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;margin-bottom:10px;';
+    card.style.cssText='padding:16px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:14px;margin-bottom:10px;';
     card.innerHTML='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
-      +'<div style="width:44px;height:44px;border-radius:50%;background:rgba(139,32,16,0.2);border:1px solid rgba(139,32,16,0.4);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#8B2010;flex-shrink:0;">'+escapeHtml(s.name.charAt(0).toUpperCase())+'</div>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#fff;">'+escapeHtml(s.name)+'</div>'
-      +'<div style="font-size:12px;color:rgba(255,255,255,0.4);">@'+escapeHtml(s.staffId)+' &bull; '+(escapeHtml(s.role||'Staff'))+'</div></div>'
-      +'<span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:8px;background:rgba(34,197,94,0.12);color:#4ade80;">'+escapeHtml(s.status)+'</span></div>'
-      +(evName?'<div style="font-size:12px;color:rgba(0,212,212,0.8);margin-bottom:8px;">\uD83D\uDCC5 '+escapeHtml(evName)+'</div>':'')
+      +'<div style="width:44px;height:44px;border-radius:50%;background:var(--c-primary-subtle);border:1px solid rgba(139,32,16,0.4);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#8B2010;flex-shrink:0;">'+escapeHtml(s.name.charAt(0).toUpperCase())+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:var(--c-text);">'+escapeHtml(s.name)+'</div>'
+      +'<div style="font-size:12px;color:var(--c-text-muted);">@'+escapeHtml(s.staffId)+' &bull; '+(escapeHtml(s.role||'Staff'))+'</div></div>'
+      +'<span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:8px;background:var(--c-success-subtle);color:var(--c-success);">'+escapeHtml(s.status)+'</span></div>'
+      +(evName?'<div style="font-size:12px;color:var(--c-accent);margin-bottom:8px;">\uD83D\uDCC5 '+escapeHtml(evName)+'</div>':'')
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">'
-      +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:#fff;">'+formatTicketCount(ss.assigned)+'</div><div style="font-size:12px;color:rgba(255,255,255,0.4);">Assigned</div></div>'
-      +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:#00D4D4;">'+formatTicketCount(ss.sold)+'</div><div style="font-size:12px;color:rgba(255,255,255,0.4);">Sold</div></div>'
-      +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:#4ade80;">\u20b9'+earnings.toLocaleString('en-IN')+'</div><div style="font-size:12px;color:rgba(255,255,255,0.4);">Earned</div></div></div>'
-      +'<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:4px;margin-bottom:10px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#00D4D4);border-radius:4px;"></div></div>'
+      +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:var(--c-text);">'+formatTicketCount(ss.assigned)+'</div><div style="font-size:12px;color:var(--c-text-muted);">Assigned</div></div>'
+      +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:var(--c-accent);">'+formatTicketCount(ss.sold)+'</div><div style="font-size:12px;color:var(--c-text-muted);">Sold</div></div>'
+      +'<div style="text-align:center;"><div style="font-size:15px;font-weight:700;color:var(--c-success);">\u20b9'+earnings.toLocaleString('en-IN')+'</div><div style="font-size:12px;color:var(--c-text-muted);">Earned</div></div></div>'
+      +'<div style="height:4px;background:var(--c-surface-3);border-radius:4px;margin-bottom:10px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#00D4D4);border-radius:4px;"></div></div>'
       +(Number(s.cashOwed||0)>0
         ?'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;padding:10px;background:rgba(232,116,97,0.08);border:1px solid rgba(232,116,97,0.25);border-radius:10px;">'
-          +'<span style="font-size:12px;color:#e87461;">Cash owed: \u20b9'+Number(s.cashOwed).toLocaleString('en-IN')+'</span>'
-          +'<button onclick="recordCashReceived(\''+jsStr(s.id)+'\')" style="padding:6px 10px;background:transparent;border:1px solid rgba(232,116,97,0.5);color:#e87461;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">Record cash received</button></div>'
+          +'<span style="font-size:12px;color:var(--c-primary);">Cash owed: \u20b9'+Number(s.cashOwed).toLocaleString('en-IN')+'</span>'
+          +'<button onclick="recordCashReceived(\''+jsStr(s.id)+'\')" style="padding:6px 10px;background:transparent;border:1px solid rgba(232,116,97,0.5);color:var(--c-primary);border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">Record cash received</button></div>'
         :'')
-      +'<div style="display:flex;gap:8px;"><button onclick="shareStaffInventoryLink(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(0,212,212,0.1);border:1px solid rgba(0,212,212,0.3);border-radius:10px;color:#00D4D4;font-size:12px;font-weight:600;cursor:pointer;">Share Link</button>'
-      +'<button onclick="creatorResetStaffPassword(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;cursor:pointer;">Reset password</button>'
-      +'<button onclick="assignMoreTickets(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;cursor:pointer;">Assign More</button></div>';
+      +'<div style="display:flex;gap:8px;"><button onclick="shareStaffInventoryLink(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:var(--c-accent-subtle);border:1px solid rgba(15,118,110,.35);border-radius:10px;color:var(--c-accent);font-size:12px;font-weight:600;cursor:pointer;">Share Link</button>'
+      +'<button onclick="creatorResetStaffPassword(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:var(--c-surface-3);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-size:12px;cursor:pointer;">Reset password</button>'
+      +'<button onclick="assignMoreTickets(\''+jsStr(s.id)+'\')" style="flex:1;padding:8px;background:var(--c-surface-3);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-size:12px;font-weight:600;cursor:pointer;">Assign More</button></div>';
     list.appendChild(card);
   });
 }
@@ -11737,21 +11749,21 @@ function refreshRevenuePage(){
   var evList=document.getElementById('revByEvent');
   if(evList){
     var revenueEvents=creatorAnalytics&&creatorAnalytics.events?creatorAnalytics.events:myEvents.map(function(event){return {id:event.id,name:event.name,status:event.status,date:event.date,revenue:event.revenue||0,tickets:event.bookingCount||0};});
-    if(!revenueEvents.length){evList.innerHTML='<div style="padding:20px;text-align:center;color:rgba(255,255,255,.3);font-size:13px;">No events yet</div>'; }
+    if(!revenueEvents.length){uiState(evList,'empty',{icon:'📊',title:'No sales yet',text:'Revenue per event appears after your first ticket sale.'}); }
     else{
       var maxRev=Math.max.apply(null,revenueEvents.map(function(e){return e.revenue||0;}))||1;
       evList.innerHTML='';
       revenueEvents.forEach(function(ev){
         var pct=Math.round((ev.revenue||0)/maxRev*100);
-        var statusCol=ev.status==='live'?'#4ade80':ev.status==='pending'?'#eab308':'#ef4444';
+        var statusCol=ev.status==='live'?'var(--c-success)':ev.status==='pending'?'var(--c-warning-text)':'var(--c-danger)';
         var d=document.createElement('div');
-        d.style.cssText='padding:14px;background:rgba(255,255,255,0.04);border-radius:12px;margin-bottom:8px;';
+        d.style.cssText='padding:14px;background:var(--c-surface-2);border-radius:12px;margin-bottom:8px;';
         d.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
-          +'<span style="font-size:13px;font-weight:600;color:#fff;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(ev.name)+'</span>'
-          +'<span style="font-size:14px;font-weight:700;color:#4ade80;">\u20b9'+(ev.revenue||0).toLocaleString('en-IN')+'</span></div>'
-          +'<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:4px;margin-bottom:6px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#c0392b);border-radius:4px;"></div></div>'
+          +'<span style="font-size:13px;font-weight:600;color:var(--c-text);max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(ev.name)+'</span>'
+          +'<span style="font-size:14px;font-weight:700;color:var(--c-success);">\u20b9'+(ev.revenue||0).toLocaleString('en-IN')+'</span></div>'
+          +'<div style="height:4px;background:var(--c-surface-3);border-radius:4px;margin-bottom:6px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#c0392b);border-radius:4px;"></div></div>'
           +'<div style="display:flex;justify-content:space-between;">'
-          +'<span style="font-size:12px;color:rgba(255,255,255,.4);">'+formatTicketCount(ev.tickets)+' tickets</span>'
+          +'<span style="font-size:12px;color:var(--c-text-muted);">'+formatTicketCount(ev.tickets)+' tickets</span>'
           +'<span style="font-size:12px;font-weight:700;color:'+escapeHtml(statusCol)+';">'+escapeHtml(ev.status)+'</span></div>';
         evList.appendChild(d);
       });
@@ -11762,15 +11774,15 @@ function refreshRevenuePage(){
     var topStaff=creatorAnalytics&&creatorAnalytics.staff
       ?creatorAnalytics.staff.map(function(s){return {name:s.name,sold:s.soldTickets,rev:s.earnings};}).slice(0,3)
       :(STORE.staff||[]).map(function(s){var ss=STORE.getStaffStats(s.id); return {name:s.name,sold:ss.sold,rev:ss.earnings};}).sort(function(a,b){return b.rev-a.rev;}).slice(0,3);
-    if(!topStaff.length){topStaffEl.innerHTML='<div style="padding:16px;text-align:center;color:rgba(255,255,255,.3);font-size:12px;">No staff data yet</div>';}
+    if(!topStaff.length){uiState(topStaffEl,'empty',{icon:'👥',title:'No staff sales yet',text:'Sales by your staff appear here.'});}
     else{
       var medals=['\uD83E\uDD47','\uD83E\uDD48','\uD83E\uDD49'];
       topStaffEl.innerHTML=topStaff.map(function(st,i){
-        return '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.04);border-radius:12px;margin-bottom:8px;">'
+        return '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--c-surface-2);border-radius:12px;margin-bottom:8px;">'
           +'<span style="font-size:20px;">'+escapeHtml(medals[i])+'</span>'
-          +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#fff;">'+escapeHtml(st.name)+'</div>'
-          +'<div style="font-size:12px;color:rgba(255,255,255,0.4);">'+formatTicketCount(st.sold)+' sold</div></div>'
-          +'<span style="font-size:13px;font-weight:700;color:#4ade80;">\u20b9'+st.rev.toLocaleString('en-IN')+'</span></div>';
+          +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--c-text);">'+escapeHtml(st.name)+'</div>'
+          +'<div style="font-size:12px;color:var(--c-text-muted);">'+formatTicketCount(st.sold)+' sold</div></div>'
+          +'<span style="font-size:13px;font-weight:700;color:var(--c-success);">\u20b9'+st.rev.toLocaleString('en-IN')+'</span></div>';
       }).join('');
     }
   }
@@ -11925,12 +11937,12 @@ function addRecentScan(b, num){
   var el = document.getElementById('recentScans'); if(!el) return;
   var statusColors={true:'#ef4444',false:'#4ade80'};
   var row = document.createElement('div');
-  row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;animation:fadeIn .3s ease;';
+  row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--c-surface-2);border-radius:10px;animation:fadeIn .3s ease;';
   var time = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  row.innerHTML = '<div><div style="font-size:12px;font-weight:600;color:#fff;">'+(escapeHtml(b.buyerName||'Buyer'))+'</div>'
-    +'<div style="font-size:12px;color:rgba(255,255,255,0.4);">'+escapeHtml(b.id)+'</div></div>'
-    +'<div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:#4ade80;margin-bottom:2px;">SCANNED</div>'
-    +'<div style="font-size:12px;color:rgba(255,255,255,0.35);">'+escapeHtml(time)+'</div></div>';
+  row.innerHTML = '<div><div style="font-size:12px;font-weight:600;color:var(--c-text);">'+(escapeHtml(b.buyerName||'Buyer'))+'</div>'
+    +'<div style="font-size:12px;color:var(--c-text-muted);">'+escapeHtml(b.id)+'</div></div>'
+    +'<div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:var(--c-success);margin-bottom:2px;">SCANNED</div>'
+    +'<div style="font-size:12px;color:var(--c-text-muted);">'+escapeHtml(time)+'</div></div>';
   // Remove "no scans" message
   if(el.children.length===1 && el.children[0].style.textAlign==='center') el.innerHTML='';
   el.insertBefore(row, el.firstChild);

@@ -48,7 +48,7 @@ test("L14: /#admin works in an open tab, beats other saved sessions, and admin s
 
 test("L15: organizer dashboard has a Log out button; organizer and staff sign-out return to their sign-in form", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
-  assert.match(html, /<button id="creatorLogoutBtn" onclick="signOutCreator\(\)"/);
+  assert.match(html, /<button type="button" id="creatorLogoutBtn" class="btn btn-secondary" onclick="signOutCreator\(\)">Log out<\/button>/);
   assert.match(html, /function performCreatorSignOut\(\)\{[^]*?logoutSession\('creator'\);[^]*?openRoleLogin\('creator'\);\s*\}/);
   assert.match(html, /function performStaffSignOut\(\)\{[^]*?logoutSession\('staff'\);[^]*?openRoleLogin\('staff'\);\s*\}/);
 });
@@ -138,4 +138,17 @@ test("formatBookingRef groups the reference for reading out; the QR keeps the re
   const vm = require("vm"); const box = {}; vm.runInNewContext(`${src}\nthis.f=formatBookingRef;`, box);
   assert.equal(box.f("BKG-6ea9686b28807c4ed79adfd2"), "BKG-6EA9 686B 2880 7C4E D79A DFD2");
   assert.equal(box.f(""), "");
+});
+
+test("UI step 3 organizer: no black pages, light organizer nav with desktop top bar, 44px controls", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  for (const id of ["page-scanner", "page-revenue", "page-staff-manage"]) {
+    const tag = html.match(new RegExp(`<div class="page" id="${id}"[^>]*>`))[0];
+    assert.doesNotMatch(tag, /background:#000/, id);
+  }
+  assert.match(html, /<nav class="bottom-nav creator-nav" id="creatorNavBar" aria-label="Organizer" style="display:none;">/);
+  assert.match(html, /body\.creator-mode \.creator-nav\{top:0;bottom:auto;height:64px;/);
+  assert.match(html, /#page-creator,#page-create,#page-scanner,#page-revenue,#page-staff-manage\{max-width:1120px;margin:0 auto;\}/);
+  assert.match(html, /<input id="scannerPayload" class="form-input" aria-label="Ticket QR value"/);
+  assert.match(html, /--c-text-muted:#6B6B73;/);
 });
