@@ -116,3 +116,26 @@ test("UI: no text under 12px outside the APK-only blocks; clickable non-buttons 
   assert.match(html, /function makeClickablesAccessible\(root\)\{[^]*?el\.setAttribute\('tabindex','0'\);/);
   assert.match(html, /if\(e\.key!=='Enter'&&e\.key!==' '\)return;/);
 });
+
+test("UI step 2 buyer: navigation bar, desktop column, 240px QR, grouped booking ref, states", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  assert.match(html, /<nav class="bottom-nav buyer-nav" id="buyerNav" aria-label="Main">/);
+  for (const page of ["page-home", "page-explore", "page-mytickets", "page-profile"]) assert.match(html, new RegExp(`data-nav-page="${page}"`));
+  assert.match(html, /document\.body\.setAttribute\('data-page',id\);/);
+  assert.match(html, /#page-home,#page-explore,#page-mytickets,#page-notifications,#page-detail\{max-width:1120px;margin:0 auto;\}/);
+  assert.match(html, /\.qr-img\{display:block;width:240px;height:240px;/);
+  assert.match(html, /\.qr-ring\{width:240px;height:240px;/);
+  assert.match(html, /set\('ticketBookingId',formatBookingRef\(booking\.id\)\);/);
+  assert.doesNotMatch(html, /\.ticket-card, \.ticket-card \* \{ color: #ffffff !important; \}/, "dark ticket card overrides removed");
+  assert.match(html, /uiState\(list,'empty',\{icon:'🎟️'/);
+  assert.match(html, /uiSkeleton\(document\.getElementById\('exploreGrid'\),4,'card'\);/);
+  assert.match(html, /<span id="totalAmt" class="order-total">/);
+});
+
+test("formatBookingRef groups the reference for reading out; the QR keeps the real value", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  const src = html.slice(html.indexOf("function formatBookingRef(id){"), html.indexOf("function copyBookingRef(){"));
+  const vm = require("vm"); const box = {}; vm.runInNewContext(`${src}\nthis.f=formatBookingRef;`, box);
+  assert.equal(box.f("BKG-6ea9686b28807c4ed79adfd2"), "BKG-6EA9 686B 2880 7C4E D79A DFD2");
+  assert.equal(box.f(""), "");
+});

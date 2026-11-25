@@ -37,11 +37,11 @@ body.session-restoring::after{content:"";position:fixed;top:50%;left:50%;width:3
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 .sub-page{display:none;min-height:100vh;padding-bottom:110px;}
 .sub-page.active{display:block;position:fixed;inset:0;z-index:1200;background:var(--bg);overflow-y:auto;animation:fadeUp .3s ease;}
-.bottom-nav{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(18,18,18,.92);backdrop-filter:blur(24px);border:1px solid var(--glass-border);border-radius:32px;padding:10px 20px;display:flex;gap:6px;z-index:1000;box-shadow:0 8px 40px rgba(0,0,0,.7);}
-.nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 14px;border-radius:24px;border:none;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s;font-family:"DM Sans",sans-serif;font-size:12px;font-weight:500;min-width:52px;}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:300;display:flex;justify-content:space-around;background:var(--c-surface);border-top:1px solid var(--c-border);box-shadow:0 -2px 12px rgb(0 0 0 / .05);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));}
+.nav-btn{flex:1;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px 6px;border-radius:var(--r-md);border:none;cursor:pointer;background:transparent;color:var(--c-text-2);font:600 var(--fs-12)/1.2 var(--font-sans);transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease);}
 .nav-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;}
-.nav-btn.active{color:var(--white);background:var(--red-dim);}
-.nav-btn.active svg{stroke:var(--red);}
+.nav-btn.active{color:var(--c-primary);background:var(--c-primary-subtle);}
+.nav-btn.active svg{stroke:var(--c-primary);}
 .creator-nav{display:none;}
 body.creator-mode .buyer-nav{display:none;}
 body.creator-mode .creator-nav{display:flex;}
@@ -69,12 +69,12 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .page-topbar-title{font-family:"Bebas Neue",sans-serif;font-size:28px;letter-spacing:2px;}
 .sub-header{padding:18px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--glass-border);}
 .sub-title{font-size:18px;font-weight:700;}
-.section-tabs{display:flex;background:var(--bg2);border-radius:12px;padding:4px;margin-bottom:20px;}
-.tab-btn{flex:1;padding:8px;border-radius:9px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;font-family:"DM Sans",sans-serif;transition:all .2s;}
-.tab-btn.active{background:var(--bg3);color:var(--white);}
-.status-badge{padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;}
-.status-upcoming{background:rgba(0,245,255,0.1);color:var(--neon);}
-.status-past{background:var(--glass);color:var(--muted);}
+.section-tabs{display:flex;gap:4px;background:var(--c-surface-3);border-radius:var(--r-md);padding:4px;margin-bottom:20px;}
+.tab-btn{flex:1;min-height:var(--tap);padding:8px;border-radius:var(--r-sm);border:none;background:none;color:var(--c-text-2);font:600 var(--fs-14)/1 var(--font-sans);cursor:pointer;transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease);}
+.tab-btn.active{background:var(--c-surface);color:var(--c-text);box-shadow:var(--sh-sm);}
+.status-badge{display:inline-flex;align-items:center;padding:2px 10px;border-radius:var(--r-pill);font:600 var(--fs-12)/20px var(--font-sans);}
+.status-upcoming{background:var(--c-info-subtle);color:var(--c-info);}
+.status-past{background:var(--c-surface-3);color:var(--c-text-2);}
 .auth-divider{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;margin:4px 0;}
 .auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--glass-border);}
 .role-selector{display:flex;gap:8px;margin-bottom:20px;}
@@ -85,11 +85,11 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .input-icon-wrap input{padding-left:42px;}
 #page-home{padding-bottom:110px;}
 .home-topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 0;}
-.location-row{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--grey);cursor:pointer;}
+.location-row{display:inline-flex;align-items:center;gap:6px;min-height:var(--tap);font-size:var(--fs-14);color:var(--c-text-2);cursor:pointer;}
 .hero{position:relative;height:520px;overflow:hidden;margin-bottom:28px;}
 .hero-slides{display:flex;height:100%;transition:transform .7s cubic-bezier(.4,0,.2,1);}
 .hero-slide{min-width:100%;height:100%;position:relative;flex-shrink:0;background-size:cover;background-position:center;}
-.hero-gradient{position:absolute;inset:0;background:linear-gradient(0deg,#0A0A0A 0%,rgba(10,10,10,.7) 40%,rgba(10,10,10,.05) 100%);}
+.hero-gradient{position:absolute;inset:0;background:linear-gradient(0deg,rgba(10,10,10,.92) 0%,rgba(10,10,10,.65) 45%,rgba(10,10,10,.1) 100%);}
 .hero-content{position:absolute;bottom:0;left:0;right:0;padding:24px 20px;}
 .hero-tags{display:flex;gap:8px;margin-bottom:8px;}
 .hero-title{font-family:"Bebas Neue",sans-serif;font-size:40px;line-height:1.02;margin-bottom:8px;letter-spacing:2px;color:#fff;text-shadow:0 3px 18px rgba(0,0,0,.55);}
@@ -98,18 +98,19 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .hero-actions{display:flex;gap:10px;}
 .hero-actions .btn-ghost{background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.4);color:#fff;backdrop-filter:blur(6px);}
 .hero-dots{position:absolute;bottom:116px;left:20px;display:flex;gap:6px;}
-.dot{width:6px;height:6px;border-radius:3px;background:var(--muted);transition:all .3s;cursor:pointer;}
-.dot.active{width:20px;background:var(--red);}
-.event-card{flex-shrink:0;width:160px;border-radius:var(--radius);overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:all .25s;background:var(--bg2);}
-.event-card:hover{transform:scale(1.04);box-shadow:0 0 24px rgba(229,9,20,.25);}
+.dot{position:relative;width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,.6);transition:width var(--dur) var(--ease),background-color var(--dur) var(--ease);cursor:pointer;}
+.dot::before{content:"";position:absolute;inset:-18px -8px;} /* 44px hit area around a small dot */
+.dot.active{width:22px;background:#fff;}
+.event-card{flex-shrink:0;width:168px;border-radius:var(--r-md);overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:transform var(--dur) var(--ease),box-shadow var(--dur) var(--ease);background:var(--c-surface);border:1px solid var(--c-border);}
+.event-card:hover{transform:translateY(-2px);box-shadow:var(--sh-md);}
 .card-img{height:200px;background-size:cover;background-position:center;position:relative;}
 .card-gradient{position:absolute;inset:0;background:linear-gradient(0deg,rgba(10,10,10,.95) 0%,transparent 55%);}
 .date-pill{position:absolute;top:10px;right:10px;background:rgba(10,10,10,.85);backdrop-filter:blur(8px);border:1px solid var(--glass-border);border-radius:8px;padding:3px 8px;font-size:12px;font-weight:700;color:#fff;font-family:"Space Mono",monospace;line-height:1.3;text-align:center;}
 .card-body{padding:10px;}
-.card-title{font-size:13px;font-weight:600;line-height:1.3;margin-bottom:6px;}
+.card-title{font-size:var(--fs-14);font-weight:600;line-height:1.3;margin-bottom:6px;color:var(--c-text);}
 .card-meta{font-size:12px;color:var(--grey);display:flex;justify-content:space-between;}
 .price-badge{color:var(--neon);font-weight:700;font-family:"Space Mono",monospace;}
-.free-badge{color:#4ade80;font-weight:700;}
+.free-badge{color:var(--c-success);font-weight:700;}
 #page-explore{padding:0 0 110px;}
 .search-bar{background:var(--bg2);border:1px solid var(--glass-border);border-radius:14px;display:flex;align-items:center;gap:10px;padding:12px 16px;}
 .search-bar svg{width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:1.8;flex-shrink:0;}
@@ -117,11 +118,11 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .search-bar input::placeholder{color:var(--muted);}
 .filter-bar{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none;}
 .filter-bar::-webkit-scrollbar{display:none;}
-.filter-chip{flex-shrink:0;border:1px solid var(--glass-border);background:var(--glass);color:var(--grey);border-radius:10px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;}
-.filter-chip.active{border-color:var(--red);color:var(--red);background:var(--red-dim);}
+.filter-chip{flex-shrink:0;min-height:40px;display:inline-flex;align-items:center;border:1px solid var(--c-border-strong);background:var(--c-surface);color:var(--c-text-2);border-radius:var(--r-pill);padding:0 14px;font:600 var(--fs-14)/1 var(--font-sans);cursor:pointer;transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease);}
+.filter-chip.active{border-color:var(--c-primary);color:var(--c-primary);background:var(--c-primary-subtle);}
 .explore-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;}
-.explore-card{border-radius:var(--radius);overflow:hidden;cursor:pointer;background:var(--bg2);transition:all .25s;}
-.explore-card:hover{transform:translateY(-3px);}
+.explore-card{border-radius:var(--r-md);overflow:hidden;cursor:pointer;background:var(--c-surface);border:1px solid var(--c-border);transition:transform var(--dur) var(--ease),box-shadow var(--dur) var(--ease);}
+.explore-card:hover{transform:translateY(-2px);box-shadow:var(--sh-md);}
 .explore-card-img{height:160px;background-size:cover;background-position:center;position:relative;}
 .explore-card-body{padding:12px;}
 .explore-card-title{font-size:14px;font-weight:600;margin-bottom:4px;line-height:1.3;}
@@ -129,7 +130,7 @@ textarea.form-input{resize:vertical;min-height:100px;}
 #page-detail{padding:0 0 120px;}
 .detail-hero{height:340px;background-size:cover;background-position:center;position:relative;}
 .detail-hero-grad{position:absolute;inset:0;background:linear-gradient(0deg,#0A0A0A 0%,rgba(10,10,10,.4) 60%,transparent 100%);}
-.detail-back{position:absolute;top:20px;left:16px;width:40px;height:40px;background:rgba(10,10,10,.7);backdrop-filter:blur(10px);border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--glass-border);}
+.detail-back{position:absolute;top:16px;left:16px;width:var(--tap);height:var(--tap);background:rgba(10,10,10,.6);backdrop-filter:blur(10px);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;cursor:pointer;}
 .detail-back svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;}
 .detail-logo-center{position:absolute;top:20px;left:50%;transform:translateX(-50%);}
 .detail-actions-top{position:absolute;top:20px;right:16px;display:flex;gap:8px;}
@@ -139,7 +140,7 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .org-avatar{width:44px;height:44px;min-width:44px;flex:0 0 44px;aspect-ratio:1;border-radius:50%;box-sizing:border-box;background:linear-gradient(135deg,var(--purple),var(--red));border:2px solid rgba(255,255,255,.9);box-shadow:0 3px 10px rgba(0,0,0,.2);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;line-height:1;letter-spacing:0;text-align:center;overflow:hidden;}
 .org-info p{font-size:13px;font-weight:600;}
 .org-info span{font-size:12px;color:var(--muted);}
-.follow-btn{margin-left:auto;border:1px solid var(--red);color:var(--red);background:none;border-radius:8px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;}
+.follow-btn{margin-left:auto;min-height:var(--tap);border:1px solid var(--c-primary);color:var(--c-primary);background:var(--c-surface);border-radius:var(--r-md);padding:0 16px;font:600 var(--fs-14)/1 var(--font-sans);cursor:pointer;}
 .event-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
 .info-card{background:var(--bg2);border-radius:12px;padding:14px;border:1px solid var(--glass-border);}
 .info-card-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
@@ -160,11 +161,11 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .booking-header{padding:18px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--glass-border);}
 .step-indicator{display:flex;padding:20px 16px;}
 .step{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;}
-.step:not(:last-child)::after{content:"";position:absolute;top:14px;left:50%;right:-50%;height:2px;background:var(--bg3);z-index:0;}
+.step:not(:last-child)::after{content:"";position:absolute;top:16px;left:50%;right:-50%;height:2px;background:var(--c-border);z-index:0;}
 .step.done:not(:last-child)::after{background:var(--red);}
-.step-dot{width:28px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid var(--bg3);background:var(--bg);color:var(--muted);z-index:1;font-family:"Space Mono",monospace;}
+.step-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:var(--fs-14);font-weight:700;border:2px solid var(--c-border-strong);background:var(--c-surface);color:var(--c-text-2);position:relative;z-index:1;}
 .step.active .step-dot,.step.done .step-dot{border-color:var(--red);background:var(--red);color:#fff;}
-.step-label{font-size:12px;color:var(--muted);}
+.step-label{font-size:var(--fs-12);color:var(--c-text-2);}
 .step.active .step-label{color:var(--white);}
 .booking-step{display:none;padding:0 16px;}
 .booking-step.active{display:block;animation:fadeUp .3s ease;}
@@ -177,16 +178,16 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .ticket-avail{font-size:12px;color:var(--grey);margin-top:2px;}
 .qty-row{display:flex;align-items:center;justify-content:space-between;padding:16px;background:var(--bg2);border-radius:14px;margin-bottom:12px;}
 .qty-control{display:flex;align-items:center;gap:16px;}
-.qty-btn{width:36px;height:50px;border-radius:50%;background:var(--bg3);border:1px solid var(--glass-border);color:var(--white);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;}
-.qty-btn:hover{background:var(--red);}
+.qty-btn{width:var(--tap);height:var(--tap);border-radius:50%;background:var(--c-surface);border:1px solid var(--c-border-strong);color:var(--c-text);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background-color var(--dur) var(--ease),transform var(--dur-fast) var(--ease);}
+.qty-btn:hover{background:var(--c-surface-2);}
 .qty-num{font-size:20px;font-weight:700;font-family:"Space Mono",monospace;min-width:28px;text-align:center;}
 .coupon-row{display:flex;gap:8px;margin-bottom:20px;}
 .coupon-input{flex:1;background:var(--bg2);border:1px solid var(--glass-border);border-radius:12px;padding:12px 16px;color:var(--white);font-size:14px;font-family:"DM Sans",sans-serif;outline:none;}
 .coupon-input::placeholder{color:var(--muted);}
 .apply-btn{background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:12px;padding:12px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;}
 .order-summary{background:var(--bg2);border-radius:16px;padding:16px;margin-bottom:20px;}
-.order-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--glass-border);font-size:13px;color:var(--grey);}
-.order-row:last-child{border:none;font-size:16px;font-weight:700;color:var(--white);}
+.order-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--c-border);font-size:var(--fs-14);color:var(--c-text-2);font-variant-numeric:tabular-nums;}
+.order-row:last-child{border:none;padding-top:12px;font-size:var(--fs-18);font-weight:700;color:var(--c-text);}
 .pay-option{background:var(--bg2);border:2px solid var(--glass-border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .2s;margin-bottom:8px;}
 .pay-option.selected{border-color:var(--red);}
 .pay-icon{width:36px;height:50px;border-radius:10px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px;}
@@ -203,30 +204,25 @@ textarea.form-input{resize:vertical;min-height:100px;}
 @keyframes confettiFall{0%{transform:translateY(-20px) rotate(0deg);opacity:1;}100%{transform:translateY(100vh) rotate(720deg);opacity:0;}}
 @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
 #page-ticket{padding:16px 16px 110px;}
-.ticket-card{background:linear-gradient(135deg,#1C1C1C,#141414);border-radius:24px;overflow:hidden;border:1px solid var(--glass-border);box-shadow:0 24px 60px rgba(0,0,0,.5);}
-.ticket-card, .ticket-card * { color: #ffffff !important; }
-.ticket-card .t-label { color: #aaaaaa !important; }
-.ticket-card .qr-id { color: #bbbbbb !important; }
-.ticket-card .t-action-btn { background: rgba(255,255,255,0.12) !important; border-color: rgba(255,255,255,0.2) !important; color: #ffffff !important; }
-.ticket-card .t-action-btn:hover { background: rgba(255,255,255,0.2) !important; }
+.ticket-card{background:var(--c-surface);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--c-border);box-shadow:var(--sh-md);margin:0 16px 24px;}
 .ticket-banner{height:180px;background-size:cover;background-position:center;position:relative;}
-.ticket-banner-grad{position:absolute;inset:0;background:linear-gradient(0deg,#1C1C1C 0%,transparent 60%);}
+.ticket-banner-grad{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.35) 0%,transparent 60%);}
 .ticket-body{padding:20px;}
-.ticket-event-name{font-family:"Bebas Neue",sans-serif;font-size:32px;letter-spacing:2px;margin-bottom:4px;}
-.ticket-date-venue{font-size:13px;color:#bbbbbb;margin-bottom:16px;}
+.ticket-event-name{font:400 var(--fs-28)/1.1 var(--font-display);letter-spacing:1.5px;margin-bottom:4px;color:var(--c-text);overflow-wrap:anywhere;}
+.ticket-date-venue{font-size:var(--fs-14);color:var(--c-text-2);margin-bottom:16px;}
 .ticket-divider{position:relative;margin:16px -20px;height:2px;}
 .ticket-divider::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,var(--glass-border) 0,var(--glass-border) 8px,transparent 8px,transparent 16px);}
 .ticket-holder{display:flex;justify-content:space-between;margin-bottom:12px;}
 .t-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;}
 .t-value{font-size:14px;font-weight:600;}
 .qr-wrap{display:flex;flex-direction:column;align-items:center;margin:16px 0;}
-.qr-ring{width:160px;height:160px;border-radius:20px;background:white;padding:12px;position:relative;}
-.qr-ring::before{content:"";position:absolute;inset:-4px;border-radius:24px;background:conic-gradient(var(--red),var(--purple),var(--neon),var(--red));z-index:-1;animation:spin 3s linear infinite;}
+.qr-ring{width:240px;height:240px;border-radius:20px;background:#fff;padding:16px;position:relative;box-sizing:content-box;}
+.qr-ring::before{content:"";position:absolute;inset:-3px;border-radius:24px;background:linear-gradient(135deg,var(--c-primary),var(--c-accent));z-index:-1;}
 @keyframes spin{to{transform:rotate(360deg);}}
-.qr-inner{width:100%;height:100%;background:white;border-radius:12px;display:flex;align-items:center;justify-content:center;}
-.qr-id{font-family:"Space Mono",monospace;font-size:12px;color:#888888 !important;margin-top:12px;letter-spacing:1px;}
+.qr-inner{width:100%;height:100%;background:#fff;display:flex;align-items:center;justify-content:center;}
+.qr-id{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--c-text-2);margin-top:12px;letter-spacing:.5px;text-align:center;word-break:break-all;}
 .ticket-actions{display:flex;gap:10px;margin-top:20px;}
-.t-action-btn{flex:1;padding:12px;border-radius:12px;border:1px solid var(--glass-border);background:var(--glass);color:var(--white);font-size:12px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;}
+.t-action-btn{flex:1;min-height:var(--tap);padding:0 12px;border-radius:var(--r-md);border:1px solid var(--c-border-strong);background:var(--c-surface);color:var(--c-text);font:600 var(--fs-14)/1 var(--font-sans);cursor:pointer;transition:background-color var(--dur) var(--ease),transform var(--dur-fast) var(--ease);}
 #page-mytickets{padding:0 0 110px;}
 .tl-card{background:var(--bg2);border-radius:16px;overflow:hidden;margin:0 16px 12px;border:1px solid var(--glass-border);cursor:pointer;}
 .tl-img{height:110px;background-size:cover;background-position:center;position:relative;}
@@ -241,7 +237,7 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .notif-content span{font-size:12px;color:var(--grey);}
 .notif-time{margin-left:auto;font-size:12px;color:var(--muted);flex-shrink:0;}
 #page-profile{padding:0 0 110px;}
-.profile-hero{background:linear-gradient(180deg,#1C1C1C,var(--bg));padding:40px 20px 24px;text-align:center;}
+.profile-hero{background:linear-gradient(180deg,var(--c-primary-subtle),var(--c-surface));padding:40px 20px 24px;text-align:center;}
 .profile-avatar{width:88px;height:88px;min-width:88px;flex:0 0 88px;aspect-ratio:1;border-radius:50%;box-sizing:border-box;background:linear-gradient(135deg,var(--purple),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;line-height:1;letter-spacing:0;text-align:center;margin:0 auto 12px;border:3px solid rgba(255,255,255,.9);box-shadow:0 5px 18px rgba(0,0,0,.28);overflow:hidden;}
 .profile-name{font-size:22px;font-weight:700;margin-bottom:4px;}
 .profile-email{font-size:13px;color:var(--grey);margin-bottom:16px;}
@@ -251,9 +247,9 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .profile-stat-num{font-family:"Space Mono",monospace;font-size:22px;font-weight:700;}
 .profile-stat-label{font-size:12px;color:var(--muted);}
 .psec-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 6px;padding:0 16px;}
-.p-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg2);border-radius:14px;margin:0 16px 2px;cursor:pointer;transition:all .2s;}
+.p-item{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 16px;background:var(--c-surface-2);border-radius:var(--r-md);margin:0 16px 4px;cursor:pointer;transition:background-color var(--dur) var(--ease);}
 .p-item:hover{background:var(--bg3);}
-.p-item-icon{width:36px;height:50px;border-radius:10px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.p-item-icon{width:36px;height:36px;border-radius:var(--r-sm);background:var(--c-surface-3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
 .p-item-label{font-size:14px;font-weight:500;flex:1;}
 .p-item-arrow{color:var(--muted);font-size:18px;}
 .bh-card{background:var(--bg2);border-radius:14px;padding:14px;margin:0 16px 10px;border:1px solid var(--glass-border);cursor:pointer;}
@@ -630,6 +626,66 @@ textarea.form-input{resize:vertical;min-height:100px;}
   .auth-page{background:var(--c-surface-2);}
   .auth-shell{min-height:auto;margin:48px auto;padding:var(--sp-6) var(--sp-8) var(--sp-8);background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-lg);box-shadow:var(--sh-md);}
   .splash-shell{min-height:560px;}
+}
+
+/* ── Buyer screens ── */
+.buyer-nav{display:none;}
+.buyer-nav-logo{display:none;}
+.buyer-nav-links{display:flex;flex:1;justify-content:space-around;gap:4px;}
+body[data-page="page-home"] .buyer-nav,body[data-page="page-explore"] .buyer-nav,body[data-page="page-mytickets"] .buyer-nav,
+body[data-page="page-notifications"] .buyer-nav,body[data-page="page-profile"] .buyer-nav{display:flex;}
+body.creator-mode .buyer-nav{display:none!important;}
+.nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.row-empty{padding:20px 4px;color:var(--c-text-2);font-size:var(--fs-14);}
+.hscroll .ui-state,.hscroll [aria-busy]{width:100%;}
+.hscroll [aria-busy]{display:flex;gap:12px;}
+.hscroll [aria-busy] .skeleton-card{width:168px;height:220px;flex-shrink:0;}
+.explore-grid>[aria-busy],.explore-grid>.ui-state{grid-column:1/-1;}
+.explore-grid>[aria-busy]{display:grid;grid-template-columns:inherit;gap:12px;}
+.explore-grid .skeleton-card{height:220px;margin:0;}
+.success-title{font:400 44px/1.05 var(--font-display);letter-spacing:2px;color:var(--c-success);margin:0 0 8px;}
+.success-card{width:100%;max-width:380px;margin-bottom:24px;padding:20px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-lg);box-shadow:var(--sh-sm);text-align:left;}
+.success-actions{display:flex;gap:12px;width:100%;max-width:380px;}
+.success-actions .btn{flex:1;}
+.booking-ref-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;}
+.booking-ref{font:700 var(--fs-14)/1.4 var(--font-mono);letter-spacing:.5px;color:var(--c-text);overflow-wrap:anywhere;}
+.ticket-holder .booking-ref-row{margin-bottom:0;}
+.qr-img{display:block;width:240px;height:240px;object-fit:contain;background:#fff;border-radius:var(--r-md);padding:16px;box-sizing:content-box;border:1px solid var(--c-border);margin:0 auto;}
+.t-label{font-size:var(--fs-12);color:var(--c-text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;}
+.t-value{color:var(--c-text);font-weight:600;}
+.profile-avatar{color:#fff;}
+.qty-btn:active,.t-action-btn:active{transform:scale(.96);}
+.hero-meta{color:#fff;}
+#page-home .hero-dots{bottom:auto;top:16px;left:auto;right:16px;}
+.search-bar input{min-height:var(--tap);}
+.order-total{color:var(--c-text);font-variant-numeric:tabular-nums;}
+.hero-tags .tag-pill{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.35);color:#fff;}
+
+/* Desktop: content column (max 1120px), grids, top navigation bar */
+@media (min-width:1024px){
+  .buyer-nav{top:0;bottom:auto;height:64px;padding:0 max(24px,calc(50% - 560px));justify-content:space-between;align-items:center;border-top:0;border-bottom:1px solid var(--c-border);box-shadow:var(--sh-sm);}
+  .buyer-nav-logo{display:block;height:40px;width:auto;object-fit:contain;cursor:pointer;}
+  .buyer-nav-links{flex:0 0 auto;gap:4px;}
+  .nav-btn{flex-direction:row;gap:8px;min-height:var(--tap);padding:0 16px;font-size:var(--fs-14);}
+  .nav-btn svg{width:18px;height:18px;}
+  body[data-page="page-home"],body[data-page="page-explore"],body[data-page="page-mytickets"],
+  body[data-page="page-notifications"],body[data-page="page-profile"]{padding-top:64px;}
+  #page-home,#page-explore,#page-mytickets,#page-notifications,#page-detail{max-width:1120px;margin:0 auto;}
+  #page-profile,#page-booking,#page-ticket{max-width:720px;margin:0 auto;}
+  .home-topbar>.vylogo,#page-explore .page-topbar>.vylogo,#page-mytickets .page-topbar>.vylogo{display:none;}
+  .page{padding-bottom:48px;}
+  .hero{height:440px;border-radius:var(--r-lg);margin:16px 16px 32px;}
+  .hscroll-wrap{overflow:visible;}
+  .hscroll{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;}
+  .event-card{width:auto;}
+  .explore-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+  .detail-hero{height:400px;border-radius:0 0 var(--r-lg) var(--r-lg);}
+  .sticky-cta{left:50%;right:auto;width:min(1120px,100%);transform:translateX(-50%);}
+  .sub-page.active{left:calc(50% - 360px);right:calc(50% - 360px);border-left:1px solid var(--c-border);border-right:1px solid var(--c-border);}
+  .tl-card,.notif-card{margin-left:0;margin-right:0;}
+  #ticketsList,#notifList{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:0 16px;}
+  #ticketsList>.ui-state,#notifList>.ui-state,#ticketsList>[aria-busy]{grid-column:1/-1;}
+  .qr-ring{width:280px;height:280px;}
 }
 </style>
 <!-- App-only styles: enabled by scripts/build-cordova.js (media="all"). -->
@@ -1300,6 +1356,17 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 </div>
 </div>
 
+<!-- BUYER NAVIGATION: bottom bar on mobile, top bar from 1024px -->
+<nav class="bottom-nav buyer-nav" id="buyerNav" aria-label="Main">
+  <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo buyer-nav-logo" alt="BLAK Tickets" onclick="navigateBuyerHome()"/>
+  <div class="buyer-nav-links">
+    <button type="button" class="nav-btn" data-nav-page="page-home" onclick="showPage('page-home',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/></svg><span>Home</span></button>
+    <button type="button" class="nav-btn" data-nav-page="page-explore" onclick="showPage('page-explore',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>Explore</span></button>
+    <button type="button" class="nav-btn" data-nav-page="page-mytickets" onclick="showPage('page-mytickets',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M13 6v12" stroke-dasharray="2 2"/></svg><span>Tickets</span></button>
+    <button type="button" class="nav-btn" data-nav-page="page-profile" onclick="showPage('page-profile',this)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Profile</span></button>
+  </div>
+</nav>
+
 <!-- LOCATION PICKER -->
 <div class="location-sheet-backdrop" id="locationSheet" onclick="if(event.target===this)closeLocationSheet();">
   <div class="location-sheet" role="dialog" aria-modal="true" aria-labelledby="locationSheetTitle">
@@ -1619,7 +1686,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
   <div class="order-row" id="discountRow" style="display:none;color:#22c55e;"><span id="couponLabel">Coupon discount</span><span id="discountAmt">—</span></div>
   <div class="order-row"><span id="feePctLabel">Platform fee</span><span id="feeAmt">—</span></div>
   <div class="order-row"><span id="gstPctLabel">GST</span><span id="gstAmt">—</span></div>
-  <div class="order-row" style="font-weight:700;font-size:15px;border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;padding-top:10px;"><span>Total</span><span id="totalAmt" style="font-family:'Space Mono',monospace;color:var(--neon)">—</span></div>
+  <div class="order-row" style="font-weight:700;font-size:15px;border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;padding-top:10px;"><span>Total</span><span id="totalAmt" class="order-total">—</span></div>
 </div>
 
 <button class="cta-full" onclick="nextBStep(3)" style="margin-top:14px;">Proceed to Payment →</button>
@@ -1630,7 +1697,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div class="pay-option" onclick="selPay(this)"><div class="pay-icon">💳</div><div class="pay-info"><p>Debit / Credit Card</p><span>Visa, Mastercard, Rupay</span></div><div class="pay-radio"></div></div>
 <div class="pay-option" onclick="selPay(this)"><div class="pay-icon">💰</div><div class="pay-info"><p>Net Banking</p><span>All major banks</span></div><div class="pay-radio"></div></div>
 <div class="pay-option" onclick="selPay(this)"><div class="pay-icon">👛</div><div class="pay-info"><p>Wallet</p><span>Mobikwik, Freecharge</span></div><div class="pay-radio"></div></div>
-<div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:20px;border:1px solid var(--glass-border);"><div style="font-size:13px;color:var(--muted);margin-bottom:4px;">Amount to pay</div><div id="payAmountLabel" style="font-family:'Space Mono',monospace;font-size:24px;font-weight:700;color:var(--neon)">₹4,836</div></div>
+<div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:20px;border:1px solid var(--glass-border);"><div style="font-size:13px;color:var(--muted);margin-bottom:4px;">Amount to pay</div><div id="payAmountLabel" class="order-total" style="font-size:28px;font-weight:700;">₹4,836</div></div>
 <button class="cta-full" id="payNowBtn" onclick="payWithPayU()">🔒 Pay via PayU — ₹4,836</button>
 </div>
 </div>
@@ -1640,23 +1707,23 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div class="confetti-wrap" id="confettiWrap"></div>
 <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo" style="height:68px;width:auto;object-fit:contain;" alt="BLAK Tickets"/>
 <div class="success-icon">🎉</div>
-<div style="font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:3px;color:#4ade80;margin-bottom:8px;">Booking Confirmed!</div>
+<h1 class="success-title">Booking Confirmed!</h1>
 <div id="successMessage" style="color:var(--grey);font-size:15px;margin-bottom:20px;">Your ticket is ready. Check your email!</div>
-<div style="background:var(--bg2);border-radius:20px;padding:20px;width:100%;max-width:340px;margin-bottom:24px;border:1px solid var(--glass-border);">
+<div class="success-card">
 <div style="font-size:12px;color:var(--muted);margin-bottom:3px;">Booking Reference</div>
-<div id="successRef" style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;margin-bottom:12px;">—</div>
+<div class="booking-ref-row"><div id="successRef" class="booking-ref">—</div><button type="button" class="btn btn-quiet btn-compact" onclick="copyBookingRef()" aria-label="Copy booking reference">Copy</button></div>
 <div style="font-size:12px;color:var(--muted);margin-bottom:3px;">Event</div>
 <div id="successEvt" style="font-size:14px;font-weight:600;margin-bottom:12px;">—</div>
 <div style="font-size:12px;color:var(--muted);margin-bottom:3px;">Ticket</div>
 <div id="successTkt" style="font-size:14px;font-weight:600;margin-bottom:16px;">—</div>
 <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Entry QR Code</div>
-<div style="display:flex;justify-content:center;"><img id="successQrImage" alt="Booking QR code" style="width:190px;height:190px;object-fit:contain;background:#fff;border-radius:12px;padding:8px;"/></div>
+<div style="display:flex;justify-content:center;"><img id="successQrImage" class="qr-img" alt="Booking QR code"/></div>
 <div id="successQrId" style="font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);text-align:center;margin-top:8px;word-break:break-all;">QR code will appear after confirmation</div>
 <div class="ticket-actions" style="margin-top:14px;"><button class="t-action-btn" onclick="downloadTicketQr()">Download QR</button><button class="t-action-btn" onclick="shareTicketWhatsApp()">WhatsApp</button><button class="t-action-btn" onclick="shareTicketSms()">SMS</button></div>
 </div>
-<div style="display:flex;gap:12px;width:100%;max-width:340px;">
-<button class="btn-ghost" style="flex:1;" onclick="showPage('page-ticket')">View Ticket</button>
-<button class="btn-red" style="flex:1;border-radius:12px;justify-content:center;" onclick="showPage('page-home')">Explore More</button>
+<div class="success-actions">
+<button type="button" class="btn btn-secondary" onclick="showPage('page-ticket')">View Ticket</button>
+<button type="button" class="btn btn-primary" onclick="showPage('page-home')">Explore More</button>
 </div>
 </div>
 
@@ -1673,10 +1740,10 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 <div class="ticket-date-venue" id="ticketDateVenue">Date · Venue</div>
 <div class="ticket-divider"></div>
 <div class="ticket-holder"><div><div class="t-label">Account Holder</div><div class="t-value" id="ticketHolder">—</div></div><div><div class="t-label">Ticket Type</div><div class="t-value" id="ticketType">—</div></div></div>
-<div class="ticket-holder"><div><div class="t-label">Booking ID</div><div class="t-value" id="ticketBookingId" style="font-family:'Space Mono',monospace;font-size:12px;">—</div></div><div><div class="t-label">Quantity</div><div class="t-value" id="ticketQty">—</div></div></div>
+<div class="ticket-holder"><div><div class="t-label">Booking ID</div><div class="booking-ref-row"><div class="t-value booking-ref" id="ticketBookingId">—</div><button type="button" class="btn btn-quiet btn-compact" onclick="copyBookingRef()" aria-label="Copy booking reference">Copy</button></div></div><div><div class="t-label">Quantity</div><div class="t-value" id="ticketQty">—</div></div></div>
 <div class="ticket-divider"></div>
 <div class="qr-wrap">
-<div class="qr-ring"><div class="qr-inner"><img id="ticketQrImage" alt="Booking QR code" style="width:100%;height:100%;object-fit:contain;border-radius:10px;"/></div></div>
+<div class="qr-ring"><div class="qr-inner"><img id="ticketQrImage" alt="Booking QR code" style="width:100%;height:100%;object-fit:contain;"/></div></div>
 <div class="qr-id" id="ticketQrId">Booking QR will appear after confirmation</div>
 </div>
 <div class="ticket-actions"><button class="t-action-btn" onclick="downloadTicketQr()">Download QR</button><button class="t-action-btn" onclick="shareTicketWhatsApp()">WhatsApp</button><button class="t-action-btn" onclick="shareTicketSms()">SMS</button><button class="t-action-btn" onclick="shareTicket()">Share</button></div>
@@ -1693,8 +1760,8 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 
 <!-- NOTIFICATIONS -->
 <div class="page" id="page-notifications">
-<div class="page-topbar"><div class="back-btn" onclick="goBack()"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo" style="height:50px;width:auto;object-fit:contain;" alt="BLAK Tickets"/><span class="page-topbar-title">Notifications</span><span style="font-size:13px;color:var(--red);cursor:pointer;" onclick="markAllNotificationsRead()">Mark all read</span></div>
-<div id="notifList"><div style="text-align:center;color:var(--muted);padding:60px 20px;font-size:14px;">No notifications yet</div></div>
+<div class="page-topbar"><div class="back-btn" onclick="goBack()"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="vylogo" style="height:50px;width:auto;object-fit:contain;" alt="BLAK Tickets"/><span class="page-topbar-title">Notifications</span><button type="button" class="link-btn" onclick="markAllNotificationsRead()">Mark all read</button></div>
+<div id="notifList"></div>
 
 <!-- NOTIFICATION DETAIL MODAL -->
 <div id="notifModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);">
@@ -1713,7 +1780,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 
 <!-- PROFILE -->
 <div class="page" id="page-profile">
-<div class="page-topbar"><div class="back-btn" onclick="navigateBuyerHome()" style="height:40px;"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div><span class="page-topbar-title">Profile</span><div class="icon-btn" onclick="showPage('page-notifications')"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div></div>
+<div class="page-topbar"><div class="back-btn" onclick="navigateBuyerHome()"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div><span class="page-topbar-title">Profile</span><div class="icon-btn" onclick="showPage('page-notifications')"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div></div>
 <div class="profile-hero">
 <div class="profile-avatar">👤</div>
 <div class="profile-name" id="profileName">—</div>
@@ -2719,6 +2786,13 @@ function showPage(id,navBtn){
   var page=document.getElementById(id);
   if(!page){ console.warn('Missing page:', id); return; }
   page.classList.add('active');
+  document.body.setAttribute('data-page',id);
+  document.querySelectorAll('.buyer-nav [data-nav-page]').forEach(function(b){
+    var on=b.getAttribute('data-nav-page')===id;
+    b.classList.toggle('active',on);
+    if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
+  });
+  if(id==='page-mytickets'&&typeof refreshMyTicketsPage==='function')refreshMyTicketsPage();
   if(id==='page-booking'&&typeof refreshPendingPaymentNotice==='function')refreshPendingPaymentNotice();
   if(pageHistory[pageHistory.length-1]!==id)pageHistory.push(id);
   pushBrowserRoute(id);
@@ -4515,6 +4589,19 @@ changeQty = function(d){
   updateOrderSummary();
 };
 
+// "BKG-6ea9686b28807c4ed79adfd2" → "BKG-6EA9 686B 2880 7C4E D79A DFD2" for reading out to support.
+function formatBookingRef(id){
+  var m=String(id||'').match(/^([A-Za-z]+-)(.+)$/);
+  if(!m)return String(id||'');
+  return m[1]+m[2].toUpperCase().replace(/(.{4})(?=.)/g,'$1 ');
+}
+function copyBookingRef(){
+  var id=CURRENT_BOOKING&&CURRENT_BOOKING.id;
+  if(!id){showToast('No booking reference yet');return;}
+  var done=function(){showToast('Booking reference copied');};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(id).then(done,function(){showToast(id);});
+  else showToast(id);
+}
 function renderTicket(booking){
   if(!booking)return;
   function set(id,value){var element=document.getElementById(id);if(element)element.textContent=value||'\u2014';}
@@ -4522,7 +4609,7 @@ function renderTicket(booking){
   set('ticketDateVenue',(booking.eventDate||'\u2014')+' \u00b7 '+(booking.eventVenue||'\u2014'));
   set('ticketHolder',booking.buyerName||booking.buyer||booking.buyerEmail||'BLAK Tickets Guest');
   set('ticketType',booking.ticketType);
-  set('ticketBookingId',booking.id);
+  set('ticketBookingId',formatBookingRef(booking.id));
   set('ticketQty',String(booking.qty||1));
   set('ticketQrId',booking.id);
   setBannerBackground(document.getElementById('ticketBanner'),booking.eventBanner,'');
@@ -4558,7 +4645,7 @@ function renderSuccessBooking(booking){
   var successEvt = document.getElementById('successEvt');
   var successTkt = document.getElementById('successTkt');
   var successMessage = document.getElementById('successMessage');
-  if(successRef) successRef.textContent = booking.id || '—';
+  if(successRef) successRef.textContent = booking.id ? formatBookingRef(booking.id) : '—';
   if(successEvt) successEvt.textContent = booking.eventName || '—';
   if(successTkt) successTkt.textContent = (booking.ticketType||'Ticket') + ' x ' + (booking.qty||1);
   if(successMessage) successMessage.textContent = 'Your ticket for '+(booking.eventName||'this event')+' is ready. Check your email!';
@@ -4574,6 +4661,7 @@ async function loadBuyerBookingHistory(){
     var data=await readAuthResponse(resp);
     if(resp.status===401){clearRejectedProfileToken(token);return STORE.bookings;}
     if(!resp.ok)throw new Error(data.error||'Could not load booking history');
+    STORE.bookingsError=false;
     (data.bookings||[]).forEach(function(booking){
       var existing=STORE.bookings.find(function(item){return item.id===booking.id;});
       if(existing)Object.assign(existing,booking);
@@ -4582,6 +4670,7 @@ async function loadBuyerBookingHistory(){
     return STORE.bookings;
   }catch(err){
     console.error('Booking history sync failed:',err);
+    STORE.bookingsError=true;
     return STORE.bookings;
   }
 }
@@ -5600,7 +5689,7 @@ function refreshBuyerHome() {
     }
     el.innerHTML='';
     if(filtered.length){ filtered.forEach(function(ev){ el.appendChild(makeCard(ev)); }); }
-    else { el.innerHTML='<div style="padding:20px;color:var(--muted);font-size:13px;">No events yet</div>'; }
+    else { var empty=document.createElement('div'); empty.className='row-empty'; empty.textContent='No events here yet'; el.replaceChildren(empty); }
   });
   if(live.length>0){
     var slides=document.getElementById('heroSlides');
@@ -5609,7 +5698,7 @@ function refreshBuyerHome() {
       live.slice(0,3).forEach(function(ev){
         var minPrice=getEventMinPrice(ev);
         var priceStr=formatPrice(minPrice);
-        var priceColor=minPrice===0?'#4ade80':'var(--neon)';
+        var priceColor=minPrice===0?'#86EFAC':'#FFFFFF'; // on the dark hero gradient
         var saved=SAVED_EVENT_IDS.indexOf(ev.id)>=0;
         var imgStyle=ev.banner?'background-image:'+cssUrl(mediaUrl(ev.banner)):'background:var(--bg3)';
         var slide=document.createElement('div');
@@ -5693,17 +5782,25 @@ filterExplore = function(q) {
       grid.appendChild(card);
     });
   } else {
-    grid.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);grid-column:span 2;">No results</div>';
+    var box=uiState(grid,'empty',{icon:'🔎',title:'No events found',text:'Try another search or filter, or come back soon.'}); if(box)box.style.gridColumn='1/-1';
   }
 };
 
+// My Tickets page: placeholders while the list loads, then the current tab.
+var MY_TICKETS_TAB='upcoming';
+function refreshMyTicketsPage(){
+  var list=document.getElementById('ticketsList');
+  if(!list||!isBuyerSignedIn()){if(typeof populateTickets==='function')populateTickets(MY_TICKETS_TAB);return;}
+  if(MY_TICKETS_TAB!=='saved')uiSkeleton(list,2,'card');
+  loadBuyerBookingHistory().then(function(){populateTickets(MY_TICKETS_TAB);});
+}
 populateTickets = function(f) {
   var list=document.getElementById('ticketsList');
   if(!list) return;
   if(f==='saved'){
     var savedEvents=SAVED_EVENT_IDS.map(function(id){return (STORE.events||[]).find(function(ev){return ev.id===id;});}).filter(Boolean);
     if(!savedEvents.length){
-      list.innerHTML='<div style="text-align:center;color:var(--muted);padding:40px;font-size:14px;">No saved events yet</div>';
+      uiState(list,'empty',{icon:'♡',title:'No saved events yet',text:'Tap Save on an event to keep it here.',actionLabel:'Browse events',onAction:function(){showPage('page-explore');}});
       return;
     }
     list.innerHTML='';
@@ -5724,9 +5821,16 @@ populateTickets = function(f) {
     });
     return;
   }
+  MY_TICKETS_TAB=f;
   var filtered = STORE.bookings.filter(function(b){ return f==='past'?b.status==='past':b.status==='upcoming'; });
   if(!filtered.length){
-    list.innerHTML='<div style="text-align:center;color:var(--muted);padding:40px;font-size:14px;">No '+escapeHtml(f)+' bookings</div>';
+    if(STORE.bookingsError){
+      uiState(list,'error',{text:'We could not load your tickets. Check your connection.',onAction:function(){refreshMyTicketsPage();}});
+      return;
+    }
+    uiState(list,'empty',{icon:'🎟️',title:f==='past'?'No past bookings':'No upcoming tickets',
+      text:f==='past'?'Events you attended appear here.':'Tickets you book appear here.',
+      actionLabel:'Browse events',onAction:function(){showPage('page-explore');}});
     return;
   }
   list.innerHTML='';
@@ -7743,7 +7847,12 @@ function cleanSharedLinkParam(value){
   return String(value||'').trim().replace(/[.)\]\s]+$/g,'');
 }
 
+var EVENTS_LOADED_ONCE=false;
 async function loadPublishedEvents(){
+  if(!EVENTS_LOADED_ONCE){
+    ['row-trending','row-nearby','row-free','row-weekend','row-upcoming','row-ai'].forEach(function(id){uiSkeleton(document.getElementById(id),3,'card');});
+    uiSkeleton(document.getElementById('exploreGrid'),4,'card');
+  }
   try {
     var resp=await fetch(apiUrl('/events'));
     var data=await readAuthResponse(resp);
@@ -7754,10 +7863,17 @@ async function loadPublishedEvents(){
       var index=(STORE.events||[]).findIndex(function(existing){return existing.id===event.id;});
       if(index>=0) STORE.events[index]=event; else STORE.events.push(event);
     });
+    EVENTS_LOADED_ONCE=true;
     refreshBuyerHome();
     refreshExplore();
   } catch(err) {
     console.error('Published events load failed:',err);
+    if(!EVENTS_LOADED_ONCE){
+      var retry=function(){loadPublishedEvents();};
+      uiState(document.getElementById('row-trending'),'error',{text:'We could not load events. Check your connection.',onAction:retry});
+      ['row-nearby','row-free','row-weekend','row-upcoming','row-ai'].forEach(function(id){var el=document.getElementById(id);if(el)el.replaceChildren();});
+      uiState(document.getElementById('exploreGrid'),'error',{text:'We could not load events. Check your connection.',onAction:retry});
+    }
   }
 }
 
@@ -8051,7 +8167,7 @@ function populateNotifs(){
   if(!list)return;
   NOTIFS=STORE.notifications||[];
   if(!(NOTIFS||[]).length){
-    list.innerHTML='<div style="text-align:center;color:var(--muted);padding:60px 20px;font-size:14px;">No notifications yet</div>';
+    uiState(list,'empty',{icon:'🔔',title:'No notifications yet',text:'Booking confirmations and event updates appear here.'});
     return;
   }
   list.innerHTML = NOTIFS.map((n,i)=>`
