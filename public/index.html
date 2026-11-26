@@ -721,6 +721,26 @@ body.creator-mode .buyer-nav{display:none!important;}
 @media (min-width:1024px){
   #page-staff-dashboard,#page-staff-qr{max-width:960px;margin:0 auto;}
 }
+
+/* ── Admin: same tokens in both modes; dense on desktop (36px with a mouse), 44px on touch ── */
+#page-admin :is(.adm-btn,.adm-tab,.adm-input,.adm-search,.adm-select){min-height:36px;}
+#page-admin .adm-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+@media (pointer:coarse){
+  #page-admin :is(.adm-btn,.adm-tab,.adm-input,.adm-search,.adm-select,.adm-nav-item,button){min-height:var(--tap);}
+  #page-admin :is(.adm-input,.adm-search,.adm-select,input,select,textarea){font-size:var(--fs-16)!important;}
+}
+
+#page-admin .adm-swatch{width:36px;height:36px;border-radius:50%;cursor:pointer;flex-shrink:0;}
+#page-admin [onclick^="admSetNotifIcon"]{min-width:36px;min-height:36px;}
+/* Extra badge colours: darker shades in light mode (AA on their tint); dark mode keeps the bright ones */
+.adm-light .adm-badge.blue{color:#1D4ED8;}
+.adm-light .adm-badge.orange{color:#C2410C;}
+.adm-light .adm-badge.purple{color:#7E22CE;}
+/* Phones: inline 2-up grids can't be pushed wider than the screen; chart/form card grids stack */
+#page-admin .adm-panel div[style*="display:grid"] > *{min-width:0;}
+@media (max-width:599px){
+  #page-admin .adm-panel div[style*="display:grid"]:has(> .adm-card){grid-template-columns:minmax(0,1fr)!important;}
+}
 </style>
 <!-- App-only styles: enabled by scripts/build-cordova.js (media="all"). -->
 <style data-platform="app" media="not all">
@@ -8054,9 +8074,21 @@ document.addEventListener('keydown',function(e){
   e.preventDefault();
   t.click();
 });
+// Fields without a linked label get an accessible name from the text shown
+// right before them (a short label-like element), else from the placeholder.
+function labelUnlabeledFields(root){
+  (root||document).querySelectorAll('input:not([type="hidden"]):not([aria-label]):not([aria-labelledby]),select:not([aria-label]):not([aria-labelledby]),textarea:not([aria-label]):not([aria-labelledby])').forEach(function(f){
+    if(f.labels&&f.labels.length)return; // already has a <label for> or a wrapping <label>
+    var text='';
+    var prev=f.previousElementSibling;
+    if(prev&&/^(LABEL|DIV|SPAN|P)$/.test(prev.tagName)&&!prev.children.length)text=(prev.textContent||'').trim();
+    if(!text||text.length>60)text=(f.getAttribute('placeholder')||'').trim();
+    if(text)f.setAttribute('aria-label',text);
+  });
+}
 (function(){
   var pending=null;
-  function run(){pending=null;makeClickablesAccessible(document);}
+  function run(){pending=null;makeClickablesAccessible(document);labelUnlabeledFields(document);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run);else run();
   new MutationObserver(function(){if(!pending)pending=setTimeout(run,150);}).observe(document.documentElement,{childList:true,subtree:true});
 })();
@@ -8563,7 +8595,7 @@ function admDrawFunnel(){
     return '<div style="margin-bottom:9px;">'
       +'<div style="display:flex;justify-content:space-between;margin-bottom:3px;">'
       +'<span style="font-size:12px;color:var(--adm-text);">'+escapeHtml(s.label)+'</span>'
-      +'<span style="font-size:12px;color:var(--adm-text2);">'+s.val.toLocaleString()+(i>0?' <span style="color:#ef4444;">-'+escapeHtml(dropOff)+'%</span>':'')+'</span></div>'
+      +'<span style="font-size:12px;color:var(--adm-text2);">'+s.val.toLocaleString()+(i>0?' <span style="color:var(--c-danger);">-'+escapeHtml(dropOff)+'%</span>':'')+'</span></div>'
       +'<div style="height:5px;background:var(--adm-bg3);border-radius:4px;overflow:hidden;">'
       +'<div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#8B2010,#c0392b);"></div></div></div>';
   }).join('');
@@ -8581,7 +8613,7 @@ function admDrawCities(){
       +'<span style="font-size:12px;color:var(--adm-text);">'+escapeHtml(c.city)+'</span>'
       +'<span style="font-size:12px;color:var(--adm-text2);">'+c.bookings.toLocaleString()+' bookings</span></div>'
       +'<div style="height:5px;background:var(--adm-bg3);border-radius:4px;overflow:hidden;">'
-      +'<div style="width:'+escapeHtml(c.pct)+'%;height:100%;background:#00D4D4;"></div></div></div>';
+      +'<div style="width:'+escapeHtml(c.pct)+'%;height:100%;background:var(--c-accent);"></div></div></div>';
   }).join('')||'<div style="font-size:12px;color:var(--adm-text2);">No booking cities yet</div>';
 }
 
@@ -8595,7 +8627,7 @@ function admDrawCreatorLeaderboard(){
       +'<span style="font-size:16px;flex-shrink:0;">'+escapeHtml(medals[i])+'</span>'
       +'<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(c.name)+'</div>'
       +'<div style="font-size:12px;color:var(--adm-text2);">'+escapeHtml(c.events)+' events</div></div>'
-      +'<div style="font-size:12px;color:#22c55e;">₹'+c.rev.toLocaleString('en-IN')+'</div></div>';
+      +'<div style="font-size:12px;color:var(--c-success);">₹'+c.rev.toLocaleString('en-IN')+'</div></div>';
   }).join('');
 }
 
@@ -8631,7 +8663,7 @@ function admRenderBuyers(){
       +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(b.status)+'</span></td>'
       +'<td><div style="display:flex;gap:4px;">'
       +(b.status==='Active'
-        ? '<button onclick="admSuspendBuyer(\''+jsStr(b.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>'
+        ? '<button onclick="admSuspendBuyer(\''+jsStr(b.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Suspend</button>'
         : '<button onclick="admReinstateUser(\''+jsStr(b.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>')
       +'<button onclick="admNotifyUser(\''+jsStr(b.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
       +'</div></td></tr>';
@@ -8666,8 +8698,8 @@ function admRenderAllUsers(){
       +'<td><div style="display:flex;gap:4px;">'+(user.source==='buyer'
       ? (suspended
         ? '<button onclick="admReinstateUser(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
-        : '<button onclick="admSuspendBuyer(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
-      : (suspended?'':'<button onclick="admSuspendCreator(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>'))+'<button onclick="admNotifyUser(decodeURIComponent(\''+jsStr(encodedName)+'\'))" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button></div></td></tr>';
+        : '<button onclick="admSuspendBuyer(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Suspend</button>')
+      : (suspended?'':'<button onclick="admSuspendCreator(decodeURIComponent(\''+jsStr(encodedId)+'\'))" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Suspend</button>'))+'<button onclick="admNotifyUser(decodeURIComponent(\''+jsStr(encodedName)+'\'))" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button></div></td></tr>';
   }).join('')+admLoadMoreRow('users','',6);
 }
 
@@ -8700,7 +8732,7 @@ function admRenderCreators(){
       +'<button onclick="admOpenCreatorReview(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-teal">View Documents</button>'
       +(c.status==='Suspended'
         ? '<button onclick="admReinstateCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reinstate</button>'
-        : '<button onclick="admSuspendCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Suspend</button>')
+        : '<button onclick="admSuspendCreator(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Suspend</button>')
       +'<button onclick="admNotifyUser(\''+jsStr(c.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Notify</button>'
       +'</div></td></tr>';
   }).join('')+admLoadMoreRow('creators','',8);
@@ -8779,7 +8811,7 @@ function admCreatorDocumentHtml(doc){
   }
   var isImage=/^image\//i.test(doc.contentType||'') || /\.(png|jpe?g|webp|gif)$/i.test(name);
   return '<div style="display:block;border:1px solid '+(verified?'rgba(34,197,94,.45)':'var(--adm-border)')+';border-radius:8px;overflow:hidden;background:var(--adm-bg2);">'
-    +(isImage?'<a href="'+safeUrl(url)+'" target="_blank" rel="noopener"><img src="'+safeUrl(url)+'" alt="'+escapeHtml(name)+'" style="width:100%;height:150px;object-fit:cover;display:block;background:#000;"></a>':'')
+    +(isImage?'<a href="'+safeUrl(url)+'" target="_blank" rel="noopener"><img src="'+safeUrl(url)+'" alt="'+escapeHtml(name)+'" style="width:100%;height:150px;object-fit:cover;display:block;background:var(--c-surface);"></a>':'')
     +'<div style="padding:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">'
     +'<div style="min-width:0;"><div style="font-size:12px;font-weight:800;color:var(--adm-text);">'+escapeHtml(type)+'</div><div style="font-size:12px;color:var(--adm-text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(name)+'</div></div>'
     +'<div style="display:flex;gap:5px;align-items:center;"><a href="'+safeUrl(url)+'" target="_blank" rel="noopener" class="adm-btn adm-btn-sm adm-btn-ghost" style="text-decoration:none;">Open</a>'
@@ -8838,11 +8870,11 @@ function admShowCreatorReviewModal(c){
   var allDocsVerified=docs.length>0&&docs.every(function(doc){return doc.verificationStatus==='Verified';});
   var modal=document.createElement('div');
   modal.id='creatorKycReviewModal';
-  modal.style.cssText='--adm-bg:#0b0b0b;--adm-bg2:#151515;--adm-border:#343434;--adm-text:#fff;--adm-text2:#b8b8b8;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);color:#fff;backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px;';
+  modal.style.cssText='--adm-bg:var(--c-surface);--adm-bg2:var(--c-surface-2);--adm-border:var(--c-border);--adm-text:var(--c-text);--adm-text2:var(--c-text-2);position:fixed;inset:0;z-index:10000;background:var(--c-overlay);color:var(--c-text);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px;';
   modal.innerHTML='<div style="width:100%;max-width:760px;max-height:90vh;overflow:auto;background:var(--adm-bg);border:1px solid var(--adm-border);border-radius:16px;padding:18px;box-shadow:0 20px 80px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px;">'
     +'<div><div style="font-size:18px;font-weight:900;color:var(--adm-text);">Creator KYC Review</div><div style="font-size:12px;color:var(--adm-text2);margin-top:4px;">Check submitted files before verification</div></div>'
-    +'<button type="button" data-close="1" aria-label="Close document review" title="Close" style="width:32px;height:32px;min-width:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #525252;background:#1f1f1f;color:#fff;font-family:Arial,sans-serif;font-size:17px;font-weight:600;line-height:1;box-shadow:none;cursor:pointer;">&#10005;</button></div>'
+    +'<button type="button" data-close="1" aria-label="Close document review" title="Close" style="width:32px;height:32px;min-width:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #525252;background:#1f1f1f;color:var(--c-text);font-family:Arial,sans-serif;font-size:17px;font-weight:600;line-height:1;box-shadow:none;cursor:pointer;">&#10005;</button></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">'
     +'<div style="padding:10px;background:var(--adm-bg2);border:1px solid var(--adm-border);border-radius:8px;"><div style="font-size:12px;color:var(--adm-text2);text-transform:uppercase;">Name</div><div style="font-weight:800;color:var(--adm-text);">'+escapeHtml(c.name)+'</div></div>'
     +'<div style="padding:10px;background:var(--adm-bg2);border:1px solid var(--adm-border);border-radius:8px;"><div style="font-size:12px;color:var(--adm-text2);text-transform:uppercase;">Email</div><div style="font-weight:800;color:var(--adm-text);word-break:break-word;">'+escapeHtml(c.email)+'</div></div>'
@@ -8852,10 +8884,10 @@ function admShowCreatorReviewModal(c){
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:16px;">'
     +(docs.length?docs.map(admCreatorDocumentHtml).join(''):'<div style="grid-column:1/-1;padding:18px;border:1px solid var(--adm-border);border-radius:8px;color:var(--adm-text2);text-align:center;">No documents found for this creator.</div>')
     +'</div>'
-    +(!allDocsVerified?'<div style="font-size:12px;color:#eab308;margin-bottom:10px;">Verify every submitted document to enable creator verification.</div>':'<div style="font-size:12px;color:#22c55e;margin-bottom:10px;">All submitted documents are verified. Close this review and verify the creator from the Status column.</div>')
+    +(!allDocsVerified?'<div style="font-size:12px;color:var(--c-warning-text);margin-bottom:10px;">Verify every submitted document to enable creator verification.</div>':'<div style="font-size:12px;color:var(--c-success);margin-bottom:10px;">All submitted documents are verified. Close this review and verify the creator from the Status column.</div>')
     +'<div style="display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;">'
     +'<button data-recent="1" class="adm-btn adm-btn-sm adm-btn-ghost">&#8592; Back to Recent Activity</button><div style="display:flex;gap:8px;">'
-    +(c.status==='Approved'?'<span class="adm-badge green" style="align-self:center;">Creator Verified</span>':'<button data-reject="1" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Reject</button>')
+    +(c.status==='Approved'?'<span class="adm-badge green" style="align-self:center;">Creator Verified</span>':'<button data-reject="1" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Reject</button>')
     +(allDocsVerified?'<button data-done="1" class="adm-btn adm-btn-sm adm-btn-green">Done</button>':'')
     +'</div></div></div></div>';
   document.body.appendChild(modal);
@@ -9075,7 +9107,7 @@ function admRenderCoupons(){
       +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(c.status)+'</span></td>'
       +'<td><div style="display:flex;gap:3px;">'
       +(c.status==='Active'
-        ? '<button onclick="admDeactivateCoupon(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Deactivate</button>'
+        ? '<button onclick="admDeactivateCoupon(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Deactivate</button>'
         : '<button onclick="admReactivateCoupon(\''+jsStr(c.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Reactivate</button>')
       +'</div></td></tr>';
   }).join('');
@@ -9173,7 +9205,7 @@ function admRenderAdmins(){
         +'<td><span class="adm-badge blue">'+escapeHtml(admRoleStaffPermissionText(s))+'</span></td>'
         +'<td><span class="adm-badge '+(active?'green':'red')+'">'+(active?'Active':'Suspended')+'</span></td>'
         +'<td style="font-size:12px;color:var(--adm-text2);">'+escapeHtml(created)+'</td>'
-        +'<td><button onclick="admRevokeRoleStaff(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Delete</button></td></tr>';
+        +'<td><button onclick="admRevokeRoleStaff(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Delete</button></td></tr>';
     }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff created yet</td></tr>';
     return;
   }
@@ -9193,7 +9225,7 @@ function admRenderAdmins(){
       +'<td style="font-size:12px;color:var(--adm-text2);">'+escapeHtml(lastLogin)+'</td>'
       +'<td>'+(isSuperAdmin() && a.role!=='Super Admin'
         ? (a.status==='Active'
-          ? '<button onclick="admRevokeAdmin(\''+jsStr(a.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Revoke</button>'
+          ? '<button onclick="admRevokeAdmin(\''+jsStr(a.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Revoke</button>'
             +' <button onclick="admResetAdminPassword(\''+jsStr(a.id)+'\',\''+jsStr(a.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost">Reset password</button>'
           : '<span style="font-size:12px;color:var(--adm-text2);">Revoked</span>')
         : '<span style="font-size:12px;color:var(--adm-text2);">—</span>')+'</td></tr>';
@@ -9212,13 +9244,13 @@ function confirmAdminRevoke(a){
   if(existing) existing.remove();
   var modal=document.createElement('div');
   modal.id='adminRevokeConfirmModal';
-  modal.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px;';
-  modal.innerHTML='<div style="width:100%;max-width:380px;background:#111;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;box-shadow:0 18px 70px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
-    +'<div style="width:48px;height:48px;border-radius:16px;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.32);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:#ef4444;font-size:24px;">!</div>'
-    +'<div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">Delete admin?</div>'
-    +'<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,.58);margin-bottom:18px;">This will permanently remove <b style="color:#fff;">'+escapeHtml(a.name)+'</b> from admin access.</div>'
+  modal.style.cssText='position:fixed;inset:0;z-index:10000;background:var(--c-overlay);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px;';
+  modal.innerHTML='<div style="width:100%;max-width:380px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:18px;padding:20px;box-shadow:0 18px 70px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
+    +'<div style="width:48px;height:48px;border-radius:16px;background:var(--c-danger-subtle);border:1px solid rgba(185,28,28,.3);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:var(--c-danger);font-size:24px;">!</div>'
+    +'<div style="font-size:18px;font-weight:800;color:var(--c-text);margin-bottom:6px;">Delete admin?</div>'
+    +'<div style="font-size:13px;line-height:1.5;color:var(--c-text-2);margin-bottom:18px;">This will permanently remove <b style="color:var(--c-text);">'+escapeHtml(a.name)+'</b> from admin access.</div>'
     +'<div style="display:flex;gap:10px;">'
-    +'<button data-cancel="1" style="flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Cancel</button>'
+    +'<button data-cancel="1" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--c-border);background:var(--c-surface-2);color:var(--c-text);font-size:13px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Cancel</button>'
     +'<button data-confirm="1" style="flex:1;padding:12px;border-radius:12px;border:none;background:#8B2010;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Delete</button>'
     +'</div></div>';
   document.body.appendChild(modal);
@@ -9256,13 +9288,13 @@ function confirmRoleStaffRevoke(s){
   if(existing) existing.remove();
   var modal=document.createElement('div');
   modal.id='roleStaffRevokeConfirmModal';
-  modal.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px;';
-  modal.innerHTML='<div style="width:100%;max-width:380px;background:#111;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;box-shadow:0 18px 70px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
-    +'<div style="width:48px;height:48px;border-radius:16px;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.32);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:#ef4444;font-size:24px;">!</div>'
-    +'<div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">Delete staff?</div>'
-    +'<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,.58);margin-bottom:18px;">This will permanently remove <b style="color:#fff;">'+escapeHtml(s.name)+'</b> from staff access.</div>'
+  modal.style.cssText='position:fixed;inset:0;z-index:10000;background:var(--c-overlay);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px;';
+  modal.innerHTML='<div style="width:100%;max-width:380px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:18px;padding:20px;box-shadow:0 18px 70px rgba(0,0,0,.65);font-family:\'DM Sans\',sans-serif;">'
+    +'<div style="width:48px;height:48px;border-radius:16px;background:var(--c-danger-subtle);border:1px solid rgba(185,28,28,.3);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:var(--c-danger);font-size:24px;">!</div>'
+    +'<div style="font-size:18px;font-weight:800;color:var(--c-text);margin-bottom:6px;">Delete staff?</div>'
+    +'<div style="font-size:13px;line-height:1.5;color:var(--c-text-2);margin-bottom:18px;">This will permanently remove <b style="color:var(--c-text);">'+escapeHtml(s.name)+'</b> from staff access.</div>'
     +'<div style="display:flex;gap:10px;">'
-    +'<button data-cancel="1" style="flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Cancel</button>'
+    +'<button data-cancel="1" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--c-border);background:var(--c-surface-2);color:var(--c-text);font-size:13px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Cancel</button>'
     +'<button data-confirm="1" style="flex:1;padding:12px;border-radius:12px;border:none;background:#8B2010;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Delete</button>'
     +'</div></div>';
   document.body.appendChild(modal);
@@ -9544,8 +9576,8 @@ function admRenderLedgerFiltered(period, status){
       +'<td style="max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;">'+escapeHtml(b.event)+'</td>'
       +'<td style="text-align:center;">'+escapeHtml(b.qty)+'</td>'
       +'<td style="font-size:12px;">\u20b9'+b.subtotal.toLocaleString('en-IN')+'</td>'
-      +'<td style="font-size:12px;color:#22c55e;">\u20b9'+fA.toLocaleString('en-IN')+'</td>'
-      +'<td style="font-size:12px;color:#60a5fa;">\u20b9'+gA.toLocaleString('en-IN')+'</td>'
+      +'<td style="font-size:12px;color:var(--c-success);">\u20b9'+fA.toLocaleString('en-IN')+'</td>'
+      +'<td style="font-size:12px;color:var(--c-focus);">\u20b9'+gA.toLocaleString('en-IN')+'</td>'
       +'<td style="font-size:12px;font-weight:700;color:var(--adm-text);">\u20b9'+tot.toLocaleString('en-IN')+'</td>'
       +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(b.status)+'</span></td>'
       +'<td style="font-size:12px;color:var(--adm-text2);">'+escapeHtml(b.date)+'</td>'
@@ -9694,7 +9726,7 @@ function admApplyAdminScope(){
 // Panel entry animation
 var admPanelStyle = document.createElement('style');
 admPanelStyle.textContent = [
-  '@keyframes admPanelIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}',
+  '@keyframes admPanelIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}',
   '.adm-panel{transition:none;}',
   '.adm-panel.active{display:block;}'
 ].join('');
@@ -10126,7 +10158,7 @@ function admSetNotifColor(color, el){
   document.querySelectorAll('#admpanel-notifications [onclick^="admSetNotifColor"]').forEach(function(d){
     d.style.border = '2px solid transparent';
   });
-  if(el) el.style.border = '2px solid #fff';
+  if(el) el.style.border = '2px solid var(--c-text)';
   admUpdateNotifPreview();
 }
 
@@ -10146,7 +10178,7 @@ function admUpdateNotifPreview(){
   var body  = (document.getElementById('notifBody')||{}).value||'';
   var img   = (document.getElementById('notifImage')||{}).value||'';
   var cta   = (document.getElementById('notifCTA')||{}).value||'';
-  if(!title && !body){ box.innerHTML='<div style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Fill in the fields to see a preview</div>'; return; }
+  if(!title && !body){ box.innerHTML='<div style="font-size:12px;color:var(--adm-text2);text-align:center;padding:20px;">Fill in the fields to see a preview</div>'; return; }
 
   var html = '';
   if(type==='banner'){
@@ -10570,14 +10602,14 @@ function admRefreshFraudPanel(){
   }
   panel.innerHTML = active.slice(0,5).map(function(a){
     var sCol = a.severity==='CRITICAL'?'#ef4444':'#eab308';
-    return '<div style="padding:10px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:6px;">'
+    return '<div style="padding:10px;background:var(--c-danger-subtle);border:1px solid rgba(185,28,28,.3);border-radius:8px;margin-bottom:6px;">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
       +'<span style="font-size:12px;font-weight:700;color:'+escapeHtml(sCol)+';">🚨 '+escapeHtml(a.severity)+'</span>'
       +'<span style="font-size:12px;color:var(--adm-text2);">'+escapeHtml(new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}))+'</span></div>'
       +'<div style="font-size:12px;color:var(--adm-text);margin-bottom:6px;">'+escapeHtml(a.detail)+'</div>'
       +'<div style="display:flex;gap:5px;">'
-      +'<button onclick="VyberaFraud.resolveAlert(\''+jsStr(a.id)+'\');admRefreshFraudPanel();" style="padding:4px 10px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:6px;color:#22c55e;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Resolve</button>'
-      +(a.eventId?'<button onclick="admPauseSales(\''+jsStr(a.eventId)+'\');" style="padding:4px 10px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:6px;color:#eab308;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Pause Sales</button>':'')
+      +'<button onclick="VyberaFraud.resolveAlert(\''+jsStr(a.id)+'\');admRefreshFraudPanel();" style="padding:4px 10px;background:var(--c-success-subtle);border:1px solid rgba(21,128,61,.3);border-radius:6px;color:var(--c-success);font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Resolve</button>'
+      +(a.eventId?'<button onclick="admPauseSales(\''+jsStr(a.eventId)+'\');" style="padding:4px 10px;background:var(--c-warning-subtle);border:1px solid rgba(180,83,9,.3);border-radius:6px;color:var(--c-warning-text);font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Pause Sales</button>':'')
       +'</div></div>';
   }).join('');
 }
@@ -10618,7 +10650,7 @@ function admRenderEvents(tab){
 
     return '<tr>'
       +'<td style="max-width:140px;"><div style="font-weight:600;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(ev.name)+'</div>'
-      +(paused?'<div style="font-size:12px;color:#eab308;">⏸ SALES PAUSED</div>':'')+'</td>'
+      +(paused?'<div style="font-size:12px;color:var(--c-warning-text);">⏸ SALES PAUSED</div>':'')+'</td>'
       +'<td style="font-size:12px;color:var(--adm-text2);">'+escapeHtml(ev.creatorName)+'</td>'
       +'<td style="font-size:12px;white-space:nowrap;">'+escapeHtml(ev.date)+'</td>'
       +'<td style="font-size:12px;">'+escapeHtml(ev.city)+'</td>'
@@ -10629,7 +10661,7 @@ function admRenderEvents(tab){
       +'<td><div style="display:flex;gap:3px;flex-wrap:wrap;">'
       +(tab==='pending'
         ?'<button onclick="admApproveEvent(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Approve</button>'
-         +'<button onclick="admRejectEvent(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Reject</button>'
+         +'<button onclick="admRejectEvent(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Reject</button>'
         :''
       )
       +(ev.status==='live'||ev.status==='paused'
@@ -10638,8 +10670,8 @@ function admRenderEvents(tab){
           :'<button onclick="admPauseSales(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm adm-btn-yellow">Pause</button>')
         :'')
       +(ev.status!=='blocked'
-        ?'<button onclick="admEmergencyBlock(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.25);font-size:12px;">🚨 Block</button>'
-        :'<span style="font-size:12px;color:#ef4444;">BLOCKED</span>')
+        ?'<button onclick="admEmergencyBlock(\''+jsStr(ev.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);font-size:12px;">🚨 Block</button>'
+        :'<span style="font-size:12px;color:var(--c-danger);">BLOCKED</span>')
       +'</div></td></tr>';
   }).join('')+admLoadMoreRow('events',filtered,9);
 }
@@ -10659,14 +10691,14 @@ function admRenderPayouts(){
     return '<tr>'
       +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(c.name)+'</td><td>'+escapeHtml(c.events)+'</td>'
       +'<td style="font-size:12px;">₹'+c.revenue.toLocaleString('en-IN')+'</td>'
-      +'<td style="font-size:12px;color:#ef4444;">₹'+platFee.toLocaleString('en-IN')+'</td>'
-      +'<td style="font-size:12px;color:#60a5fa;">₹'+gstAmt.toLocaleString('en-IN')+'</td>'
-      +'<td style="font-size:12px;color:#22c55e;font-weight:700;">₹'+payout.toLocaleString('en-IN')+'</td>'
+      +'<td style="font-size:12px;color:var(--c-danger);">₹'+platFee.toLocaleString('en-IN')+'</td>'
+      +'<td style="font-size:12px;color:var(--c-focus);">₹'+gstAmt.toLocaleString('en-IN')+'</td>'
+      +'<td style="font-size:12px;color:var(--c-success);font-weight:700;">₹'+payout.toLocaleString('en-IN')+'</td>'
       +'<td><span class="adm-badge '+escapeHtml(bc)+'">'+escapeHtml(c.status)+'</span></td>'
       +'<td><div style="display:flex;gap:4px;">'
       +(c.status==='Pending'
         ?'<button onclick="admTriggerPayout(\''+jsStr(c.name)+'\')" class="adm-btn adm-btn-sm adm-btn-green">Pay Now</button>'
-         +'<button onclick="admFreezePayout(\''+jsStr(c.name)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(234,179,8,0.1);color:#eab308;border:1px solid rgba(234,179,8,0.3);">Freeze</button>'
+         +'<button onclick="admFreezePayout(\''+jsStr(c.name)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-warning-subtle);color:var(--c-warning-text);border:1px solid rgba(180,83,9,.3);">Freeze</button>'
         :'<span style="font-size:12px;color:var(--adm-text2);">Done ✓</span>')
       +'</div></td></tr>';
   }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--adm-text2);padding:24px;">No payout data</td></tr>';
@@ -11250,7 +11282,7 @@ function admRefreshStaff(){
     var frozen = s._inventoryFrozen;
     var locked = s._walletLocked;
     return '<tr>'
-      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(s.name)+(frozen?'<span style="font-size:12px;color:#ef4444;display:block;">🔒 INV FROZEN</span>':'')+(locked?'<span style="font-size:12px;color:#eab308;display:block;">🔒 WALLET LOCKED</span>':'')+'</td>'
+      +'<td style="font-weight:600;color:var(--adm-text);">'+escapeHtml(s.name)+(frozen?'<span style="font-size:12px;color:var(--c-danger);display:block;">🔒 INV FROZEN</span>':'')+(locked?'<span style="font-size:12px;color:var(--c-warning-text);display:block;">🔒 WALLET LOCKED</span>':'')+'</td>'
       +'<td style="font-size:12px;color:var(--adm-text2);">@'+escapeHtml(s.staffId)+'</td>'
       +'<td>'+escapeHtml(ss.assigned)+'</td><td>'+escapeHtml(ss.sold)+'</td>'
       +'<td style="font-size:12px;">₹'+earnings.toLocaleString('en-IN')+'</td>'
@@ -11258,8 +11290,8 @@ function admRefreshStaff(){
       +'<td><div style="display:flex;gap:3px;flex-wrap:wrap;">'
       +'<button onclick="admDisableStaff(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm '+(s.status==='active'?'adm-btn-ghost':'adm-btn-green')+'">'+(s.status==='active'?'Disable':'Enable')+'</button>'
       +'<button onclick="admResetStaffPassword(\''+jsStr(s.id)+'\',\''+jsStr(s.name)+'\')" class="adm-btn adm-btn-sm adm-btn-ghost" style="font-size:12px;">Reset pwd</button>'
-      +(frozen?'':'<button onclick="admFreezeInventory(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:12px;">Freeze Inv</button>')
-      +(locked?'':'<button onclick="admLockWallet(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:rgba(234,179,8,.1);color:#eab308;border:1px solid rgba(234,179,8,.3);font-size:12px;">Lock Wallet</button>')
+      +(frozen?'':'<button onclick="admFreezeInventory(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);font-size:12px;">Freeze Inv</button>')
+      +(locked?'':'<button onclick="admLockWallet(\''+jsStr(s.id)+'\')" class="adm-btn adm-btn-sm" style="background:var(--c-warning-subtle);color:var(--c-warning-text);border:1px solid rgba(180,83,9,.3);font-size:12px;">Lock Wallet</button>')
       +'</div></td></tr>';
   }).join('') + admLoadMoreRow('staff','',7) || '<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No staff yet</td></tr>';
 }
@@ -12092,7 +12124,7 @@ function admRenderApplications(){
         +'<td><div style="display:flex;gap:4px;" onclick="event.stopPropagation();">'
         +(a.status==='Pending'?
           '<button onclick="admOpenCreatorAppReview('+jsArg(i)+')" class="adm-btn adm-btn-sm adm-btn-green">Review</button>'
-          +'<button onclick="admRejectCreatorApp('+jsArg(i)+')" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Reject</button>'
+          +'<button onclick="admRejectCreatorApp('+jsArg(i)+')" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Reject</button>'
           :'<span style="font-size:12px;color:var(--adm-text2);">Done</span>')
         +'</div></td></tr>';
     }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--adm-text2);padding:24px;">No applications yet</td></tr>')
@@ -12232,30 +12264,10 @@ var _pendingStaffLogin = null;
 <!-- ══════════════════════════════════════════════════════ -->
 <div class="page" id="page-admin" style="min-height:100vh;padding-bottom:0;position:relative;z-index:10;">
 <style>
-/* ── ADMIN THEME VARS ── */
-.adm-dark {
-  --adm-bg:#050505; --adm-bg2:#0d0d0d; --adm-bg3:#141414;
-  --adm-border:rgba(255,255,255,0.07); --adm-text:#ffffff;
-  --adm-text2:rgba(255,255,255,0.5); --adm-text3:rgba(255,255,255,0.25);
-  --adm-card-bg:#0d0d0d; --adm-hover:rgba(255,255,255,0.04);
-  --adm-input-bg:rgba(255,255,255,0.05);
-}
-.adm-light {
-  --adm-bg:#f0f2f5; --adm-bg2:#ffffff; --adm-bg3:#f7f8fa;
-  --adm-border:rgba(0,0,0,0.08); --adm-text:#111111;
-  --adm-text2:rgba(0,0,0,0.55); --adm-text3:rgba(0,0,0,0.3);
-  --adm-card-bg:#ffffff; --adm-hover:rgba(0,0,0,0.03);
-  --adm-input-bg:rgba(0,0,0,0.04);
-}
 
-#page-admin {
-  background:var(--adm-bg);
-  color:var(--adm-text);
-  font-family:'DM Sans',sans-serif;
-  transition:background .3s, color .3s;
-}
+#page-admin { font-family:var(--font-sans); }
 
-.adm-shell { display:flex; min-height:100vh; }
+.adm-shell { display:flex; min-height:100vh; background:var(--adm-bg); color:var(--adm-text); }
 
 /* Sidebar */
 .adm-sidebar {
@@ -12264,7 +12276,7 @@ var _pendingStaffLogin = null;
   border-right:1px solid var(--adm-border);
   display:flex; flex-direction:column;
   position:fixed; top:0; left:0; bottom:0; z-index:200;
-  transition:background .3s, border .3s, transform .25s;
+  transition:transform var(--dur-slow) var(--ease);
   transform:translateX(-100%);
 }
 .adm-sidebar.open { transform:translateX(0); }
@@ -12279,20 +12291,19 @@ var _pendingStaffLogin = null;
   transition:all .15s; border-left:2px solid transparent;
 }
 .adm-nav-item:hover { color:var(--adm-text); background:var(--adm-hover); }
-.adm-nav-item.active { color:#8B2010; background:rgba(139,32,16,0.1); border-left-color:#8B2010; font-weight:600; }
+.adm-nav-item.active { color:#8B2010; background:var(--c-primary-subtle); border-left-color:#8B2010; font-weight:600; }
 .adm-nav-icon { font-size:15px; width:18px; text-align:center; flex-shrink:0; }
 .adm-nav-section { padding:10px 14px 3px; font-size:12px; color:var(--adm-text3); letter-spacing:2px; text-transform:uppercase; font-weight:600; }
-.adm-nav-badge { margin-left:auto; font-size:12px; background:rgba(139,32,16,0.2); color:#8B2010; padding:1px 6px; border-radius:8px; font-weight:700; }
+.adm-nav-badge { margin-left:auto; font-size:12px; background:var(--c-primary-subtle); color:#8B2010; padding:1px 6px; border-radius:8px; font-weight:700; }
 
 /* Main */
-.adm-main { flex:1; min-height:100vh; overflow-y:auto; background:var(--adm-bg); transition:background .3s; }
+.adm-main { flex:1; min-height:100vh; overflow-y:auto; background:var(--adm-bg); }
 
 /* Topbar */
 .adm-topbar {
   padding:0 16px; height:52px; display:flex; align-items:center;
   justify-content:space-between; border-bottom:1px solid var(--adm-border);
   background:var(--adm-bg2); position:sticky; top:0; z-index:100;
-  transition:background .3s, border .3s;
 }
 
 /* Panels */
@@ -12302,38 +12313,37 @@ var _pendingStaffLogin = null;
 /* Cards */
 .adm-card {
   background:var(--adm-card-bg); border:1px solid var(--adm-border);
-  border-radius:12px; transition:background .3s, border .3s;
+  border-radius:12px;
 }
 .adm-stat-card {
   padding:14px 16px; background:var(--adm-card-bg);
   border:1px solid var(--adm-border); border-radius:12px;
-  transition:background .3s, border .3s;
 }
 .adm-stat-val { font-size:24px; font-weight:700; color:var(--adm-text); font-family:'Space Mono',monospace; }
 .adm-stat-lbl { font-size:12px; color:var(--adm-text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
-.adm-stat-delta { font-size:12px; margin-top:3px; }
-.adm-stat-delta.up { color:#22c55e; }
-.adm-stat-delta.down { color:#ef4444; }
+.adm-stat-delta { font-size:12px; margin-top:3px; color:var(--adm-text2); }
+.adm-stat-delta.up { color:var(--c-success); }
+.adm-stat-delta.down { color:var(--c-danger); }
 
 /* Tables */
 .adm-table { width:100%; border-collapse:collapse; font-size:12px; }
 .adm-table th { padding:9px 12px; text-align:left; font-size:12px; color:var(--adm-text2); text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid var(--adm-border); font-weight:600; white-space:nowrap; }
-.adm-table td { padding:10px 12px; border-bottom:1px solid var(--adm-border); color:var(--adm-text); vertical-align:middle; transition:color .3s; }
+.adm-table td { padding:10px 12px; border-bottom:1px solid var(--adm-border); color:var(--adm-text); vertical-align:middle; }
 .adm-table tr:last-child td { border-bottom:none; }
 .adm-table tr:hover td { background:var(--adm-hover); }
 .adm-perm-matrix th,.adm-perm-matrix td{text-align:center;}
 .adm-perm-matrix th:first-child,.adm-perm-matrix td:first-child{text-align:left;}
-.perm-ok{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:2px;background:#38c172;color:#fff;font-size:13px;font-weight:900;line-height:1;}
+.perm-ok{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:2px;background:var(--c-success);color:#fff;font-size:13px;font-weight:900;line-height:1;}
 .perm-no{display:inline-flex;align-items:center;justify-content:center;color:#ff4f86;font-size:30px;font-weight:700;line-height:.75;}
-.perm-view{display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px;line-height:1;text-shadow:0 0 0 #60a5fa;}
+.perm-view{display:inline-flex;align-items:center;justify-content:center;color:var(--c-text);font-size:13px;line-height:1;text-shadow:0 0 0 #60a5fa;}
 
 /* Badges */
 .adm-badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
-.adm-badge.green  { background:rgba(34,197,94,.12);  color:#22c55e; }
-.adm-badge.red    { background:rgba(239,68,68,.12);   color:#ef4444; }
-.adm-badge.yellow { background:rgba(234,179,8,.12);   color:#d4a017; }
-.adm-badge.blue   { background:rgba(59,130,246,.12);  color:#60a5fa; }
-.adm-badge.teal   { background:rgba(0,212,212,.12);   color:#00D4D4; }
+.adm-badge.green  { background:var(--c-success-subtle);  color:var(--c-success); }
+.adm-badge.red    { background:var(--c-danger-subtle);   color:var(--c-danger); }
+.adm-badge.yellow { background:var(--c-warning-subtle);   color:var(--c-warning-text); }
+.adm-badge.blue   { background:rgba(59,130,246,.12);  color:var(--c-focus); }
+.adm-badge.teal   { background:var(--c-accent-subtle);   color:var(--c-accent); }
 .adm-badge.orange { background:rgba(249,115,22,.12);  color:#f97316; }
 .adm-badge.purple { background:rgba(168,85,247,.12);  color:#a855f7; }
 
@@ -12344,16 +12354,16 @@ var _pendingStaffLogin = null;
 .adm-btn-sm { padding:5px 10px; font-size:12px; }
 .adm-btn-red    { background:#8B2010; color:#fff; }
 .adm-btn-ghost  { background:var(--adm-input-bg); color:var(--adm-text2); border:1px solid var(--adm-border); }
-.adm-btn-green  { background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.3); }
-.adm-btn-teal   { background:rgba(0,212,212,0.1); color:#00D4D4; border:1px solid rgba(0,212,212,0.3); }
-.adm-btn-yellow { background:rgba(234,179,8,0.1); color:#d4a017; border:1px solid rgba(234,179,8,0.3); }
+.adm-btn-green  { background:var(--c-success-subtle); color:var(--c-success); border:1px solid rgba(21,128,61,.3); }
+.adm-btn-teal   { background:var(--c-accent-subtle); color:var(--c-accent); border:1px solid rgba(15,118,110,.35); }
+.adm-btn-yellow { background:var(--c-warning-subtle); color:var(--c-warning-text); border:1px solid rgba(180,83,9,.3); }
 
 /* Inputs */
 .adm-input  { width:100%; padding:9px 12px; background:var(--adm-input-bg); border:1px solid var(--adm-border); border-radius:8px; color:var(--adm-text); font-size:13px; font-family:'DM Sans',sans-serif; box-sizing:border-box; outline:none; transition:all .2s; }
 .adm-input:focus { border-color:rgba(139,32,16,0.5); }
 .adm-select { width:100%; padding:9px 12px; background:var(--adm-bg3); border:1px solid var(--adm-border); border-radius:8px; color:var(--adm-text); font-size:13px; font-family:'DM Sans',sans-serif; outline:none; -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:30px; }
-.adm-dark .adm-select option, .adm-dark select option { background:#141414 !important; color:#fff !important; }
-.adm-light .adm-select option, .adm-light select option { background:#ffffff !important; color:#111 !important; }
+.adm-dark .adm-select option, .adm-dark select option { background:var(--c-surface-2) !important; color:var(--c-text) !important; }
+.adm-light .adm-select option, .adm-light select option { background:var(--c-surface) !important; color:var(--c-text) !important; }
 .adm-select option { background:var(--adm-bg3); color:var(--adm-text); }
 .adm-textarea { width:100%; padding:9px 12px; background:var(--adm-input-bg); border:1px solid var(--adm-border); border-radius:8px; color:var(--adm-text); font-size:13px; font-family:'DM Sans',sans-serif; resize:vertical; box-sizing:border-box; outline:none; }
 .adm-label { font-size:12px; color:var(--adm-text2); text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:5px; font-weight:600; }
@@ -12370,15 +12380,15 @@ var _pendingStaffLogin = null;
 .adm-toggle-row:last-child { border-bottom:none; }
 .adm-sw { position:relative; width:38px; height:21px; flex-shrink:0; }
 .adm-sw input { opacity:0; width:0; height:0; }
-.adm-sw-slider { position:absolute; inset:0; background:rgba(139,32,16,0.2); border-radius:21px; cursor:pointer; transition:.3s; border:1px solid var(--adm-border); }
-.adm-sw-slider:before { content:''; position:absolute; width:15px; height:15px; left:3px; bottom:3px; background:#888; border-radius:50%; transition:.3s; }
+.adm-sw-slider { position:absolute; inset:0; background:var(--c-primary-subtle); border-radius:21px; cursor:pointer; transition:background-color var(--dur) var(--ease); border:1px solid var(--adm-border); }
+.adm-sw-slider:before { content:''; position:absolute; width:15px; height:15px; left:3px; bottom:3px; background:#888; border-radius:50%; transition:transform var(--dur) var(--ease); }
 .adm-sw input:checked+.adm-sw-slider { background:#8B2010; border-color:#8B2010; }
 .adm-sw input:checked+.adm-sw-slider:before { transform:translateX(17px); background:#fff; }
 
 /* Modal */
-.adm-modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); backdrop-filter:blur(6px); z-index:9000; align-items:center; justify-content:center; padding:16px; }
+.adm-modal-bg { display:none; position:fixed; inset:0; background:var(--c-overlay); backdrop-filter:blur(6px); z-index:9000; align-items:center; justify-content:center; padding:16px; }
 .adm-modal-bg.open { display:flex; }
-.adm-modal { background:var(--adm-bg2); border:1px solid var(--adm-border); border-radius:14px; padding:20px; width:100%; max-width:440px; max-height:85vh; overflow-y:auto; transition:background .3s; }
+.adm-modal { background:var(--adm-bg2); border:1px solid var(--adm-border); border-radius:14px; padding:20px; width:100%; max-width:440px; max-height:85vh; overflow-y:auto; }
 .adm-modal-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
 .adm-modal-title { font-size:15px; font-weight:700; color:var(--adm-text); }
 
@@ -12388,7 +12398,7 @@ var _pendingStaffLogin = null;
 .adm-tab.active { background:#8B2010; color:#fff; }
 
 /* Overlay for mobile sidebar */
-.adm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:199; }
+.adm-overlay { display:none; position:fixed; inset:0; background:var(--c-overlay); z-index:199; }
 .adm-overlay.open { display:block; }
 
 /* Charts */
@@ -12417,8 +12427,8 @@ var _pendingStaffLogin = null;
 }
 #page-admin select option,
 #page-admin .adm-select option {
-  background: #141414 !important;
-  color: #ffffff !important;
+  background: var(--c-surface-2) !important;
+  color: var(--c-text) !important;
   padding: 8px 12px !important;
 }
 #page-admin select:focus,
@@ -12426,39 +12436,28 @@ var _pendingStaffLogin = null;
   border-color: rgba(139,32,16,0.6) !important;
   box-shadow: 0 0 0 2px rgba(139,32,16,0.15) !important;
 }
-.adm-light #page-admin select,
-.adm-light #page-admin .adm-select {
-  background: #ffffff !important;
-  color: #111111 !important;
-  border-color: rgba(0,0,0,0.15) !important;
-}
-.adm-light #page-admin select option,
-.adm-light #page-admin .adm-select option {
-  background: #ffffff !important;
-  color: #111111 !important;
-}
 </style>
 <style data-platform="app" media="not all">
 #adminModal > div{
-  background:#0d0d0d!important;
-  border-color:rgba(255,255,255,0.14)!important;
+  background:var(--c-surface-2)!important;
+  border-color:var(--c-border)!important;
 }
 #adminModal div,
 #adminModal span,
 #adminModal label{
-  color:#ffffff!important;
+  color:var(--c-text)!important;
 }
 #adminModal input,
 #adminModal select{
-  background:#161616!important;
-  color:#ffffff!important;
-  border-color:rgba(255,255,255,0.14)!important;
+  background:var(--c-surface-2)!important;
+  color:var(--c-text)!important;
+  border-color:var(--c-border)!important;
 }
 #adminModal input::placeholder{
-  color:rgba(255,255,255,0.45)!important;
+  color:var(--c-text-2)!important;
 }
 #adminModal [style*="color:var(--adm-text2)"]{
-  color:rgba(255,255,255,0.72)!important;
+  color:var(--c-text)!important;
 }
 
 @media(max-width:899px){
@@ -12569,7 +12568,7 @@ var _pendingStaffLogin = null;
 <aside class="adm-sidebar" id="admSidebar">
   <div class="adm-sidebar-logo">
     <div style="display:flex;align-items:center;gap:8px;">
-      <div style="width:30px;height:30px;background:rgba(139,32,16,0.2);border:1px solid rgba(139,32,16,0.4);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;">🛡️</div>
+      <div style="width:30px;height:30px;background:var(--c-primary-subtle);border:1px solid rgba(139,32,16,0.4);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;">🛡️</div>
       <div><div style="font-size:12px;font-weight:700;color:var(--adm-text);letter-spacing:.5px;">BLAK Tickets</div><div style="font-size:12px;color:var(--adm-text3);letter-spacing:1.5px;text-transform:uppercase;">Admin</div></div>
     </div>
   </div>
@@ -12597,7 +12596,7 @@ var _pendingStaffLogin = null;
 
   <div style="padding:10px 14px;border-top:1px solid var(--adm-border);">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <div id="admAvatar" style="width:30px;height:30px;border-radius:50%;background:rgba(139,32,16,0.25);border:1px solid rgba(139,32,16,0.4);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#8B2010;flex-shrink:0;">SA</div>
+      <div id="admAvatar" style="width:30px;height:30px;border-radius:50%;background:var(--c-primary-subtle);border:1px solid rgba(139,32,16,0.4);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#8B2010;flex-shrink:0;">SA</div>
       <div style="flex:1;min-width:0;"><div id="admSidebarName" style="font-size:12px;font-weight:600;color:var(--adm-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">BLAK Tickets Admin</div><div id="admSidebarRole" style="font-size:12px;color:var(--adm-text3);">Super Admin</div></div>
     </div>
     <button onclick="admSignOut()" style="width:100%;padding:7px;background:var(--adm-input-bg);border:1px solid var(--adm-border);border-radius:8px;color:var(--adm-text2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;">↩ Sign Out</button>
@@ -12613,7 +12612,7 @@ var _pendingStaffLogin = null;
       <button onclick="admToggleSidebar()" style="background:none;border:none;color:var(--adm-text2);cursor:pointer;padding:4px;line-height:0;">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
-      <button id="admBackBtn" onclick="admGoBack()" style="display:none;background:rgba(255,255,255,0.06);border:1px solid var(--adm-border);color:var(--adm-text2);cursor:pointer;padding:4px 10px;border-radius:7px;font-size:12px;line-height:1.4;align-items:center;gap:4px;">
+      <button id="admBackBtn" onclick="admGoBack()" style="display:none;background:var(--c-surface-3);border:1px solid var(--adm-border);color:var(--adm-text2);cursor:pointer;padding:4px 10px;border-radius:7px;font-size:12px;line-height:1.4;align-items:center;gap:4px;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;"><polyline points="15 18 9 12 15 6"/></svg>Back
       </button>
       <span style="color:var(--adm-text3);font-size:12px;">/</span>
@@ -12709,9 +12708,9 @@ var _pendingStaffLogin = null;
     </div>
 
     <!-- Fraud Alert Panel -->
-  <div class="adm-card" style="margin-top:10px;border:1px solid rgba(239,68,68,0.2);">
+  <div class="adm-card" style="margin-top:10px;border:1px solid rgba(185,28,28,.3);">
     <div style="padding:10px 14px;border-bottom:1px solid var(--adm-border);display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:12px;font-weight:700;color:#ef4444;">🚨 Fraud Alerts</span>
+      <span style="font-size:12px;font-weight:700;color:var(--c-danger);">🚨 Fraud Alerts</span>
       <div style="display:flex;align-items:center;gap:6px;"><div id="fraudAlertDot" style="width:6px;height:6px;border-radius:50%;background:#22c55e;"></div><span style="font-size:12px;color:var(--adm-text2);">MONITOR</span></div>
     </div>
     <div id="admFraudPanel" style="padding:10px 14px;max-height:200px;overflow-y:auto;">
@@ -12815,13 +12814,13 @@ var _pendingStaffLogin = null;
         <button class="adm-tab"        id="ptab-refunds"  onclick="admPayTab('refunds')">Refunds</button>
         <button class="adm-tab"        id="ptab-disputes" onclick="admPayTab('disputes')">Disputes</button>
       </div>
-      <select id="payFilterPeriod" onchange="admRefreshPayFilter()" style="padding:7px 28px 7px 10px;background:var(--adm-bg3);border:1px solid var(--adm-border);border-radius:8px;color:var(--adm-text);font-family:'DM Sans',sans-serif;font-size:12px;outline:none;">
+      <select id="payFilterPeriod" aria-label="Filter by period" onchange="admRefreshPayFilter()" style="padding:7px 28px 7px 10px;background:var(--adm-bg3);border:1px solid var(--adm-border);border-radius:8px;color:var(--adm-text);font-family:'DM Sans',sans-serif;font-size:12px;outline:none;">
         <option value="all">All Time</option>
         <option value="today">Today</option>
         <option value="week">This Week</option>
         <option value="month" selected>This Month</option>
       </select>
-      <select id="payFilterStatus" onchange="admRefreshPayFilter()" style="padding:7px 28px 7px 10px;background:var(--adm-bg3);border:1px solid var(--adm-border);border-radius:8px;color:var(--adm-text);font-family:'DM Sans',sans-serif;font-size:12px;outline:none;">
+      <select id="payFilterStatus" aria-label="Filter by status" onchange="admRefreshPayFilter()" style="padding:7px 28px 7px 10px;background:var(--adm-bg3);border:1px solid var(--adm-border);border-radius:8px;color:var(--adm-text);font-family:'DM Sans',sans-serif;font-size:12px;outline:none;">
         <option value="all">All Status</option>
         <option value="Success">Success</option>
         <option value="Refunded">Refunded</option>
@@ -12877,7 +12876,7 @@ var _pendingStaffLogin = null;
       <div class="adm-sec-hdr"><div class="adm-sec-title">Refund Management</div><button class="adm-btn adm-btn-yellow" onclick="admProcessAllRefunds()">Process All Pending</button></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
         <div class="adm-stat-card"><div class="adm-stat-lbl">Total Refunded</div><div class="adm-stat-val" style="font-size:18px;">₹0</div></div>
-        <div class="adm-stat-card"><div class="adm-stat-lbl">Pending</div><div class="adm-stat-val" style="font-size:18px;color:#eab308;">0</div></div>
+        <div class="adm-stat-card"><div class="adm-stat-lbl">Pending</div><div class="adm-stat-val" style="font-size:18px;color:var(--c-warning-text);">0</div></div>
         <div class="adm-stat-card"><div class="adm-stat-lbl">Avg Processing</div><div class="adm-stat-val" style="font-size:18px;">—</div></div>
       </div>
       <div class="adm-card" style="overflow-x:auto;">
@@ -13015,11 +13014,11 @@ var _pendingStaffLogin = null;
           <div>
             <label class="adm-label">Accent Colour</label>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <div onclick="admSetNotifColor('#8B2010',this)" style="width:24px;height:24px;border-radius:50%;background:#8B2010;cursor:pointer;border:2px solid #fff;"></div>
-              <div onclick="admSetNotifColor('#00D4D4',this)" style="width:24px;height:24px;border-radius:50%;background:#00D4D4;cursor:pointer;border:2px solid transparent;"></div>
-              <div onclick="admSetNotifColor('#22c55e',this)" style="width:24px;height:24px;border-radius:50%;background:#22c55e;cursor:pointer;border:2px solid transparent;"></div>
-              <div onclick="admSetNotifColor('#eab308',this)" style="width:24px;height:24px;border-radius:50%;background:#eab308;cursor:pointer;border:2px solid transparent;"></div>
-              <div onclick="admSetNotifColor('#ef4444',this)" style="width:24px;height:24px;border-radius:50%;background:#ef4444;cursor:pointer;border:2px solid transparent;"></div>
+              <div class="adm-swatch" aria-label="Accent colour: Brick red" onclick="admSetNotifColor('#8B2010',this)" style="border-radius:50%;background:#8B2010;cursor:pointer;border:2px solid #fff;"></div>
+              <div class="adm-swatch" aria-label="Accent colour: Teal" onclick="admSetNotifColor('#00D4D4',this)" style="border-radius:50%;background:#00D4D4;cursor:pointer;border:2px solid transparent;"></div>
+              <div class="adm-swatch" aria-label="Accent colour: Green" onclick="admSetNotifColor('#22c55e',this)" style="border-radius:50%;background:#22c55e;cursor:pointer;border:2px solid transparent;"></div>
+              <div class="adm-swatch" aria-label="Accent colour: Yellow" onclick="admSetNotifColor('#eab308',this)" style="border-radius:50%;background:#eab308;cursor:pointer;border:2px solid transparent;"></div>
+              <div class="adm-swatch" aria-label="Accent colour: Red" onclick="admSetNotifColor('#ef4444',this)" style="border-radius:50%;background:#ef4444;cursor:pointer;border:2px solid transparent;"></div>
             </div>
           </div>
           <div>
@@ -13075,9 +13074,9 @@ var _pendingStaffLogin = null;
         <!-- Live preview -->
         <div class="adm-card" style="padding:14px;">
           <div style="font-size:12px;font-weight:700;color:var(--adm-text);margin-bottom:10px;">Live Preview</div>
-          <div id="notifPreviewBox" style="border-radius:12px;overflow:hidden;background:#111;min-height:80px;padding:0;">
+          <div id="notifPreviewBox" style="border-radius:12px;overflow:hidden;background:var(--c-surface-2);min-height:80px;padding:0;">
             <div id="notifPreviewInner" style="padding:14px;">
-              <div style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Fill in the fields to see a preview</div>
+              <div style="font-size:12px;color:var(--c-text-muted);text-align:center;padding:20px;">Fill in the fields to see a preview</div>
             </div>
           </div>
         </div>
@@ -13130,7 +13129,7 @@ var _pendingStaffLogin = null;
         </div>
         <div class="adm-toggle-row">
           <div><div style="font-size:13px;color:var(--adm-text);">Force Logout All Users</div><div style="font-size:12px;color:var(--adm-text2);">Terminates all active sessions</div></div>
-          <button onclick="admForceLogoutAll()" class="adm-btn adm-btn-sm" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Force Logout</button>
+          <button onclick="admForceLogoutAll()" class="adm-btn adm-btn-sm" style="background:var(--c-danger-subtle);color:var(--c-danger);border:1px solid rgba(185,28,28,.3);">Force Logout</button>
         </div>
       </div>
     </div>

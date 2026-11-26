@@ -163,3 +163,19 @@ test("UI step 3 staff: light staff panel, tabs by class + aria-selected, 44px bu
   assert.match(html, /#page-staff-dashboard button,#page-staff-qr button\{min-height:var\(--tap\);\}/);
   assert.match(html, /<input aria-label="Your sell link"/);
 });
+
+test("UI step 3 admin: one set of theme values (on the tokens), shell sets its own colours, phone-safe grids", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  // the old per-page --adm-* values overrode the token mapping; only the design-system ones remain
+  assert.deepEqual(html.match(/--adm-bg:[^;]+/g), ["--adm-bg:var(--c-surface)", "--adm-bg:var(--c-surface-2)", "--adm-bg:var(--c-surface)"]);
+  assert.doesNotMatch(html, /--adm-bg:#050505/);
+  assert.match(html, /\.adm-shell \{ display:flex; min-height:100vh; background:var\(--adm-bg\); color:var\(--adm-text\); \}/);
+  assert.doesNotMatch(html, /\.adm-light #page-admin select/); // could never match: #page-admin is outside the shell
+  assert.match(html, /\.adm-stat-delta \{[^}]*color:var\(--adm-text2\);/);
+  assert.doesNotMatch(html.slice(html.indexOf('<div class="page" id="page-admin"')), /transition:background \.3s/);
+  assert.match(html, /@keyframes admPanelIn\{from\{opacity:0;transform:translateY\(4px\)\}/);
+  assert.match(html, /div\[style\*="display:grid"\]:has\(> \.adm-card\)\{grid-template-columns:minmax\(0,1fr\)!important;\}/);
+  assert.equal((html.match(/class="adm-swatch" aria-label="Accent colour: /g) || []).length, 5);
+  assert.match(html, /id="payFilterPeriod" aria-label="Filter by period"/);
+  assert.match(html, /\.adm-light \.adm-badge\.orange\{color:#C2410C;\}/);
+});
