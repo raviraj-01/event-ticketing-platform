@@ -198,3 +198,12 @@ test("no payment-success flag; a load that skips session restore still removes t
   const block = html.slice(start, html.indexOf("restoreSavedSession().then(resumePendingPaymentCheck)", start));
   assert.match(block, /clearSessionRestoring\(\);\s*return;\s*\}/);
 });
+
+test("dead code removed: old staff login page and its handler, never-run seedTestData", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  // Staff sign in on the main login form (selectLoginRole('staff') -> loginAsStaff).
+  for (const gone of ["page-staff-login", "doStaffLogin", "stLoginPwd", "seedTestData", "VYB-TEST-"]) {
+    assert.ok(!html.includes(gone), gone);
+  }
+  assert.match(html, /var handlers=\{admin:loginAsAdmin,staff:loginAsStaff,creator:loginAsCreator,buyer:loginAsBuyer\};/);
+});

@@ -31,7 +31,7 @@
 - **Twilio Verify** (`TWILIO_VERIFY_SERVICE_SID`, paid): without it, phone OTP signup answers 503 in production. Google sign-in works without it; a buyer then types a phone before a paid checkout (Q14). `OTP_DEV_MODE`/`ADMIN_OTP_DEV_MODE` are ignored when `NODE_ENV=production`.
 - **Acceptance:** PayU test checkout ([docs/PAYU-TEST.md](docs/PAYU-TEST.md)) was run with Ravi on 2026-11-24/25 and its findings fixed (H19, instant check, popup); tick it after one more run on the deployed demo. Android device test ([docs/ANDROID-DEVICE-CHECKLIST.md](docs/ANDROID-DEVICE-CHECKLIST.md), also closes H15's device check). Rebrand once the name is chosen.
 - **L7:** restrict the Firebase API key to the demo domain and the app in the Google Cloud console; add the Render host to Firebase's authorized domains.
-- **Delete or keep (ask first):** dead markup `#page-staff-login`, dead function `seedTestData`, the L9 leftovers.
+- **Delete or keep (ask first):** the L9 leftovers (other unused functions in `public/index.html`). `#page-staff-login` and `seedTestData` were deleted on 2026-11-26.
 - **C1:** outside this repo (original project).
 
 **Code, deferred by the feature freeze** (details in README "Future work"): refunds (M9), coupons, editing events, share-link regeneration (D25), organizer email verification (rest of H12), presigned uploads (M11), staff resale (D19).
@@ -462,6 +462,7 @@ Build status (2026-11-24): **built:** D20, D22 (M18), D23 (step 1 + step 2: migr
 | 2026-11-26 | Final UI pass (every role's main screens, 375 and 1440 px, measured in the page: contrast, controls under 44/36 px, sideways overflow, bars under the banner). Fixed: the sticky "Book" bar price was dark text on the red bar (2.0:1; it inherited the page text colour, which used to be white) → `.sticky-cta-inner{color:#fff}`; the ticket's four action buttons needed ~340 px in a 270 px card and the last was clipped → grid, 2×2 on phones, one row on desktop; the hero carousel dots (keyboard buttons since step 2b) had no name → `aria-label`. Everything else measured clean. | Ravi's freeze list: fix only real regressions. |
 | 2026-11-26 | M23: no payment-success flag any more (Ravi's decision); the startup removes the restore overlay on loads that skip the restore. New end-to-end test in a real headless browser (`test/helpers/browser.js`: installed Chrome/Edge over the DevTools protocol, tracked by the process guard; `CHROME_PATH` to choose one). | A refresh after booking left a permanent black screen. |
 | 2026-11-26 | UI freeze: "Status at UI freeze" section (done, open, deploy checklist); stale Q17 / Q12 / 0019 notes updated. | Ravi: freeze after the final pass. |
+| 2026-11-26 | Deleted dead code (Ravi's OK): `#page-staff-login` and its only handler `doStaffLogin()` (no link or route reached the page; staff sign in on the main form via `loginAsStaff`), and `seedTestData()` (249 lines of sample events in an IIFE that started with `return;`). 322 lines out of `public/index.html`, no behaviour change. Test: frontend guard that they stay gone. | Smaller page, nothing to maintain for code that never runs. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).
@@ -495,7 +496,7 @@ Audit and full proposal: [docs/UI-AUDIT.md](docs/UI-AUDIT.md). Decisions: one **
 - **Layout (buyer):** `body[data-page]` is set by `showPage()`; the buyer nav (`#buyerNav`) shows only on Home/Explore/Tickets/Notifications/Profile; ≥1024px it is a 64px top bar and pages get a 1120px column (720px for booking, ticket, profile); `.hscroll` rows become grids.
 - **Admin:** `#admShell` carries `.adm-dark` / `.adm-light` (toggled by `admToggleTheme()`); the only `--adm-*` values are the two mappings in the design-system block (plus the KYC dialog's inline copy). Admin is dense on purpose: 36px controls with a mouse, 44px on touch (`pointer:coarse`).
 - **Demo banner (`DEMO_MODE=true`):** `/config/public` returns `demoMode`; the app then shows `#demoBanner` (fixed, 32 px, warning colours, short text under 600 px) and sets `html.demo-mode`, which makes `--demo-h` 32 px. Everything pinned to the top uses `--demo-h` (`body` padding, desktop buyer/organizer bars, staff tabs, admin sidebar, sub-pages); it is 0 otherwise. The admin topbar needs no offset: it sticks inside `.adm-main`, which already starts below the banner.
-- **Dead markup left in place:** `#page-staff-login` has no references (ask Ravi before deleting).
+- **Dead code removed (2026-11-26, Ravi's OK):** `#page-staff-login` (unreachable; staff sign in on the main login form) with its only handler `doStaffLogin`, and `seedTestData` (sample events; its first statement was `return;`).
 - **Accessibility/motion:** `:focus-visible` ring everywhere (beats inline `outline:none`); `prefers-reduced-motion` turns non-essential motion off (spinners stay); page change 200 ms from 0.6 opacity (was invisible for 300 ms).
 
 ## Study guide (read in this order)
