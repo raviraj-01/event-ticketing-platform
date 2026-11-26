@@ -188,3 +188,13 @@ test("final UI pass: sticky price readable on red, ticket actions fit a phone, c
   assert.match(html, /\.ticket-actions\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(110px,1fr\)\);/);
   assert.equal((html.match(/onclick="goToSlide\(\d\)" aria-label="Show featured event \d"/g) || []).length, 3);
 });
+
+test("no payment-success flag; a load that skips session restore still removes the restore overlay", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  // Ravi 2026-11-26: confirmation relies only on the stored pending order ID + the instant check.
+  assert.doesNotMatch(html, /PAYMENT_SUCCESS_ACTIVE/);
+  const start = html.indexOf("if(params.get('payment')||params.get('ticket')){");
+  assert.ok(start > 0);
+  const block = html.slice(start, html.indexOf("restoreSavedSession().then(resumePendingPaymentCheck)", start));
+  assert.match(block, /clearSessionRestoring\(\);\s*return;\s*\}/);
+});

@@ -4623,7 +4623,6 @@ function renderConfirmedBooking(booking){
   }
   showPage('page-success');
   pageHistory=['page-success'];
-  sessionStorage.setItem('VYBERA_PAYMENT_SUCCESS_ACTIVE','1');
   confetti();
 }
 
@@ -8167,8 +8166,8 @@ if(safeSessionGet('VYBERA_GOOGLE_PENDING')==='1'){
 function loadPublicConfig(){
   return fetch(apiUrl('/config/public')).then(function(resp){return resp.json();}).then(function(cfg){
     STORE.platformConfig=Object.assign({},STORE.platformConfig,{baseFee:Number(cfg.platformFeePercent),gst:Number(cfg.gstPercent)});
-    if(cfg.demoMode===true){document.documentElement.classList.add('demo-mode');document.getElementById('demoBanner').hidden=false;}
     STORE.orderLimits={maxTicketsPerOrder:Number(cfg.maxTicketsPerOrder)||10,freeTicketsPerUserPerEvent:Number(cfg.freeTicketsPerUserPerEvent)||2};
+    if(cfg.demoMode===true){document.documentElement.classList.add('demo-mode');document.getElementById('demoBanner').hidden=false;}
     if(typeof updateOrderSummary==='function')updateOrderSummary();
   }).catch(function(err){console.error('Could not load public config:',err);});
 }
@@ -8177,7 +8176,15 @@ setTimeout(function(){completePayUReturn();}, 100);
 setTimeout(loadPublishedEvents, 150);
 setTimeout(function(){
   var params=new URLSearchParams(location.search);
-  if(params.get('payment')||params.get('ticket')||sessionStorage.getItem('VYBERA_PAYMENT_SUCCESS_ACTIVE')==='1')return;
+  // A payment return (?payment=) or a shared ticket link (?ticket=) shows its
+  // own page. Every other load restores the session and then finishes any
+  // payment still in progress from the stored pending order ID (instant check).
+  if(params.get('payment')||params.get('ticket')){
+    // Without this the restore overlay (body.session-restoring) stayed up and
+    // every page was hidden.
+    clearSessionRestoring();
+    return;
+  }
   restoreSavedSession().then(resumePendingPaymentCheck).catch(function(err){console.error('Pending payment check failed:',err);});
 },180);
 setTimeout(enableVyberaLogoNavigation,0);
