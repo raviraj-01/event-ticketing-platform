@@ -179,3 +179,12 @@ test("UI step 3 admin: one set of theme values (on the tokens), shell sets its o
   assert.match(html, /id="payFilterPeriod" aria-label="Filter by period"/);
   assert.match(html, /\.adm-light \.adm-badge\.orange\{color:#C2410C;\}/);
 });
+
+test("final UI pass: sticky price readable on red, ticket actions fit a phone, carousel dots named", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(/\r\n/g, "\n");
+  // the price inherited the (now dark) page text colour on the red bar: 2.0:1
+  assert.match(html, /\.sticky-cta-inner\{background:var\(--red\);color:#fff;/);
+  // four 44px buttons did not fit 270px and the last one was clipped
+  assert.match(html, /\.ticket-actions\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(110px,1fr\)\);/);
+  assert.equal((html.match(/onclick="goToSlide\(\d\)" aria-label="Show featured event \d"/g) || []).length, 3);
+});

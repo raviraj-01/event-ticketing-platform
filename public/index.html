@@ -156,7 +156,7 @@ textarea.form-input{resize:vertical;min-height:100px;}
 .exp-section.open .exp-body{display:block;}
 .sticky-cta{position:fixed;bottom:20px;left:0;right:0;padding:12px 16px;background:linear-gradient(0deg,var(--bg) 60%,transparent);display:none;}
 .sticky-cta.visible{display:block;}
-.sticky-cta-inner{background:var(--red);border-radius:16px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;box-shadow:0 8px 32px rgba(139,32,16,0.3);}
+.sticky-cta-inner{background:var(--red);color:#fff;border-radius:16px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;box-shadow:0 8px 32px rgba(139,32,16,0.3);}
 #page-booking{padding:0 0 110px;}
 .booking-header{padding:18px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--glass-border);}
 .step-indicator{display:flex;padding:20px 16px;}
@@ -221,7 +221,7 @@ textarea.form-input{resize:vertical;min-height:100px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .qr-inner{width:100%;height:100%;background:#fff;display:flex;align-items:center;justify-content:center;}
 .qr-id{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--c-text-2);margin-top:12px;letter-spacing:.5px;text-align:center;word-break:break-all;}
-.ticket-actions{display:flex;gap:10px;margin-top:20px;}
+.ticket-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:20px;}
 .t-action-btn{flex:1;min-height:var(--tap);padding:0 12px;border-radius:var(--r-md);border:1px solid var(--c-border-strong);background:var(--c-surface);color:var(--c-text);font:600 var(--fs-14)/1 var(--font-sans);cursor:pointer;transition:background-color var(--dur) var(--ease),transform var(--dur-fast) var(--ease);}
 #page-mytickets{padding:0 0 110px;}
 .tl-card{background:var(--bg2);border-radius:16px;overflow:hidden;margin:0 16px 12px;border:1px solid var(--glass-border);cursor:pointer;}
@@ -1476,7 +1476,7 @@ window.VYBERA_GOOGLE_USE_REDIRECT=false;
 </div>
 <div class="hero" style="margin-top:8px;">
 <div class="hero-slides" id="heroSlides"><div class="hero-empty" style="min-width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;"><div style="font-size:48px;opacity:.3">🎟️</div><div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;opacity:.4;color:#fff;">No Featured Events</div><div style="font-size:14px;color:var(--muted);">Events will appear here once added</div></div></div>
-<div class="hero-dots" id="heroDots" style="display:none;"><div class="dot active" onclick="goToSlide(0)"></div><div class="dot" onclick="goToSlide(1)"></div><div class="dot" onclick="goToSlide(2)"></div></div>
+<div class="hero-dots" id="heroDots" style="display:none;"><div class="dot active" onclick="goToSlide(0)" aria-label="Show featured event 1"></div><div class="dot" onclick="goToSlide(1)" aria-label="Show featured event 2"></div><div class="dot" onclick="goToSlide(2)" aria-label="Show featured event 3"></div></div>
 </div>
 <div class="chips-wrap"><div class="chips"><div class="chip active" data-home-filter="all">All</div><div class="chip" data-home-filter="music">🎵 Music</div><div class="chip" data-home-filter="tech">💻 Tech</div><div class="chip" data-home-filter="comedy">😂 Comedy</div><div class="chip" data-home-filter="sports">⚽ Sports</div><div class="chip" data-home-filter="food">🍕 Food</div><div class="chip" data-home-filter="art">🎨 Art</div><div class="chip" data-home-filter="free">🆓 Free</div></div></div>
 <div class="sec-header"><span class="sec-title">🔥 Trending Now</span><span class="sec-more">See all</span></div>
