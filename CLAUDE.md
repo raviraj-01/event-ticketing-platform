@@ -10,9 +10,44 @@
 
 **Repo:** `ticketing-app/` is a fresh repo (2026-11-21) with clean history, created by copying the old `VYBERA/` working tree without `.git` or `.env`. The old folder is left untouched. Ravi will add his own GitHub remote.
 
-**Current phase:** Phase 2 — all Critical and High items fixed (2026-11-21). Next per D17: server-side coupons, then remaining Medium/Low, then Phase 3. Acceptance items (PayU test checkout, device test, rebrand) still open.
+**Current phase:** UI freeze (2026-11-26). Feature and UI work is closed; the next steps are Ravi's (deploy the demo, device test, rebrand). See "Status at UI freeze" below for what is done, what is open and the deploy checklist. No UI change without Ravi's go-ahead.
 
 ---
+
+## Status at UI freeze (2026-11-26)
+
+### Done
+- **Security audit (Phase 1) and fixes (Phase 2):** every Critical and High item fixed except C1 (the original project's history, not this repo). Medium/Low: all fixed except M9 (refunds, deferred), M3 (partly: the old rows are never re-checked, by design M22) and L7 (Ravi's console setting).
+- **Structure (Phase 3):** `src/` split (routes, services, middleware), SQL migrations (node-pg-migrate, run before listening; a boot never changes existing rows, M22), no startup `ALTER`s.
+- **Payments:** server-side orders with atomic seat holds, server price, verified PayU callbacks (C4, H9, H11); browser-never-returned payments are settled by the PayU webhook, a 5-minute reconciliation poll and the instant check on return (H19); PayU opens in its own window.
+- **Sessions:** httpOnly cookie sessions + refresh tokens with revocation, CSRF-safe CORS allowlist, CSP/helmet (H5, H16, M15); one signed-in role per browser (L16).
+- **Data:** migrations 0001-0019 applied to Ravi's own database (2026-11-24), demo seed (`npm run seed-demo`).
+- **UI:** design system with tokens, one light theme for buyer/organizer/staff, admin dark/light on the same tokens, desktop layouts (1120 px, top bars), 44 px touch targets, 12 px minimum text, keyboard dialogs, aria-live toasts, loading/empty/error states, 240 px ticket QR; final pass at 375/1440 px for every role; DEMO_MODE banner + noindex.
+- **Tests:** 215 tests (`npm test`, about 4.5 min): integration tests on a real embedded PostgreSQL, HTML escaping checker, one end-to-end test in headless Chrome/Edge. Test processes never outlive a run (`npm run check:orphans`).
+
+### Open
+**Ravi (accounts, devices, decisions)**
+- **SMTP** (`SMTP_*`): required, not optional. In production the admin login code is emailed (H6) and password reset is email-only; without SMTP no admin can sign in.
+- **Twilio Verify** (`TWILIO_VERIFY_SERVICE_SID`, paid): without it, phone OTP signup answers 503 in production. Google sign-in works without it; a buyer then types a phone before a paid checkout (Q14). `OTP_DEV_MODE`/`ADMIN_OTP_DEV_MODE` are ignored when `NODE_ENV=production`.
+- **Acceptance:** PayU test checkout ([docs/PAYU-TEST.md](docs/PAYU-TEST.md)) was run with Ravi on 2026-11-24/25 and its findings fixed (H19, instant check, popup); tick it after one more run on the deployed demo. Android device test ([docs/ANDROID-DEVICE-CHECKLIST.md](docs/ANDROID-DEVICE-CHECKLIST.md), also closes H15's device check). Rebrand once the name is chosen.
+- **L7:** restrict the Firebase API key to the demo domain and the app in the Google Cloud console; add the Render host to Firebase's authorized domains.
+- **Delete or keep (ask first):** dead markup `#page-staff-login`, dead function `seedTestData`, the L9 leftovers.
+- **C1:** outside this repo (original project).
+
+**Code, deferred by the feature freeze** (details in README "Future work"): refunds (M9), coupons, editing events, share-link regeneration (D25), organizer email verification (rest of H12), presigned uploads (M11), staff resale (D19).
+
+### Deploy checklist (Render, public demo)
+1. **Node 22.12+** (`package.json` engines). On Render set `NODE_VERSION=22.12.0` or newer.
+2. **Required env:** `NODE_ENV=production`, `DATABASE_URL`, `JWT_SECRET` (new random value, 48+ bytes), `APP_BASE_URL=https://<host>` (PayU return URLs, reset links, `Secure` cookies and the default CORS origin all come from it).
+3. **`TRUST_PROXY_HOPS=1`**: Render has one proxy in front; without it every request looks like it comes from the proxy (rate limits would lump all users together) and `req.secure` is wrong.
+4. **`DEMO_MODE=true`**: banner + `X-Robots-Tag: noindex` + `robots.txt`. Check after deploy: `curl -I https://<host>/` shows `x-robots-tag`, `/robots.txt` says `Disallow: /`, the banner shows.
+5. **PayU (test mode):** `PAYU_KEY`, `PAYU_SALT`, `PAYU_ENV=test`. In the PayU dashboard set the webhook URL to `https://<host>/payments/payu/webhook` (payment success and failure). Never set `PAYU_VERIFY_URL` (test-only; ignored in production).
+6. **CORS origins:** the default allows `APP_BASE_URL`'s origin + `https://localhost` (Cordova WebView). Set `CORS_ORIGINS` (comma-separated, both listed again) only if the site is also served from another origin, e.g. a custom domain plus the `onrender.com` one.
+7. **SMTP:** `SMTP_SERVICE` (e.g. Gmail with an app password) or `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`, plus `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`. Needed for admin login and password reset.
+8. **Bootstrap + services:** `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` (creates the first super admin only if none exists, M1), `R2_*` (banners and KYC need R2), `GOOGLE_CLIENT_ID`, `TWILIO_*` (see Open). Optional: `PLATFORM_FEE_PERCENT`, `GST_PERCENT`, `MAX_TICKETS_PER_ORDER`, `FREE_TICKETS_PER_USER_PER_EVENT`, session TTLs (`.env.example` lists every name).
+9. **First boot:** migrations run before the server listens; `GET /health` must say `database: connected`. Optionally `npm run seed-demo` against the demo database.
+10. **APK:** `CORDOVA_API_BASE=https://<host> npm run build:cordova` (the host must be in `vybera-cordova/config.xml` `<access>`; the script refuses otherwise), then `cd vybera-cordova && npx cordova build android`. Android Google client ID in `config.xml`.
+11. **Never:** commit `.env`, use the old `VYBERA/.env` values, or serve anything outside `public/` (this file must stay private).
 
 ## Overview
 
@@ -332,7 +367,7 @@ Frontend consolidation (M14) happens before the first frontend-touching fix (C2)
 | D26 | Organizer fee (Q16) | Organizer net = gross ticket subtotal. The platform fee + GST is charged to the buyer only, on top of the ticket price at checkout. |
 | D27 | Admin powers over staff (M19) | **Approved by Ravi 2026-11-24.** Suspend = any admin (reversible safety action, audited); activate / set pending / delete = only the admin who created the staff account, or a super admin; organizer staff are not deleted from the admin panel. |
 
-Build status (2026-11-24): **built:** D20, D22 (M18), D23 (step 1 + step 2: migration 0019), D24, D26 (Q16), D27 (M19, approved). Migration 0019 has not run on Ravi's database yet: that happens after the Q17 `.env` check. **Feature freeze (README Future work):** D21, D25.
+Build status (2026-11-24): **built:** D20, D22 (M18), D23 (step 1 + step 2: migration 0019), D24, D26 (Q16), D27 (M19, approved). Migration 0019 ran on Ravi's database on 2026-11-24. **Feature freeze (README Future work):** D21, D25.
 
 ## Change log
 | Date | Change | Why |
@@ -426,6 +461,7 @@ Build status (2026-11-24): **built:** D20, D22 (M18), D23 (step 1 + step 2: migr
 | 2026-11-26 | `DEMO_MODE=true` (public demo): every response gets `X-Robots-Tag: noindex, nofollow`, `/robots.txt` disallows everything, `/config/public` returns `demoMode` and the app shows a "Demo site · test payments only" banner; bars pinned to the top move down by `--demo-h`. Off by default (`.env.example`: `DEMO_MODE=false`). Tests: `test/demoMode.test.js` (on and off), frontend markup test. Checked in the browser for every role at 375 and 1440 px: no bar under the banner. | Ravi's freeze list: the demo must say it takes test payments only and stay out of search engines. |
 | 2026-11-26 | Final UI pass (every role's main screens, 375 and 1440 px, measured in the page: contrast, controls under 44/36 px, sideways overflow, bars under the banner). Fixed: the sticky "Book" bar price was dark text on the red bar (2.0:1; it inherited the page text colour, which used to be white) → `.sticky-cta-inner{color:#fff}`; the ticket's four action buttons needed ~340 px in a 270 px card and the last was clipped → grid, 2×2 on phones, one row on desktop; the hero carousel dots (keyboard buttons since step 2b) had no name → `aria-label`. Everything else measured clean. | Ravi's freeze list: fix only real regressions. |
 | 2026-11-26 | M23: no payment-success flag any more (Ravi's decision); the startup removes the restore overlay on loads that skip the restore. New end-to-end test in a real headless browser (`test/helpers/browser.js`: installed Chrome/Edge over the DevTools protocol, tracked by the process guard; `CHROME_PATH` to choose one). | A refresh after booking left a permanent black screen. |
+| 2026-11-26 | UI freeze: "Status at UI freeze" section (done, open, deploy checklist); stale Q17 / Q12 / 0019 notes updated. | Ravi: freeze after the final pass. |
 
 ## Before calling the project done (Ravi's acceptance list)
 - [ ] Real PayU **test-mode** checkout end to end (Ravi's own test merchant key/salt). Plan: [docs/PAYU-TEST.md](docs/PAYU-TEST.md).
@@ -433,9 +469,9 @@ Build status (2026-11-24): **built:** D20, D22 (M18), D23 (step 1 + step 2: migr
 - [ ] Rename/rebrand (Ravi gives the name; see "Branding/cleanup to do").
 
 ## Open questions for Ravi
-- **Q17 (2026-11-22, blocking Q12 step 2 and the PayU test).** The local `.env` must hold Ravi's own test accounts before anything runs against it; checked by hash only with `scripts/compare-env.js`.
+- ~~Q17~~ **Done 2026-11-24:** Ravi replaced every `.env` value with his own; `compare-env` reported no reused secret; migrations, demo seed and the duplicate report ran on his database.
 Q6/Q8/Q10/Q12/Q14/Q15 answered 2026-11-21 → D20-D25.
-- Q12 step 2: run `npm run report-duplicate-phones` against your own database and send me the output; then I add the partial unique index.
+- ~~Q12 step 2~~ **Done 2026-11-24:** no duplicates; migration 0019 added the unique indexes.
 
 ## Branding/cleanup to do (don't rename until Ravi picks a name)
 - **Names:** "BLAK Tickets" (server.js ×13, vybera_26.html ×51, Cordova index ×49, VYBERA.html ×14, config.xml ×3, Cordova package.json). "VYBERA"/"Vybera" (≈170-250 per HTML file, package name, repo name, README, `localStorage` keys `VYBERA_*`, `window.VYBERA_API_BASE`).
