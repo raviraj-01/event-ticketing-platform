@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --check server.js && eslint . && node --test --test-force-exit --test-concurrency=1 \"test/*.test.js\"",
+    "test": "node --check server.js && eslint . && node --test --test-force-exit --test-concurrency=1 --test-timeout=60000 \"test/*.test.js\"",
     "build:cordova": "node scripts/build-cordova.js",
     "migrate": "node src/db/migrate.js",
     "test:syntax": "node --check server.js && node --check public/firebaseconfig.js",
@@ -15,7 +15,8 @@
     "db:fixups": "node scripts/db-fixups.js",
     "report-duplicates": "node scripts/report-duplicate-phones.js",
     "seed-demo": "node scripts/seed-demo.js",
-    "payu:reconcile": "node scripts/payu-reconcile.js"
+    "payu:reconcile": "node scripts/payu-reconcile.js",
+    "check:orphans": "node scripts/check-orphans.js"
   },
   "keywords": [],
   "author": "",
