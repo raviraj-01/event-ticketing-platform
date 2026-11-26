@@ -25,7 +25,7 @@ const {
   makeRequestHash,
   isValidResponseHash,
 } = require("../services/payu");
-const { APP_BASE_URL } = require("../config");
+const { APP_BASE_URL, DEMO_MODE } = require("../config");
 const { reconcilePayuOrders, describeResult } = require("../services/payuReconcile");
 
 const router = express.Router();
@@ -36,6 +36,7 @@ router.get("/config/public", (req, res) => {
     gstPercent: ORDER_SETTINGS.gstPercent,
     maxTicketsPerOrder: ORDER_SETTINGS.maxTicketsPerOrder,
     freeTicketsPerUserPerEvent: ORDER_SETTINGS.freeTicketsPerUserPerEvent,
+    demoMode: DEMO_MODE,
   });
 });
 

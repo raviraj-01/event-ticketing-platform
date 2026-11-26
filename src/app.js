@@ -3,7 +3,7 @@
 // things together.
 const path = require("path");
 const express = require("express");
-const { publicDir, uploadsDir } = require("./config");
+const { DEMO_MODE, publicDir, uploadsDir } = require("./config");
 const { corsMiddleware, openerPolicy, blockCrossSiteCookieRequests } = require("./middleware/security");
 const { securityHeaders } = require("./middleware/securityHeaders");
 const { sendError } = require("./utils/httpError");
@@ -18,6 +18,14 @@ app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 0));
 // M5: first, so every response and log line of a request carries its ID.
 app.use(requestId);
 app.use(securityHeaders);
+// Demo deployment: keep every page and file out of search engines.
+if (DEMO_MODE) {
+  app.use((req, res, next) => {
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    next();
+  });
+  app.get("/robots.txt", (req, res) => res.type("text/plain").send("User-agent: *\nDisallow: /\n"));
+}
 app.use(corsMiddleware);
 app.use(openerPolicy);
 app.use(blockCrossSiteCookieRequests);

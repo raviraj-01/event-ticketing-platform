@@ -663,13 +663,13 @@ body.creator-mode .buyer-nav{display:none!important;}
 
 /* Desktop: content column (max 1120px), grids, top navigation bar */
 @media (min-width:1024px){
-  .buyer-nav{top:0;bottom:auto;height:64px;padding:0 max(24px,calc(50% - 560px));justify-content:space-between;align-items:center;border-top:0;border-bottom:1px solid var(--c-border);box-shadow:var(--sh-sm);}
+  .buyer-nav{top:var(--demo-h);bottom:auto;height:64px;padding:0 max(24px,calc(50% - 560px));justify-content:space-between;align-items:center;border-top:0;border-bottom:1px solid var(--c-border);box-shadow:var(--sh-sm);}
   .buyer-nav-logo{display:block;height:40px;width:auto;object-fit:contain;cursor:pointer;}
   .buyer-nav-links{flex:0 0 auto;gap:4px;}
   .nav-btn{flex-direction:row;gap:8px;min-height:var(--tap);padding:0 16px;font-size:var(--fs-14);}
   .nav-btn svg{width:18px;height:18px;}
   body[data-page="page-home"],body[data-page="page-explore"],body[data-page="page-mytickets"],
-  body[data-page="page-notifications"],body[data-page="page-profile"]{padding-top:64px;}
+  body[data-page="page-notifications"],body[data-page="page-profile"]{padding-top:calc(64px + var(--demo-h));}
   #page-home,#page-explore,#page-mytickets,#page-notifications,#page-detail{max-width:1120px;margin:0 auto;}
   #page-profile,#page-booking,#page-ticket{max-width:720px;margin:0 auto;}
   .home-topbar>.vylogo,#page-explore .page-topbar>.vylogo,#page-mytickets .page-topbar>.vylogo{display:none;}
@@ -698,12 +698,12 @@ body.creator-mode .buyer-nav{display:none!important;}
 #page-creator .kpi-value[style*="--c-accent"],#creatorKpiActive{color:var(--c-accent);}
 .scanner-wrap,.scanner-vf{color:#fff;} /* camera view stays dark */
 @media (min-width:1024px){
-  body.creator-mode .creator-nav{top:0;bottom:auto;height:64px;padding:0 max(24px,calc(50% - 560px));justify-content:space-between;align-items:center;border-top:0;border-bottom:1px solid var(--c-border);box-shadow:var(--sh-sm);}
+  body.creator-mode .creator-nav{top:var(--demo-h);bottom:auto;height:64px;padding:0 max(24px,calc(50% - 560px));justify-content:space-between;align-items:center;border-top:0;border-bottom:1px solid var(--c-border);box-shadow:var(--sh-sm);}
   .creator-nav-logo{display:block;height:40px;width:auto;object-fit:contain;cursor:pointer;}
   .creator-nav-links{flex:0 0 auto;}
   .creator-nav .nav-btn{flex-direction:row;gap:8px;min-height:var(--tap);padding:0 14px;font-size:var(--fs-14);}
   .creator-nav .nav-btn svg{width:18px;height:18px;}
-  body.creator-mode{padding-top:64px;}
+  body.creator-mode{padding-top:calc(64px + var(--demo-h));}
   #page-creator,#page-create,#page-scanner,#page-revenue,#page-staff-manage{max-width:1120px;margin:0 auto;}
   #page-creator>div:first-child .vylogo{display:none;}
   .kpi-grid,.rev-grid{grid-template-columns:repeat(4,1fr);gap:16px;}
@@ -713,7 +713,7 @@ body.creator-mode .buyer-nav{display:none!important;}
 }
 
 /* ── Staff panel ── */
-.staff-tabs{display:flex;gap:4px;padding:4px 16px;border-bottom:1px solid var(--c-border);background:var(--c-surface);position:sticky;top:0;z-index:100;}
+.staff-tabs{display:flex;gap:4px;padding:4px 16px;border-bottom:1px solid var(--c-border);background:var(--c-surface);position:sticky;top:var(--demo-h);z-index:100;}
 .staff-tab{flex:1;min-height:var(--tap);border:none;border-bottom:2px solid transparent;background:transparent;color:var(--c-text-2);font:600 var(--fs-14)/1 var(--font-sans);cursor:pointer;transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease);}
 .staff-tab:hover{color:var(--c-text);}
 #page-staff-dashboard button,#page-staff-qr button{min-height:var(--tap);}
@@ -741,6 +741,18 @@ body.creator-mode .buyer-nav{display:none!important;}
 @media (max-width:599px){
   #page-admin .adm-panel div[style*="display:grid"]:has(> .adm-card){grid-template-columns:minmax(0,1fr)!important;}
 }
+
+/* ── Demo deployment banner (DEMO_MODE=true on the server; /config/public says so) ──
+   --demo-h is 0 otherwise, so every offset below is a no-op outside demo mode. */
+:root{--demo-h:0px;}
+html.demo-mode{--demo-h:32px;}
+body{padding-top:var(--demo-h);}
+.demo-banner{position:fixed;top:0;left:0;right:0;z-index:900;height:var(--demo-h);display:flex;align-items:center;justify-content:center;gap:6px;padding:0 12px;
+  background:var(--c-warning-subtle);color:var(--c-warning-text);border-bottom:1px solid rgba(180,83,9,.3);font:600 var(--fs-12)/1.2 var(--font-sans);text-align:center;white-space:nowrap;overflow:hidden;}
+.demo-banner[hidden]{display:none;}
+.demo-banner .demo-more{font-weight:400;}
+@media (max-width:599px){ .demo-banner .demo-more{display:none;} }
+.sub-page.active,#page-admin .adm-sidebar{top:var(--demo-h);} /* .adm-topbar sticks inside .adm-main, which already starts below the banner */
 </style>
 <!-- App-only styles: enabled by scripts/build-cordova.js (media="all"). -->
 <style data-platform="app" media="not all">
@@ -1010,6 +1022,7 @@ img.vylogo { background: transparent; mix-blend-mode: multiply; }
 </style>
 </head>
 <body class="on-splash">
+<div id="demoBanner" class="demo-banner" role="note" hidden><strong>Demo site</strong><span>· test payments only</span><span class="demo-more">· don't enter real card details or personal data</span></div>
 <script>
 // ── Output encoding helpers (H7) ───────────────────────────────────────────
 // Anything that came from the server (event names, venues, buyer names, staff
@@ -8154,6 +8167,7 @@ if(safeSessionGet('VYBERA_GOOGLE_PENDING')==='1'){
 function loadPublicConfig(){
   return fetch(apiUrl('/config/public')).then(function(resp){return resp.json();}).then(function(cfg){
     STORE.platformConfig=Object.assign({},STORE.platformConfig,{baseFee:Number(cfg.platformFeePercent),gst:Number(cfg.gstPercent)});
+    if(cfg.demoMode===true){document.documentElement.classList.add('demo-mode');document.getElementById('demoBanner').hidden=false;}
     STORE.orderLimits={maxTicketsPerOrder:Number(cfg.maxTicketsPerOrder)||10,freeTicketsPerUserPerEvent:Number(cfg.freeTicketsPerUserPerEvent)||2};
     if(typeof updateOrderSummary==='function')updateOrderSummary();
   }).catch(function(err){console.error('Could not load public config:',err);});

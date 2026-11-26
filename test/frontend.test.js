@@ -147,7 +147,7 @@ test("UI step 3 organizer: no black pages, light organizer nav with desktop top 
     assert.doesNotMatch(tag, /background:#000/, id);
   }
   assert.match(html, /<nav class="bottom-nav creator-nav" id="creatorNavBar" aria-label="Organizer" style="display:none;">/);
-  assert.match(html, /body\.creator-mode \.creator-nav\{top:0;bottom:auto;height:64px;/);
+  assert.match(html, /body\.creator-mode \.creator-nav\{top:var\(--demo-h\);bottom:auto;height:64px;/);
   assert.match(html, /#page-creator,#page-create,#page-scanner,#page-revenue,#page-staff-manage\{max-width:1120px;margin:0 auto;\}/);
   assert.match(html, /<input id="scannerPayload" class="form-input" aria-label="Ticket QR value"/);
   assert.match(html, /--c-text-muted:#6B6B73;/);
